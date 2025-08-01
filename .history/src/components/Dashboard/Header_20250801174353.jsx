@@ -10,18 +10,9 @@ export default function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showModal, setShowModal] = useState(false);
 
-  // ✅ Mapa para obtener la key correcta
-  const eventoKeyMap = {
-    TGS: "evento-tgs",
-    Edificios: "evento-edificio",
-    VTV: "evento-vtv",
-    Barrios: "evento-barrios",
-    Otros: "evento-otros",
-  };
-
   useEffect(() => {
     const audio = new Audio(notificationSound);
-    const startTime = Date.now();
+    const startTime = Date.now(); // Marca tiempo al montar el componente
 
     const collections = [
       { path: "novedades/tgs/eventos", cliente: "TGS" },
@@ -36,21 +27,18 @@ export default function Header() {
         snapshot.docChanges().forEach((change) => {
           if (change.type === "added") {
             const data = change.doc.data();
+
             const eventTimestamp = data.fechaHoraEnvio?.seconds
               ? data.fechaHoraEnvio.seconds * 1000
               : 0;
 
+            // Mostrar solo si es nuevo
             if (eventTimestamp > startTime) {
               const fecha = new Date(eventTimestamp).toLocaleString("es-AR");
-
-              // ✅ Obtener el evento correcto según cliente
-              const evento = data[eventoKeyMap[cliente]] || "Evento no disponible";
-
+              const evento = data[`evento-${cliente.toLowerCase()}`] || "Sin Evento";
               const ubicacion =
                 cliente === "Edificios"
-                  ? `${data["edificio"] || "Sin ubicación"}${
-                      data["unidad"] ? ` - ${data["unidad"]}` : ""
-                    }`
+                  ? `${data["edificio"] || "Sin ubicación"}${data["unidad"] ? ` - ${data["unidad"]}` : ""}`
                   : data["locaciones-tgs"] ||
                     data["planta-vtv"] ||
                     data["barrio"] ||
@@ -59,11 +47,11 @@ export default function Header() {
 
               const nuevaNotif = { id: change.doc.id, evento, cliente, ubicacion, fecha };
 
-              // ✅ Solo guardamos las últimas 5
+              // Guardar en lista (máximo 5 últimas)
               setNotificaciones((prev) => [nuevaNotif, ...prev.slice(0, 4)]);
               setUnreadCount((prev) => prev + 1);
 
-              // ✅ Toast con sonido
+              // Mostrar toast
               toast.info(
                 <div>
                   <strong>{evento}</strong>
@@ -80,6 +68,7 @@ export default function Header() {
                 }
               );
 
+              // Sonido
               audio.play().catch(() => console.log("Sonido bloqueado"));
             }
           }
@@ -98,14 +87,16 @@ export default function Header() {
       </div>
 
       <div className="header-actions">
-        {/* Burbuja */}
+        <button className="btn-primary">📄 Generar Reporte</button>
+
+        {/* Burbuja notificaciones */}
         <div className="notification-bubble" onClick={() => setShowModal(true)}>
           🔔
           {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal compacto */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -130,7 +121,7 @@ export default function Header() {
             <button
               onClick={() => {
                 setShowModal(false);
-                setUnreadCount(0);
+                setUnreadCount(0); // Reset contador
               }}
             >
               Cerrar
