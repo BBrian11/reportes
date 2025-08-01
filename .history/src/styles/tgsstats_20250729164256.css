@@ -1,0 +1,71 @@
+.tgs-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+    max-width: 500px; /* ✅ Para que no ocupe todo el ancho */
+  }
+  
+  .section-title {
+    font-size: 1rem;
+    font-weight: bold;
+    margin-bottom: 16px;
+    color: #111827;
+  }
+  
+  /* Grid interna */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  
+  @media (min-width: 768px) {
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  
+  /* Tarjetas */
+  .stats-card {
+    background: #fff;
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .stats-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+  }
+  
+  /* Iconos */
+  .stats-icon {
+    font-size: 1.5rem;
+    background: #f3f4f6;
+    border-radius: 50%;
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Texto */
+  .stats-title {
+    font-size: 0.9rem;
+    color: #6b7280;
+    font-weight: 500;
+  }
+  
+  .stats-value {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #111827;
+  }
+  

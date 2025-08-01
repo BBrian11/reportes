@@ -1,0 +1,21 @@
+/* Dashboard general styles */
+body {
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  background-color: #f8fafc;
+}
+h1, h2, h3 {
+  font-weight: bold;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  border: 1px solid #e2e8f0;
+  padding: 8px;
+  text-align: left;
+}
+th {
+  background-color: #f1f5f9;
+}

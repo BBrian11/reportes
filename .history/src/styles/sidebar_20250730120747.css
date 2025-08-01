@@ -1,0 +1,68 @@
+.sidebar {
+    width: 240px;
+    background: #fff;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    transition: width 0.3s ease;
+    z-index: 100;
+  }
+  
+  .sidebar.collapsed {
+    width: 80px;
+  }
+  
+  .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  
+  .logo-text {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #2563eb;
+  }
+  
+  .toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: #374151;
+  }
+  
+  .sidebar nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .sidebar nav li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #374151;
+    font-weight: 500;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+  }
+  
+  .sidebar nav li:hover {
+    background: #f3f4f6;
+  }
+  
+  .sidebar nav li.active {
+    background: #2563eb;
+    color: #fff;
+  }
+  

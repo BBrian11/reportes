@@ -1,0 +1,117 @@
+/* Sidebar base */
+.sidebar {
+    width: 260px;
+    background: #fff;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    transition: width 0.3s ease;
+    z-index: 100;
+  }
+  
+  .sidebar.collapsed {
+    width: 80px;
+  }
+  
+  .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  
+  .logo-text {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #2563eb;
+  }
+  
+  .toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: #374151;
+  }
+  
+  .sidebar nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .sidebar-item {
+    margin-bottom: 8px;
+  }
+  
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #374151;
+    font-weight: 500;
+    transition: background 0.2s ease;
+  }
+  
+  .sidebar-link:hover {
+    background: #f3f4f6;
+  }
+  
+  .sidebar-link.active {
+    background: #2563eb;
+    color: #fff;
+  }
+  
+  .expand-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  /* Submenú */
+  .sub-menu {
+    margin-left: 20px;
+    margin-top: 8px;
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 8px;
+  }
+  
+  .search-input {
+    width: 100%;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  
+  .sub-menu ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .sub-item {
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #374151;
+    font-size: 14px;
+  }
+  
+  .sub-item:hover {
+    background: #e5e7eb;
+  }
+  

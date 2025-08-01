@@ -1,0 +1,104 @@
+.event-table-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+    padding: 20px;
+    margin-top: 20px;
+    overflow: hidden;
+  }
+  
+  .table-header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+  }
+  
+  .table-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .table-subtitle {
+    font-size: 0.85rem;
+    color: #6b7280;
+  }
+  
+  .rdt_TableHeader {
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .rdt_Table {
+    font-size: 14px;
+  }
+  
+  .rdt_TableRow {
+    transition: background 0.2s ease;
+  }
+  
+  .rdt_TableRow:hover {
+    background: #f9fafb;
+  }
+  
+  .rdt_Pagination {
+    border-top: 1px solid #e5e7eb;
+    padding: 10px;
+    font-size: 0.85rem;
+  }
+  /* Contenedor general */
+.events-table-wrapper {
+  width: 100%;
+  margin-top: 20px;
+  overflow-x: auto;
+}
+
+/* ✅ Tamaño grande y diseño limpio */
+.events-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.05rem;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* Cabecera */
+.events-table thead {
+  background-color: #1f2937; /* Dark elegante */
+  color: #fff;
+}
+
+.events-table th {
+  padding: 16px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+}
+
+/* Filas */
+.events-table td {
+  padding: 14px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #374151;
+}
+
+/* Hover fila */
+.events-table tbody tr:hover {
+  background: #f9fafb;
+  transition: 0.2s ease-in-out;
+}
+
+/* ✅ Versión grande */
+.events-table-large .events-table {
+  font-size: 1.2rem;
+}
+
+.events-table-large .events-table th,
+.events-table-large .events-table td {
+  padding: 18px 16px;
+}

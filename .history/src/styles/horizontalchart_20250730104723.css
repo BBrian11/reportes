@@ -1,0 +1,43 @@
+.horizontal-chart-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .horizontal-chart-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+  }
+  
+  .horizontal-chart-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  
+  .horizontal-chart-wrapper {
+    position: relative;
+    height: 300px;
+    margin-bottom: 12px;
+  }
+  
+  .horizontal-chart-footer {
+    font-size: 0.9rem;
+    color: #6b7280;
+    text-align: center;
+    margin-top: 8px;
+  }
+  
+  .horizontal-chart-footer span {
+    font-weight: bold;
+    color: #2563eb;
+  }
+  

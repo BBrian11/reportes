@@ -1,0 +1,213 @@
+/* ===========================
+   DASHBOARD PRO ENTERPRISE
+=========================== */
+:root {
+    --color-primary: #2563eb;
+    --color-secondary: #1e40af;
+    --color-success: #16a34a;
+    --color-warning: #f59e0b;
+    --color-danger: #dc2626;
+    --color-light: #f9fafb;
+    --text-dark: #1f2937;
+  
+    --radius: 12px;
+    --shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+    --transition: 0.3s ease;
+    --card-padding: 16px;
+  }
+  
+  /* Global */
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--color-light);
+    color: var(--text-dark);
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+  }
+  
+  /* ===========================
+     HEADER
+  =========================== */
+  .dashboard-header {
+    background: linear-gradient(90deg, #0f172a, #1e293b);
+    color: #fff;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+  
+  .dashboard-header .btn-primary {
+    background: #fff;
+    color: var(--text-dark);
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    border: none;
+    transition: var(--transition);
+  }
+  
+  .dashboard-header .btn-primary:hover {
+    background: #e5e7eb;
+  }
+  
+  /* ===========================
+     CONTAINERS
+  =========================== */
+  .dashboard-container {
+    background: var(--color-light);
+    min-height: 100vh;
+  }
+  
+  .dashboard-content {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .dashboard-content > * {
+    margin-bottom: 24px;
+  }
+  
+  /* ===========================
+     GRID LAYOUTS
+  =========================== */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  @media (min-width: 1024px) {
+    .dashboard-grid {
+      grid-template-columns: repeat(3, 1fr); /* TGS, Edificios, VTV */
+    }
+  }
+  
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  
+  /* ===========================
+     CARDS GENERIC
+  =========================== */
+  .card {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: var(--card-padding);
+    box-shadow: var(--shadow);
+    transition: transform var(--transition);
+  }
+  
+  .card:hover {
+    transform: translateY(-2px);
+  }
+  
+  /* Card Titles */
+  .card-title {
+    font-size: 0.9rem;
+    color: #6b7280;
+    margin-bottom: 6px;
+  }
+  
+  .card-value {
+    font-size: 1.6rem;
+    font-weight: bold;
+    color: var(--text-dark);
+  }
+  
+  /* ===========================
+     KPI CARDS
+  =========================== */
+  .stat-card {
+    padding: var(--card-padding);
+    border-radius: var(--radius);
+    background: #fff;
+    box-shadow: var(--shadow);
+  }
+  
+  .stat-card .kpi-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+  }
+  
+  .stat-card .kpi-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    margin: 4px 0;
+  }
+  
+  .kpi-success { border-left: 4px solid var(--color-success); }
+  .kpi-warning { border-left: 4px solid var(--color-warning); }
+  .kpi-danger { border-left: 4px solid var(--color-danger); }
+  
+  /* ===========================
+     ANALYTICS WIDGETS
+  =========================== */
+  .analytics-widget {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: var(--card-padding);
+    box-shadow: var(--shadow);
+  }
+  
+  .analytics-widget h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  
+  /* ===========================
+     RANKING LIST
+  =========================== */
+  .ranking-card {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: var(--card-padding);
+    box-shadow: var(--shadow);
+  }
+  
+  .ranking-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  
+  .ranking-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .ranking-item {
+    display: flex;
+    justify-content: space-between;
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+  }
+  
+  /* ===========================
+     TABLE
+  =========================== */
+  .table-wrapper {
+    background: #fff;
+    padding: var(--card-padding);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  

@@ -1,0 +1,71 @@
+/* Card contenedor */
+.edificio-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+  }
+  
+  /* Ranking Card */
+  .ranking-card {
+    margin-top: 20px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+    max-height: 250px;
+    overflow-y: auto;
+  }
+  
+  .ranking-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 12px;
+  }
+  
+  /* Lista */
+  .ranking-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  /* Ítems */
+  .ranking-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #374151;
+    transition: background 0.2s ease;
+  }
+  
+  .ranking-item:hover {
+    background: #f3f4f6;
+  }
+  
+  .ranking-name {
+    max-width: 70%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .ranking-count {
+    font-weight: bold;
+    color: #2563eb;
+  }
+  
+  .ranking-empty {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 0.9rem;
+  }
+  

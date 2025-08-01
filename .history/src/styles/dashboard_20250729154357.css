@@ -1,0 +1,4 @@
+body { font-family: Arial; margin: 0; background: #f4f6f9; }
+.dashboard-banner { background: #203a43; color: #fff; padding: 15px; }
+.stats-cards { display: flex; gap: 10px; margin: 10px; }
+.card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }

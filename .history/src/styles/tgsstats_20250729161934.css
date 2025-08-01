@@ -1,0 +1,50 @@
+.tgs-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+  }
+  
+  .tgs-title {
+    font-size: 1rem;
+    font-weight: bold;
+    margin-bottom: 16px;
+    color: #111827;
+  }
+  
+  .tgs-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  
+  @media (min-width: 768px) {
+    .tgs-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+  
+  .tgs-item {
+    text-align: center;
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 12px;
+    transition: background 0.2s ease;
+  }
+  
+  .tgs-item:hover {
+    background: #f3f4f6;
+  }
+  
+  .tgs-item h2 {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #2563eb;
+  }
+  
+  .tgs-item p {
+    font-size: 0.9rem;
+    color: #6b7280;
+  }
+  

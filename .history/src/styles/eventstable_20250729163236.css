@@ -1,0 +1,51 @@
+.event-table-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+    padding: 20px;
+    margin-top: 20px;
+    overflow: hidden;
+  }
+  
+  .table-header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+  }
+  
+  .table-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .table-subtitle {
+    font-size: 0.85rem;
+    color: #6b7280;
+  }
+  
+  .rdt_TableHeader {
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .rdt_Table {
+    font-size: 14px;
+  }
+  
+  .rdt_TableRow {
+    transition: background 0.2s ease;
+  }
+  
+  .rdt_TableRow:hover {
+    background: #f9fafb;
+  }
+  
+  .rdt_Pagination {
+    border-top: 1px solid #e5e7eb;
+    padding: 10px;
+    font-size: 0.85rem;
+  }
+  
