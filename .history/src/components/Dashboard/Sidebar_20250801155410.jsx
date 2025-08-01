@@ -1,26 +1,12 @@
-import React, { useState, useMemo } from "react";
-import {
-  FaBars,
-  FaBuilding,
-  FaTools,
-  FaCar,
-  FaHome,
-  FaTh,
-  FaChevronDown,
-  FaChevronUp,
-} from "react-icons/fa";
-import "../../styles/sidebar.css";
-
 export default function Sidebar({ eventos, onSelectCliente, onSelectUbicacion }) {
+  const [collapsed, setCollapsed] = useState(false);
   const [activeCliente, setActiveCliente] = useState("Todos");
   const [expanded, setExpanded] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [active, setActive] = useState(false); // ✅ Para controlar el menú móvil
+  const [active, setActive] = useState(false); // ✅ Para mostrar/ocultar sidebar en mobile
 
-  // ✅ Construir estructura: Cliente -> Grupo -> Ubicación
   const estructura = useMemo(() => {
     const map = {};
-
     eventos.forEach((e) => {
       const cliente = e.cliente || "Otros";
       const grupo = e.grupo || e.ubicacion?.split(" ")[0] || "General";
@@ -30,7 +16,6 @@ export default function Sidebar({ eventos, onSelectCliente, onSelectUbicacion })
       if (!map[cliente][grupo]) map[cliente][grupo] = new Set();
       map[cliente][grupo].add(ubicacion);
     });
-
     return map;
   }, [eventos]);
 
@@ -45,7 +30,6 @@ export default function Sidebar({ eventos, onSelectCliente, onSelectUbicacion })
   const handleSelectCliente = (cliente) => {
     setActiveCliente(cliente);
     onSelectCliente(cliente);
-    setActive(false); // ✅ Cerrar menú en mobile al seleccionar
   };
 
   const toggleExpand = (cliente) => {
@@ -53,26 +37,27 @@ export default function Sidebar({ eventos, onSelectCliente, onSelectUbicacion })
     setSearchTerm("");
   };
 
+  // ✅ NUEVO RETURN
   return (
     <>
-      {/* ✅ Overlay cuando el menú está abierto en mobile */}
+      {/* Overlay (oscurece fondo en mobile) */}
       <div
         className={`sidebar-overlay ${active ? "active" : ""}`}
         onClick={() => setActive(false)}
       ></div>
 
-      {/* ✅ Sidebar */}
+      {/* Sidebar */}
       <aside className={`sidebar ${active ? "active" : ""}`}>
         <div className="sidebar-header">
           <span className="logo-text">G3T</span>
-          <button className="close-btn" onClick={() => setActive(false)}>
+          <button className="toggle-btn" onClick={() => setActive(false)}>
             ✕
           </button>
         </div>
 
         <nav>
           <ul>
-            {/* Opción general */}
+            {/* Todos */}
             <li
               className={`sidebar-link ${activeCliente === "Todos" ? "active" : ""}`}
               onClick={() => handleSelectCliente("Todos")}
@@ -80,7 +65,7 @@ export default function Sidebar({ eventos, onSelectCliente, onSelectUbicacion })
               {iconos.Todos} <span>Todos</span>
             </li>
 
-            {/* Clientes dinámicos */}
+            {/* Clientes */}
             {Object.keys(estructura).map((cliente, idx) => (
               <li key={idx} className="sidebar-item">
                 <div
@@ -100,7 +85,6 @@ export default function Sidebar({ eventos, onSelectCliente, onSelectUbicacion })
                   </button>
                 </div>
 
-                {/* Submenú: grupos y ubicaciones */}
                 {expanded === cliente && (
                   <div className="sub-menu">
                     <input
@@ -123,10 +107,7 @@ export default function Sidebar({ eventos, onSelectCliente, onSelectUbicacion })
                               .map((ubicacion, i) => (
                                 <li
                                   key={i}
-                                  onClick={() => {
-                                    onSelectUbicacion(cliente, ubicacion);
-                                    setActive(false);
-                                  }}
+                                  onClick={() => onSelectUbicacion(cliente, ubicacion)}
                                   className="sub-item"
                                 >
                                   {ubicacion}
@@ -144,7 +125,7 @@ export default function Sidebar({ eventos, onSelectCliente, onSelectUbicacion })
         </nav>
       </aside>
 
-      {/* ✅ Botón flotante tipo PWA */}
+      {/* Botón hamburguesa (visible solo en mobile) */}
       <button className="floating-toggle" onClick={() => setActive(true)}>
         <FaBars />
       </button>

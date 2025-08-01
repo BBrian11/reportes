@@ -1,0 +1,138 @@
+/* ======== SIDEBAR ======== */
+.sidebar {
+  width: 260px;
+  background: #ffffff;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease-in-out;
+  z-index: 1000;
+}
+
+/* Estado colapsado en desktop */
+.sidebar.collapsed {
+  width: 80px;
+}
+
+/* ===== MOBILE (PWA STYLE) ===== */
+@media (max-width: 768px) {
+  .sidebar {
+    left: -100%; /* Oculta sidebar */
+    width: 80%;
+    max-width: 320px;
+    background: #ffffff;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .sidebar.active {
+    left: 0; /* Desliza */
+  }
+
+  /* Overlay oscuro para UX */
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease;
+  }
+
+  .sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* ===== HEADER SIDEBAR ===== */
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.logo-text {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  font-size: 1.8rem;
+  cursor: pointer;
+  color: #374151;
+}
+
+/* ===== NAV LINKS ===== */
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.sidebar-link:hover,
+.sidebar-link.active {
+  background: #f3f4f6;
+  color: #2563eb;
+}
+
+/* ===== SUBMENÚ ===== */
+.sub-menu {
+  background: #f9fafb;
+  margin-top: 6px;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+
+.scrollable-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.sub-item {
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.sub-item:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
