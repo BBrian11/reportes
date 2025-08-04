@@ -163,5 +163,10 @@ export default function Sidebar({ eventos, onSelectCliente, onSelectUbicacion })
     </>
   );
   
-   
+      {/* ✅ Botón flotante tipo PWA */}
+      <button className="floating-toggle" onClick={() => setActive(true)}>
+        <FaBars />
+      </button>
+    </>
+  );
 }
