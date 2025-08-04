@@ -102,7 +102,7 @@ export default function Dashboard() {
   
     return (
       (!filtros.cliente || filtros.cliente === "Todos" || e.cliente === filtros.cliente) &&
-      (!filtros.grupo || e.grupo === filtros.grupo) && // ✅ Filtra por grupo
+      (!filtros.grupo || e.grupo === filtros.grupo) &&
       (!filtros.ubicacion || e.ubicacion === filtros.ubicacion) &&
       (!fechaInicio || fechaEvento >= fechaInicio) &&
       (!fechaFin || fechaEvento <= fechaFin)
