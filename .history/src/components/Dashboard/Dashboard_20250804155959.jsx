@@ -95,19 +95,20 @@ export default function Dashboard() {
   
   // ✅ Filtrado dinámico
   const eventosFiltrados = eventos.filter((e) => {
-    const fechaEvento = e.fechaObj || new Date(e.fecha);
+    const fechaEvento = e.fechaObj; // Asegurate que tengas un Date aquí
     const fechaInicio = filtros.fechaInicio ? new Date(filtros.fechaInicio) : null;
     const fechaFin = filtros.fechaFin ? new Date(filtros.fechaFin) : null;
   
-    return (
-      (!filtros.cliente || filtros.cliente === "Todos" || e.cliente === filtros.cliente) &&
-      (!filtros.grupo || e.grupo === filtros.grupo) &&
-      (!filtros.ubicacion || e.ubicacion === filtros.ubicacion) &&
-      (!fechaInicio || fechaEvento >= fechaInicio) &&
-      (!fechaFin || fechaEvento <= fechaFin)
-    );
-  });
+    // ✅ Condiciones dinámicas
+    const coincideCliente = !filtros.cliente || filtros.cliente === "Todos" || e.cliente === filtros.cliente;
+    const coincideGrupo = !filtros.grupo || e.grupo === filtros.grupo;
+    const coincideUbicacion = !filtros.ubicacion || e.ubicacion === filtros.ubicacion;
+    const coincideEvento = !filtros.evento || e.evento === filtros.evento;
+    const coincideFechaInicio = !fechaInicio || fechaEvento >= fechaInicio;
+    const coincideFechaFin = !fechaFin || fechaEvento <= fechaFin;
   
+    return coincideCliente && coincideGrupo && coincideUbicacion && coincideEvento && coincideFechaInicio && coincideFechaFin;
+  });
   
 
   return (
