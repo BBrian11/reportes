@@ -12,9 +12,9 @@ import ExportPDF from "./ExportPDF.jsx";
 import MiniCharts from "./MiniCharts.jsx";
 import OtrosStats from "./OtrosStats.jsx";
 import LineAnalytics from "./LineAnalytics.jsx";
-import TareasPanel from "./TareasPanel.jsx";
+import TareasPanel from "./TareasPanel.jsx"; // ✅ Nueva vista
+import { FaSync, FaTasks } from "react-icons/fa";
 
-import { FaSync, FaTasks, FaBars } from "react-icons/fa";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import "../../styles/dashboard.css";
@@ -28,10 +28,9 @@ export default function Dashboard() {
     fechaInicio: "",
     fechaFin: "",
   });
-  const [vista, setVista] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [vista, setVista] = useState("dashboard"); // ✅ "dashboard" o "tareas"
 
-  // ✅ Función para cargar eventos desde Firestore
+  // ✅ Función para cargar eventos
   const loadEventos = () => {
     const collections = [
       { path: "novedades/tgs/eventos", cliente: "TGS", eventoKey: "evento-tgs", ubicacionKey: "locaciones-tgs" },
@@ -89,7 +88,7 @@ export default function Dashboard() {
     return unsubscribe;
   }, []);
 
-  // ✅ Filtrar datos según filtros activos
+  // ✅ Filtrado dinámico
   const eventosFiltrados = eventos.filter((e) => {
     const fechaEvento = e.fechaObj || new Date(e.fecha);
     const fechaInicio = filtros.fechaInicio ? new Date(filtros.fechaInicio) : null;
@@ -106,19 +105,11 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-layout">
-      {/* ✅ Botones flotantes al costado izquierdo */}
-      <div className="floating-controls">
-        {/* Botón Sidebar */}
-        <button className="icon-btn dark" onClick={() => setSidebarOpen(true)}>
-          <FaBars size={20} />
-        </button>
-
-        {/* Botón R    <button className="icon-btn green" onClick={() => loadEventos()}>
+      {/* ✅ Barra superior de controles */}
+      <div className="top-controls">
+        <button className="icon-btn green" onClick={() => loadEventos()}>
           <FaSync size={20} />
         </button>
-ecargar */}
-    
-        {/* Botón Cambiar Vista */}
         <button
           className={`icon-btn purple ${vista === "tareas" ? "active" : ""}`}
           onClick={() => setVista(vista === "dashboard" ? "tareas" : "dashboard")}
@@ -127,11 +118,9 @@ ecargar */}
         </button>
       </div>
 
-      {/* ✅ Sidebar (intacto con submenús) */}
+      {/* ✅ Sidebar */}
       <Sidebar
         eventos={eventos}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
         onSelectCliente={(cliente) =>
           setFiltros({ cliente: cliente === "Todos" ? "" : cliente, ubicacion: "", grupo: "" })
         }
@@ -143,9 +132,10 @@ ecargar */}
         }
       />
 
-      {/* ✅ Contenido principal */}
+      {/* ✅ Contenido */}
       <main className="dashboard-main">
         <Header />
+
         <div className="dashboard-content">
           {vista === "dashboard" ? (
             <>

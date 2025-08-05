@@ -1124,6 +1124,57 @@
 .icon-btn.purple.active {
   box-shadow: 0 0 12px #c084fc;
 }
+/* Controles flotantes al lado izquierdo */
+.floating-controls {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 2500;
+}
+
+/* Botones flotantes */
+.icon-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: none;
+  cursor: pointer;
+  font-size: 1.4rem;
+  color: #fff;
+  transition: all 0.25s ease;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.icon-btn:hover {
+  transform: scale(1.1);
+}
+
+/* Colores */
+.icon-btn.dark {
+  background: #1e293b;
+}
+
+.icon-btn.green {
+  background: #16a34a;
+}
+
+.icon-btn.green:hover {
+  background: #15803d;
+}
+
+.icon-btn.purple {
+  background: #7e22ce;
+}
+
+.icon-btn.purple.active {
+  box-shadow: 0 0 14px #c084fc;
+}
 /* Botones flotantes */
 .floating-controls {
   position: fixed;

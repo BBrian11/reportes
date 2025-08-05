@@ -113,11 +113,11 @@ export default function Dashboard() {
           <FaBars size={20} />
         </button>
 
-        {/* Botón R    <button className="icon-btn green" onClick={() => loadEventos()}>
+        {/* Botón Recargar */}
+        <button className="icon-btn green" onClick={() => loadEventos()}>
           <FaSync size={20} />
         </button>
-ecargar */}
-    
+
         {/* Botón Cambiar Vista */}
         <button
           className={`icon-btn purple ${vista === "tareas" ? "active" : ""}`}

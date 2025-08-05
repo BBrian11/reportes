@@ -1124,7 +1124,7 @@
 .icon-btn.purple.active {
   box-shadow: 0 0 12px #c084fc;
 }
-/* Botones flotantes */
+/* Controles flotantes al lado izquierdo */
 .floating-controls {
   position: fixed;
   bottom: 20px;
@@ -1135,6 +1135,7 @@
   z-index: 2500;
 }
 
+/* Botones flotantes */
 .icon-btn {
   width: 56px;
   height: 56px;
@@ -1142,9 +1143,9 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 1.4rem;
   border: none;
   cursor: pointer;
+  font-size: 1.4rem;
   color: #fff;
   transition: all 0.25s ease;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
@@ -1154,6 +1155,7 @@
   transform: scale(1.1);
 }
 
+/* Colores */
 .icon-btn.dark {
   background: #1e293b;
 }

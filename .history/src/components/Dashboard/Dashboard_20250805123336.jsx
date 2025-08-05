@@ -31,7 +31,7 @@ export default function Dashboard() {
   const [vista, setVista] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // ✅ Función para cargar eventos desde Firestore
+  // ✅ Carga inicial + recarga manual
   const loadEventos = () => {
     const collections = [
       { path: "novedades/tgs/eventos", cliente: "TGS", eventoKey: "evento-tgs", ubicacionKey: "locaciones-tgs" },
@@ -89,7 +89,7 @@ export default function Dashboard() {
     return unsubscribe;
   }, []);
 
-  // ✅ Filtrar datos según filtros activos
+  // ✅ Filtrar eventos según los filtros
   const eventosFiltrados = eventos.filter((e) => {
     const fechaEvento = e.fechaObj || new Date(e.fecha);
     const fechaInicio = filtros.fechaInicio ? new Date(filtros.fechaInicio) : null;
@@ -106,19 +106,14 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-layout">
-      {/* ✅ Botones flotantes al costado izquierdo */}
+      {/* ✅ Controles flotantes a la izquierda */}
       <div className="floating-controls">
-        {/* Botón Sidebar */}
         <button className="icon-btn dark" onClick={() => setSidebarOpen(true)}>
           <FaBars size={20} />
         </button>
-
-        {/* Botón R    <button className="icon-btn green" onClick={() => loadEventos()}>
+        <button className="icon-btn green" onClick={() => loadEventos()}>
           <FaSync size={20} />
         </button>
-ecargar */}
-    
-        {/* Botón Cambiar Vista */}
         <button
           className={`icon-btn purple ${vista === "tareas" ? "active" : ""}`}
           onClick={() => setVista(vista === "dashboard" ? "tareas" : "dashboard")}
@@ -127,7 +122,7 @@ ecargar */}
         </button>
       </div>
 
-      {/* ✅ Sidebar (intacto con submenús) */}
+      {/* ✅ Sidebar */}
       <Sidebar
         eventos={eventos}
         isOpen={sidebarOpen}

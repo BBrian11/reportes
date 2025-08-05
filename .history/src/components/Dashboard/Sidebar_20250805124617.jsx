@@ -164,3 +164,11 @@ export default function Sidebar({
   );
 }
 
+
+      {/* Botón flotante */}
+      <button className="floating-toggle" onClick={() => setActive(true)}>
+        <FaBars />
+      </button>
+    </>
+  );
+}
