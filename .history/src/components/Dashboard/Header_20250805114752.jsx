@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import { ToastContainer, toast } from "react-toastify";
@@ -11,11 +11,17 @@ export default function Header() {
   const [alertas, setAlertas] = useState([]);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showAlertModal, setShowAlertModal] = useState(false);
+  const timersRef = useRef({});
   const audio = new Audio(notificationSound);
 
-  // ✅ Lista de eventos críticos
   const CRITICOS = ["Corte de energía eléctrica", "Intrusión detectada"];
-
+  const EVENTOS_TIEMPO = {
+    "Corte de energía eléctrica": 60 * 60 * 1000, // 1 hora
+    "Puerta Mantenida Abierta (PMA)": 40 * 60 * 1000, // 40 min
+  };
+  
+  const eventoCierre = ["Restauración de energía eléctrica", "Puerta Cerrada"];
+  
   const eventoKeyMap = {
     TGS: "evento-tgs",
     Edificios: "evento-edificio",
@@ -27,7 +33,7 @@ export default function Header() {
   useEffect(() => {
     if (Notification.permission !== "granted") Notification.requestPermission();
     const startTime = Date.now();
-
+  
     const collections = [
       { path: "novedades/tgs/eventos", cliente: "TGS" },
       { path: "novedades/edificios/eventos", cliente: "Edificios" },
@@ -35,7 +41,7 @@ export default function Header() {
       { path: "novedades/barrios/eventos", cliente: "Barrios" },
       { path: "novedades/otros/eventos", cliente: "Otros" },
     ];
-
+  
     const unsubscribes = collections.map(({ path, cliente }) => {
       const q = query(collection(db, path), orderBy("fechaHoraEnvio", "desc"));
       return onSnapshot(q, (snapshot) => {
@@ -43,7 +49,7 @@ export default function Header() {
           if (change.type === "added") {
             const data = change.doc.data();
             const eventTimestamp = data.fechaHoraEnvio?.seconds * 1000 || 0;
-
+  
             if (eventTimestamp > startTime) {
               const evento = data[eventoKeyMap[cliente]] || "Evento no disponible";
               const fecha = new Date(eventTimestamp).toLocaleString("es-AR");
@@ -51,30 +57,50 @@ export default function Header() {
                 cliente === "Edificios"
                   ? `${data["edificio"] || "Sin ubicación"}${data["unidad"] ? ` - ${data["unidad"]}` : ""}`
                   : data["locaciones-tgs"] || data["planta-vtv"] || data["barrio"] || data["otro"] || "Sin ubicación";
-
+  
               const clave = `${cliente}-${ubicacion}`;
               const info = { id: change.doc.id, evento, cliente, ubicacion, fecha, read: false };
-
+  
               // ✅ Notificación normal
               if (!CRITICOS.includes(evento)) {
                 setNotificaciones((prev) => [info, ...prev.slice(0, 9)]);
                 toast.info(`${evento} | ${ubicacion}`, { position: "bottom-right", autoClose: 6000 });
               }
-
+  
               // ✅ Evento crítico → alerta inmediata
               if (CRITICOS.includes(evento)) {
                 generarAlerta(clave, `⚠️ ${evento} en ${ubicacion}`);
               }
-
+  
+              // ✅ Eventos con temporizador (corte o PMA)
+              if (EVENTOS_TIEMPO[evento]) {
+                if (!timersRef.current[clave]) {
+                  timersRef.current[clave] = setTimeout(() => {
+                    generarAlerta(clave, `❗ ${evento} no resuelto en tiempo (ubicación: ${ubicacion})`);
+                  }, EVENTOS_TIEMPO[evento]);
+                }
+              }
+  
+              // ✅ Eventos que cierran ciclo (Restauración o Puerta Cerrada)
+              if (eventoCierre.includes(evento)) {
+                if (timersRef.current[clave]) {
+                  clearTimeout(timersRef.current[clave]);
+                  delete timersRef.current[clave];
+                  eliminarAlerta(clave);
+                }
+              }
+  
               audio.play().catch(() => {});
             }
           }
         });
       });
     });
-
+  
     return () => unsubscribes.forEach((u) => u());
   }, []);
+
+  
 
   const generarAlerta = (clave, mensaje) => {
     setAlertas((prev) => [...prev, { clave, mensaje, timestamp: new Date() }]);
@@ -92,12 +118,11 @@ export default function Header() {
   return (
     <header className="dashboard-header">
       <div className="header-left">
-        <h1>MONITOREO</h1>
+        <h1>📡 Dashboard G3T</h1>
         <p>Monitoreo avanzado y alertas críticas</p>
       </div>
 
       <div className="header-actions">
-        {/* Notificaciones normales */}
         <button
           className="icon-btn blue"
           onClick={() => {
@@ -111,14 +136,12 @@ export default function Header() {
           )}
         </button>
 
-        {/* Alertas críticas */}
         <button className="icon-btn red" onClick={() => setShowAlertModal(true)}>
           <FaExclamationTriangle size={20} />
           {alertas.length > 0 && <span className="badge">{alertas.length}</span>}
         </button>
       </div>
 
-      {/* Modal Notificaciones */}
       {showNotifModal && (
         <div className="modal-overlay" onClick={() => setShowNotifModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -128,7 +151,10 @@ export default function Header() {
             ) : (
               <ul>
                 {notificaciones.map((n) => (
-                  <li key={n.id} className={`notif-item ${n.read ? "read" : "unread"}`}>
+                  <li
+                    key={n.id}
+                    className={`notif-item ${n.read ? "read" : "unread"}`}
+                  >
                     <span className="evento">{n.evento}</span>
                     <small>{n.cliente} · {n.ubicacion}</small>
                     <small>{n.fecha}</small>
@@ -141,7 +167,6 @@ export default function Header() {
         </div>
       )}
 
-      {/* Modal Alertas Críticas */}
       {showAlertModal && (
         <div className="modal-overlay" onClick={() => setShowAlertModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

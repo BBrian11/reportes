@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import { ToastContainer, toast } from "react-toastify";
@@ -11,10 +11,11 @@ export default function Header() {
   const [alertas, setAlertas] = useState([]);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showAlertModal, setShowAlertModal] = useState(false);
+  const timersRef = useRef({});
   const audio = new Audio(notificationSound);
 
-  // ✅ Lista de eventos críticos
-  const CRITICOS = ["Corte de energía eléctrica", "Intrusión detectada"];
+  // Palabras clave para eventos críticos
+  const CRITICOS = ["Corte de energía eléctrica", "Intrusión detectada", "Dispositivo CCTV fuera de línea"];
 
   const eventoKeyMap = {
     TGS: "evento-tgs",
@@ -26,6 +27,7 @@ export default function Header() {
 
   useEffect(() => {
     if (Notification.permission !== "granted") Notification.requestPermission();
+
     const startTime = Date.now();
 
     const collections = [
@@ -52,18 +54,37 @@ export default function Header() {
                   ? `${data["edificio"] || "Sin ubicación"}${data["unidad"] ? ` - ${data["unidad"]}` : ""}`
                   : data["locaciones-tgs"] || data["planta-vtv"] || data["barrio"] || data["otro"] || "Sin ubicación";
 
-              const clave = `${cliente}-${ubicacion}`;
-              const info = { id: change.doc.id, evento, cliente, ubicacion, fecha, read: false };
+              const info = { id: change.doc.id, evento, cliente, ubicacion, fecha };
 
-              // ✅ Notificación normal
+              // ✅ Notificación común SI NO ES crítico
               if (!CRITICOS.includes(evento)) {
-                setNotificaciones((prev) => [info, ...prev.slice(0, 9)]);
+                setNotificaciones((prev) => [info, ...prev.slice(0, 4)]);
                 toast.info(`${evento} | ${ubicacion}`, { position: "bottom-right", autoClose: 6000 });
               }
 
-              // ✅ Evento crítico → alerta inmediata
+              // ✅ Evento crítico → Alertas inmediatas
               if (CRITICOS.includes(evento)) {
-                generarAlerta(clave, `⚠️ ${evento} en ${ubicacion}`);
+                generarAlerta(`${cliente}-${ubicacion}`, `⚠️ ${evento} en ${ubicacion}`);
+              }
+
+              // ✅ Si es corte → iniciar timer para alerta automática
+              if (evento === "Corte de energía eléctrica") {
+                const clave = `${cliente}-${ubicacion}`;
+                if (!timersRef.current[clave]) {
+                  timersRef.current[clave] = setTimeout(() => {
+                    generarAlerta(clave, `❗ No se restauró energía en ${ubicacion} después de 1 hora`);
+                  }, 60 * 60 * 1000);
+                }
+              }
+
+              // ✅ Restauración → cancelar timer
+              if (evento === "Restauración de energía eléctrica") {
+                const clave = `${cliente}-${ubicacion}`;
+                if (timersRef.current[clave]) {
+                  clearTimeout(timersRef.current[clave]);
+                  delete timersRef.current[clave];
+                  eliminarAlerta(clave);
+                }
               }
 
               audio.play().catch(() => {});
@@ -85,40 +106,28 @@ export default function Header() {
     setAlertas((prev) => prev.filter((a) => a.clave !== clave));
   };
 
-  const marcarNotificacionesLeidas = () => {
-    setNotificaciones((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
-
   return (
     <header className="dashboard-header">
       <div className="header-left">
-        <h1>MONITOREO</h1>
+        <h1>📡 Dashboard G3T</h1>
         <p>Monitoreo avanzado y alertas críticas</p>
       </div>
 
       <div className="header-actions">
-        {/* Notificaciones normales */}
-        <button
-          className="icon-btn blue"
-          onClick={() => {
-            setShowNotifModal(true);
-            marcarNotificacionesLeidas();
-          }}
-        >
+        {/* Botón Notificaciones */}
+        <button className="icon-btn blue" onClick={() => setShowNotifModal(true)}>
           <FaBell size={20} />
-          {notificaciones.some((n) => !n.read) && (
-            <span className="badge">{notificaciones.filter((n) => !n.read).length}</span>
-          )}
+          {notificaciones.length > 0 && <span className="badge">{notificaciones.length}</span>}
         </button>
 
-        {/* Alertas críticas */}
+        {/* Botón Alertas */}
         <button className="icon-btn red" onClick={() => setShowAlertModal(true)}>
           <FaExclamationTriangle size={20} />
           {alertas.length > 0 && <span className="badge">{alertas.length}</span>}
         </button>
       </div>
 
-      {/* Modal Notificaciones */}
+      {/* MODALES */}
       {showNotifModal && (
         <div className="modal-overlay" onClick={() => setShowNotifModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -128,9 +137,11 @@ export default function Header() {
             ) : (
               <ul>
                 {notificaciones.map((n) => (
-                  <li key={n.id} className={`notif-item ${n.read ? "read" : "unread"}`}>
-                    <span className="evento">{n.evento}</span>
+                  <li key={n.id}>
+                    <strong>{n.evento}</strong>
+                    <br />
                     <small>{n.cliente} · {n.ubicacion}</small>
+                    <br />
                     <small>{n.fecha}</small>
                   </li>
                 ))}
@@ -141,7 +152,6 @@ export default function Header() {
         </div>
       )}
 
-      {/* Modal Alertas Críticas */}
       {showAlertModal && (
         <div className="modal-overlay" onClick={() => setShowAlertModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

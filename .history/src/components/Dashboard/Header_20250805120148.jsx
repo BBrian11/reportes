@@ -92,7 +92,7 @@ export default function Header() {
   return (
     <header className="dashboard-header">
       <div className="header-left">
-        <h1>MONITOREO</h1>
+        <h1>📡 MONITOREO</h1>
         <p>Monitoreo avanzado y alertas críticas</p>
       </div>
 

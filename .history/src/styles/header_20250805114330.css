@@ -1,0 +1,24 @@
+.notif-item {
+  padding: 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notif-item.unread {
+  background: #e0f2fe; /* Azul claro */
+  font-weight: bold;
+}
+
+.notif-item.read {
+  background: #f9fafb;
+  color: #374151;
+}
+
+.notif-item .evento {
+  color: #2563eb;
+  font-size: 1rem;
+}

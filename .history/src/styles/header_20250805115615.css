@@ -1,0 +1,154 @@
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0f172a; /* Azul oscuro */
+  color: #f8fafc;
+  padding: 14px 24px;
+  border-bottom: 2px solid #1e293b;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.header-left h1 {
+  font-size: 1.4rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.header-left p {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.header-actions {
+  display: flex;
+  gap: 14px;
+}
+
+.icon-btn {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.2rem;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+}
+
+.icon-btn:hover {
+  transform: scale(1.1);
+}
+
+.icon-btn.blue {
+  background: #2563eb;
+  color: #fff;
+}
+
+.icon-btn.red {
+  background: #dc2626;
+  color: #fff;
+}
+
+.badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: #fff;
+  color: #111;
+  font-size: 0.75rem;
+  font-weight: bold;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 420px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal h3 {
+  font-size: 1rem;
+  font-weight: bold;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.modal ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.modal li {
+  padding: 10px;
+  margin-bottom: 6px;
+  background: #f9fafb;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.modal button {
+  margin-top: 10px;
+  padding: 10px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.modal button:hover {
+  background: #1d4ed8;
+}
+.notif-item {
+  padding: 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notif-item.unread {
+  background: #e0f2fe; /* Azul claro */
+  font-weight: bold;
+}
+
+.notif-item.read {
+  background: #f9fafb;
+  color: #374151;
+}
+
+.notif-item .evento {
+  color: #2563eb;
+  font-size: 1rem;
+}
