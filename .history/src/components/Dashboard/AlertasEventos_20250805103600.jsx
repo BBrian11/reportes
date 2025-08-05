@@ -1,8 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../../services/firebase";
-
-
 export default function AlertasEventos() {
   const [alertas, setAlertas] = useState([]);
   const timersRef = useRef({}); // Guardamos timers por clave única (edificio o ubicacion)
