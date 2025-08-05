@@ -94,38 +94,6 @@ export default function Dashboard() {
     setFiltros({ ...filtros, cliente, grupo }); // ✅ Filtra todo el edificio
   };
   
-  const procesarEventoAlerta = (evento) => {
-    const clave = `${evento.ubicacion}`;
-    if (evento.evento === "Corte de energía eléctrica") {
-      if (!timersRef.current[clave]) {
-        timersRef.current[clave] = setTimeout(() => {
-          generarAlerta(clave, `No se detectó restauración tras 1 hora del corte en ${clave}`);
-        }, 60 * 60 * 1000); // 1 hora
-      }
-    }
-
-    if (evento.evento === "Restauración de energía eléctrica") {
-      if (timersRef.current[clave]) {
-        clearTimeout(timersRef.current[clave]);
-        delete timersRef.current[clave];
-        eliminarAlerta(clave);
-      }
-    }
-  };
-
-  const generarAlerta = (clave, mensaje) => {
-    setAlertas((prev) => [...prev, { clave, mensaje, timestamp: new Date() }]);
-    const audio = new Audio("/alerta.mp3");
-    audio.play();
-    if (Notification.permission === "granted") {
-      new Notification("⚠️ Alerta en edificio", { body: mensaje });
-    }
-  };
-
-  const eliminarAlerta = (clave) => {
-    setAlertas((prev) => prev.filter((a) => a.clave !== clave));
-  };
-
   // ✅ Filtrado dinámico
   const eventosFiltrados = eventos.filter((e) => {
     const fechaEvento = e.fechaObj || new Date(e.fecha);
@@ -162,32 +130,7 @@ export default function Dashboard() {
   
       <main className="dashboard-main">
         <Header />
-         {/* ✅ Botón flotante con badge */}
-         <button className="alerta-btn" onClick={() => setMostrarModal(true)}>
-          🔔 {alertas.length > 0 && <span className="badge">{alertas.length}</span>}
-        </button>
-
-        {/* ✅ Modal de alertas */}
-        {mostrarModal && (
-          <div className="modal-alertas">
-            <div className="modal-content">
-              <h3>Alertas pendientes</h3>
-              {alertas.length === 0 ? (
-                <p>No hay alertas activas</p>
-              ) : (
-                alertas.map((a, idx) => (
-                  <div key={idx} className="alerta-item">
-                    <strong>{a.mensaje}</strong>
-                    <span>{a.timestamp.toLocaleTimeString()}</span>
-                    <button onClick={() => eliminarAlerta(a.clave)}>❌</button>
-                  </div>
-                ))
-              )}
-              <button onClick={() => setMostrarModal(false)}>Cerrar</button>
-            </div>
-          </div>
-        )}
-
+        <AlertasEventos />
         <div className="dashboard-content">
           <Filters filtros={filtros} setFiltros={setFiltros} eventos={eventos} />
   
