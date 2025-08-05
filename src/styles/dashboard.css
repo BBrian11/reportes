@@ -755,3 +755,45 @@
   border-radius: 8px;
   width: 400px;
 }
+.alerta-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #e60000; /* rojo intenso */
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  animation: pulse 1.5s infinite; /* efecto alerta */
+}
+
+.alerta-btn:hover {
+  background: #cc0000;
+}
+
+.badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: yellow;
+  color: black;
+  border-radius: 50%;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+/* Animación efecto alerta */
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(230, 0, 0, 0.7); }
+  70% { box-shadow: 0 0 0 15px rgba(230, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(230, 0, 0, 0); }
+}

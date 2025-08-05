@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../../services/firebase";
-import { FaExclamationTriangle } from "react-icons/fa";
+
 export default function AlertasEventos() {
   const [alertas, setAlertas] = useState([]);
   const [mostrarModal, setMostrarModal] = useState(false);
@@ -64,10 +64,8 @@ export default function AlertasEventos() {
     <>
       {/* Botón flotante */}
       <button className="alerta-btn" onClick={() => setMostrarModal(true)}>
-  <FaExclamationTriangle size={22} color="#fff" />
-  {alertas.length > 0 && <span className="badge">{alertas.length}</span>}
-</button>
-
+      ⚠️ {alertas.length > 0 && <span className="badge">{alertas.length}</span>}
+      </button>
 
       {/* Modal */}
       {mostrarModal && (
