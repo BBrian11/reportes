@@ -13,8 +13,8 @@ import MiniCharts from "./MiniCharts.jsx";
 import OtrosStats from "./OtrosStats.jsx";
 import LineAnalytics from "./LineAnalytics.jsx";
 import TareasPanel from "./TareasPanel.jsx";
-
-import { FaSync, FaTasks, FaBars } from "react-icons/fa";
+import { Link } from "react-router-dom";
+import { FaSync, FaTasks, FaBars, FaWpforms } from "react-icons/fa";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import "../../styles/dashboard.css";
@@ -125,6 +125,11 @@ ecargar */}
         >
           <FaTasks size={20} />
         </button>
+        <Link to="/form-builder">
+          <button className="icon-btn blue">
+            <FaWpforms size={20} />
+          </button>
+        </Link>
       </div>
 
       {/* ✅ Sidebar (intacto con submenús) */}

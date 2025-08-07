@@ -1173,3 +1173,23 @@
 .icon-btn.purple.active {
   box-shadow: 0 0 14px #c084fc;
 }
+.tareas-panel {
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.tareas-panel ul {
+  list-style: none;
+  padding: 0;
+}
+
+.tareas-panel li {
+  padding: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tareas-panel li:last-child {
+  border-bottom: none;
+}
