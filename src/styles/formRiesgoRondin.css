@@ -1,0 +1,137 @@
+:root{
+    --ok:#22c55e;      /* verde */
+    --medio:#f59e0b;   /* amarillo */
+    --grave:#ef4444;   /* rojo */
+    --bg:#f8fafc;
+    --panel:#ffffff;
+    --ink:#0f172a;
+    --muted:#64748b;
+    --bd:#e2e8f0;
+  }
+  
+  .riesgo-wrapper{ padding:10px; }
+  
+  /* Header */
+  .riesgo-header{
+    display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(90deg,#0a0f1e,#1e293b);
+    color:#fff; padding:18px 22px; border-radius:16px;
+    box-shadow:0 8px 22px rgba(0,0,0,.22); margin-bottom:18px;
+  }
+  .riesgo-header__left{ display:flex; gap:12px; align-items:center; }
+  .riesgo-title{ font-weight:700 !important; letter-spacing:.3px; }
+  .chip-tiempo{ background:#0ea5e9 !important; color:#fff !important; border-radius:10px !important; font-weight:600 !important; }
+  
+  /* Panel principal */
+  .riesgo-container{
+    padding:26px !important; border-radius:18px !important;
+    background:var(--bg) !important; box-shadow:0 10px 26px rgba(2,6,23,.08) !important;
+  }
+  
+  /* Progreso */
+  .riesgo-progress{ margin-bottom:16px; }
+  .progress-bar{ height:8px !important; border-radius:10px; margin-top:6px; }
+  
+  .riesgo-divider{ margin:18px 0 !important; }
+  
+  /* Inputs */
+  .riesgo-container .MuiOutlinedInput-root{
+    border-radius:12px !important; background:#fff;
+  }
+  
+  /* Grid de tandas */
+  .tandas-grid{
+    display:grid; gap:14px;
+    grid-template-columns:1fr;
+  }
+  
+  /* Card de tanda */
+  .tanda-card{
+    background:var(--panel) !important; border-radius:14px !important;
+    box-shadow:0 6px 16px rgba(0,0,0,.06) !important;
+  }
+  .tanda-header-row{
+    display:flex; gap:12px; justify-content:space-between; align-items:center; margin-bottom:12px;
+  }
+  .tanda-cliente{  min-width: 360px; }
+  
+  /* Tabla simple de cámaras */
+  .tabla-camaras{
+    border:1px solid var(--bd); border-radius:12px; overflow:hidden; background:#fff; margin-bottom:12px;
+  }
+  .tabla-head, .tabla-row{
+    display:grid; grid-template-columns:140px 360px 1fr 44px; gap:10px; align-items:center;
+  }
+  .tabla-head{
+    background:#f1f5f9; color:var(--muted); font-weight:600; padding:10px 12px;
+  }
+  .tabla-row{ padding:10px 12px; border-top:1px solid var(--bd); }
+  .tabla-row:first-of-type{ border-top:none; }
+  .tabla-row.estado-ok{ box-shadow: inset 4px 0 0 0 var(--ok); }
+  .tabla-row.estado-medio{ box-shadow: inset 4px 0 0 0 var(--medio); }
+  .tabla-row.estado-grave{ box-shadow: inset 4px 0 0 0 var(--grave); }
+  
+  .cell.canal .MuiOutlinedInput-root{ background:#fff; }
+  .cell.estado .estado-switch{ display:flex; gap:8px; flex-wrap:wrap; }
+  .estado-pill{
+    --pill-bg:#f8fafc;
+    display:inline-flex; align-items:center; gap:6px;
+    border:1px solid var(--bd); padding:6px 10px; border-radius:999px;
+    cursor:pointer; user-select:none; background:var(--pill-bg);
+    transition:all .15s ease;
+  }
+  .estado-pill .dot{
+    width:10px; height:10px; border-radius:50%; display:inline-block; background:var(--pill);
+    box-shadow:0 0 0 2px rgba(0,0,0,.04) inset;
+  }
+  .estado-pill .txt{ font-size:.85rem; color:var(--ink); }
+  .estado-pill:hover{ background:#f1f5f9; }
+  .estado-pill.active{ border-color:var(--pill); box-shadow:0 0 0 3px color-mix(in srgb, var(--pill) 25%, transparent); }
+  .estado-pill input{ display:none; }
+  
+  .tanda-resumen .MuiOutlinedInput-root{ background:#fff; }
+  
+  /* Botón agregar tanda */
+  .btn-add-tanda{
+    justify-self:start; border-radius:10px !important; padding:8px 14px !important; border-color:#cbd5e1 !important;
+  }
+  .btn-add-tanda:hover{ background:#f8fafc !important; }
+  
+  /* Footer fijo */
+  .riesgo-footer{
+    position:sticky; bottom:-1px; margin-top:20px; padding:12px 14px;
+    background:rgba(248,250,252,.9); backdrop-filter:blur(6px);
+    border-radius:12px; border:1px solid var(--bd);
+    box-shadow:0 8px 20px rgba(15,23,42,.06);
+  }
+  .riesgo-footer .spacer{ flex:1; }
+  .btn-reset{ border:1px solid var(--bd) !important; }
+  
+  /* Responsive */
+  @media (max-width: 1024px){
+    .tabla-head, .tabla-row{ grid-template-columns:120px 1fr 1fr 44px; }
+  }
+  @media (max-width: 640px){
+    .tabla-head, .tabla-row{ grid-template-columns:1fr; }
+    .tabla-head span:nth-child(n+2){ display:none; }
+  }
+  /* Aumentar ancho de todos los inputs y selects dentro del formulario */
+.riesgo-container .MuiFormControl-root,
+.riesgo-container .MuiTextField-root {
+  width: 50% !important;  /* Ocupa todo el espacio disponible */
+}
+
+/* Hacer más grande el select de cliente */
+.tanda-cliente {
+  min-width: 360px;  /* Antes 260px */
+}
+
+/* En la tabla, que el primer select (canal) sea más ancho */
+.tabla-camaras .cell.canal .MuiOutlinedInput-root {
+  min-width: 180px; /* Antes auto */
+}
+
+/* Hacer que las columnas de la tabla usen proporción en vez de píxeles fijos */
+.tabla-head, .tabla-row {
+  grid-template-columns: 200px 1fr 2fr 44px; /* más espacio para Estado y Nota */
+}

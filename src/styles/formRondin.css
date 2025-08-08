@@ -1,0 +1,194 @@
+/* Wrapper general para respetar layout del dashboard */
+.rondin-wrapper {
+    padding: 8px;
+  }
+  
+  /* Header */
+  .rondin-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(90deg, #0a0f1e, #1e293b);
+    color: #fff;
+    padding: 18px 22px;
+    border-radius: 16px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+    margin-bottom: 18px;
+  }
+  
+  .rondin-header__left {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  
+  .rondin-title {
+    font-weight: 700 !important;
+    letter-spacing: .3px;
+  }
+  
+  .chip-tiempo {
+    background: #0ea5e9 !important;
+    color: #fff !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+  }
+  
+  /* Contenedor */
+  .rondin-container {
+    padding: 28px !important;
+    border-radius: 18px !important;
+    background: #f8fafc !important;
+    box-shadow: 0 10px 26px rgba(2, 6, 23, 0.08) !important;
+  }
+  
+  /* Progreso */
+  .rondin-progress {
+    margin-bottom: 16px;
+  }
+  .progress-bar {
+    height: 8px !important;
+    border-radius: 10px;
+    margin-top: 6px;
+  }
+  
+  /* Divider fino */
+  .rondin-divider {
+    margin: 18px 0 !important;
+  }
+  
+  /* Top form: inputs con bordes suaves */
+  .rondin-container .MuiOutlinedInput-root {
+    border-radius: 12px !important;
+    background: #ffffff;
+  }
+  .rondin-container .MuiTextField-root .MuiOutlinedInput-root {
+    border-radius: 12px !important;
+  }
+  
+  /* Grid de ítems */
+  .items-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  
+  /* Tarjeta de ítem */
+  .item-card {
+    border-radius: 14px !important;
+    overflow: hidden;
+    background: #ffffff !important;
+    box-shadow: 0 6px 16px rgba(0,0,0,.06) !important;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .item-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(0,0,0,.08) !important;
+  }
+  
+  .item-card__content {
+    padding: 14px !important;
+  }
+  
+  .item-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  
+  .item-label {
+    font-weight: 600 !important;
+    color: #0f172a;
+    font-size: 0.95rem !important;
+  }
+  
+  /* Estados visuales */
+  .status-ok {
+    border-left: 4px solid #22c55e;
+  }
+  .status-alerta {
+    border-left: 4px solid #f59e0b;
+  }
+  .status-na {
+    border-left: 4px solid #94a3b8;
+  }
+  .status-pendiente {
+    border-left: 4px solid #cbd5e1;
+  }
+  
+  /* Botones de estado */
+  .btn-status {
+    color: #0f172a !important;
+    border: 1px solid #e2e8f0 !important;
+    background: #fff !important;
+  }
+  .btn-status:hover {
+    background: #f8fafc !important;
+  }
+  .btn-status.active {
+    border-color: #22c55e !important;
+    background: #ecfdf5 !important;
+  }
+  .btn-status.warn.active {
+    border-color: #f59e0b !important;
+    background: #fffbeb !important;
+  }
+  .btn-status.na.active {
+    border-color: #94a3b8 !important;
+    background: #f1f5f9 !important;
+  }
+  
+  /* Nota del ítem */
+  .item-note .MuiOutlinedInput-root {
+    background: #f8fafc;
+    border-radius: 10px !important;
+  }
+  
+  /* Timestamp */
+  .item-ts {
+    margin-top: 6px;
+    font-size: 12px !important;
+    color: #64748b !important;
+  }
+  
+  /* Botón agregar ítem */
+  .btn-add-item {
+    justify-self: start;
+    border-radius: 10px !important;
+    padding: 8px 14px !important;
+    border-color: #cbd5e1 !important;
+  }
+  .btn-add-item:hover {
+    background: #f8fafc !important;
+  }
+  
+  /* Footer fijo */
+  .rondin-footer {
+    position: sticky;
+    bottom: -1px;
+    margin-top: 20px;
+    padding: 12px 14px;
+    background: rgba(248, 250, 252, 0.9);
+    backdrop-filter: blur(6px);
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  }
+  .rondin-footer .spacer {
+    flex: 1;
+  }
+  .btn-reset {
+    border: 1px solid #e2e8f0 !important;
+  }
+  
+  /* Responsive tweaks */
+  @media (max-width: 768px) {
+    .rondin-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+  }
+  
