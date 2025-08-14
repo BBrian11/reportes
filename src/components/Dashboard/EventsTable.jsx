@@ -22,26 +22,47 @@ export default function EventsTable({ eventos }) {
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
 
-  // ✅ Columnas
+  // ✅ Getters robustos
+  // ✅ Getters simples y robustos (sin depender de cliente)
+const getObservacion = (row) =>
+row?.observacion ??
+row?.["observaciones-edificios"] ??
+"";
+
+const getResolucion = (row) =>
+row?.["resolusion-evento"] ??        // nombre con guion y typo (el de tu DB)
+row?.["resolucion-evento"] ??        // por si en algún lado lo guardaste bien
+row?.resolucion ??                   // variantes comunes
+row?.resolucionEvento ??
+row?.resolusionEvento ??
+"";
+const getRespuestaResidente = (row) =>
+  row?.["respuesta-residente"] ??
+  row?.respuesta ??
+  "";
+  // ✅ Columnas (solo agrego Resolución)
   const columns = [
     { name: "Cliente", selector: (row) => row.cliente, sortable: true },
-    { name: "Evento", selector: (row) => row.evento, sortable: true },
-    { name: "Ubicación", selector: (row) => row.ubicacion },
-    { name: "Fecha", selector: (row) => row.fecha, sortable: true },
-    { name: "Observación", selector: (row) => row.observacion, wrap: true },
+    { name: "Evento", selector: (row) => row.evento || row["evento-edificio"], sortable: true },
+    { name: "Ubicación", selector: (row) => row.ubicacion || row.edificio },
+    { name: "Fecha", selector: (row) => row.fecha || row.fechaHoraEnvio, sortable: true },
+  
+    // ✅ Observación: toma la que exista (normal y/o de Edificios)
+    { name: "Observación", selector: (row) => getObservacion(row) || "-", wrap: true },
+  
+    // ✅ Resolución: se muestra si el doc trae cualquiera de las variantes; si no, “-”
+    { name: "Resolución", selector: (row) => getResolucion(row) || "-", wrap: true },
+    { name: "Respuesta Residente", selector: (row) => getRespuestaResidente(row) || "-", wrap: true },
     {
       name: "Acciones",
       cell: (row) => (
         <div className="flex gap-2">
-          {/* Botón Editar */}
           <button
             onClick={() => handleEditObservation(row)}
             className="bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 transition"
           >
             ✏️ Editar
           </button>
-
-          {/* Botón Eliminar */}
           <button
             onClick={() => handleDeleteEvent(row)}
             className="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition"
@@ -53,7 +74,7 @@ export default function EventsTable({ eventos }) {
       ignoreRowClick: true,
     },
   ];
-
+  
   const customStyles = {
     headCells: {
       style: {
@@ -66,60 +87,65 @@ export default function EventsTable({ eventos }) {
     },
     rows: {
       style: {
-        "&:hover": {
-          backgroundColor: "#f3f4f6",
-          transition: "0.2s",
-        },
+        "&:hover": { backgroundColor: "#f3f4f6", transition: "0.2s" },
       },
     },
   };
 
-  // ✅ Filtrado
+  // ✅ Filtrado: busca también en la observación correcta y en resolución
   const filteredData = useMemo(() => {
-    return eventos.filter((item) => {
+    return (eventos || []).filter((item) => {
+      const texto = (filterText || "").toLowerCase();
       const textMatch =
-        item.cliente?.toLowerCase().includes(filterText.toLowerCase()) ||
-        item.evento?.toLowerCase().includes(filterText.toLowerCase()) ||
-        item.ubicacion?.toLowerCase().includes(filterText.toLowerCase()) ||
-        item.observacion?.toLowerCase().includes(filterText.toLowerCase());
-
-      const fechaEvento = item.fechaObj || new Date(item.fecha);
+        item?.cliente?.toLowerCase().includes(texto) ||
+        item?.evento?.toLowerCase().includes(texto) ||
+        item?.ubicacion?.toLowerCase().includes(texto) ||
+        (getObservacion(item) || "").toLowerCase().includes(texto) ||   // ✅
+        (getResolucion(item) || "").toLowerCase().includes(texto);      // ✅
+  
+      const fechaEvento =
+        item?.fechaObj || (item?.fecha instanceof Date ? item.fecha : new Date(item?.fecha ?? item?.fechaHoraEnvio));
       const desde = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : null;
       const hasta = fechaFin ? new Date(`${fechaFin}T23:59:59`) : null;
-
+  
       return (
         textMatch &&
-        (!desde || fechaEvento >= desde) &&
-        (!hasta || fechaEvento <= hasta)
+        (!desde || (fechaEvento && fechaEvento >= desde)) &&
+        (!hasta || (fechaEvento && fechaEvento <= hasta))
       );
     });
   }, [eventos, filterText, fechaInicio, fechaFin]);
-
-  // ✅ Editar Observación
+  
+  // ✅ Editar Observación (escribe en el campo correcto)
   const handleEditObservation = async (event) => {
     const { value: newObservation } = await MySwal.fire({
       title: "Editar Observación",
       html: `
-        <textarea id="swal-observation" class="swal2-textarea" style="width:100%;padding:10px;">
-          ${event.observacion || ""}
-        </textarea>`,
+        <textarea id="swal-observation" class="swal2-textarea" style="width:100%;padding:10px;">${getObservacion(event) || ""}</textarea>
+      `,
       showCancelButton: true,
       confirmButtonText: "Guardar",
       cancelButtonText: "Cancelar",
       width: "500px",
       preConfirm: () => document.getElementById("swal-observation").value,
     });
+    if (newObservation === undefined) return;
 
-    if (newObservation !== undefined) {
-      try {
-        const path = `novedades/${event.cliente.toLowerCase()}/eventos/${event.id}`;
-        await updateDoc(doc(db, path), {
-          [`observaciones-${event.cliente.toLowerCase()}`]: newObservation,
-        });
-        MySwal.fire("✅ Guardado", "Observación actualizada", "success");
-      } catch {
-        MySwal.fire("❌ Error", "No se pudo actualizar", "error");
-      }
+    try {
+      // decidir colección
+      const clienteLower = (event?.cliente || (event?.edificio ? "Edificios" : "otros")).toLowerCase();
+      const path = `novedades/${clienteLower}/eventos/${event.id}`;
+
+      // decidir campo de observación
+      const fieldName =
+        clienteLower === "edificios"
+          ? "observaciones-edificios"
+          : `observaciones-${clienteLower}`;
+
+      await updateDoc(doc(db, path), { [fieldName]: newObservation });
+      MySwal.fire("✅ Guardado", "Observación actualizada", "success");
+    } catch {
+      MySwal.fire("❌ Error", "No se pudo actualizar", "error");
     }
   };
 
@@ -127,7 +153,7 @@ export default function EventsTable({ eventos }) {
   const handleDeleteEvent = async (event) => {
     const confirm = await MySwal.fire({
       title: "¿Eliminar este evento?",
-      text: `Se eliminará el evento: "${event.evento}" en "${event.ubicacion}"`,
+      text: `Se eliminará el evento: "${event.evento}" en "${event.ubicacion || event.edificio || ""}"`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#d33",
@@ -138,7 +164,8 @@ export default function EventsTable({ eventos }) {
 
     if (confirm.isConfirmed) {
       try {
-        const path = `novedades/${event.cliente.toLowerCase()}/eventos/${event.id}`;
+        const clienteLower = (event?.cliente || (event?.edificio ? "Edificios" : "otros")).toLowerCase();
+        const path = `novedades/${clienteLower}/eventos/${event.id}`;
         await deleteDoc(doc(db, path));
         MySwal.fire("✅ Eliminado", "El evento fue eliminado", "success");
       } catch {
@@ -150,19 +177,18 @@ export default function EventsTable({ eventos }) {
   return (
     <div className="bg-white shadow-lg rounded-2xl p-6 mb-6 border border-gray-200">
       <h2 className="text-lg font-semibold text-gray-700 mb-4">Filtros de búsqueda</h2>
-  
-      {/* ✅ Contenedor Filtros */}
+
       <div className="filters-container">
         <div className="icon-wrapper">
           <FiSearch />
           <input
             type="text"
-            placeholder="Buscar cliente, evento o ubicación..."
+            placeholder="Buscar cliente, evento, observación o resolución..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
           />
         </div>
-  
+
         <div className="icon-wrapper">
           <FiCalendar />
           <input
@@ -171,7 +197,7 @@ export default function EventsTable({ eventos }) {
             onChange={(e) => setFechaInicio(e.target.value)}
           />
         </div>
-  
+
         <div className="icon-wrapper">
           <FiCalendar />
           <input
@@ -180,21 +206,14 @@ export default function EventsTable({ eventos }) {
             onChange={(e) => setFechaFin(e.target.value)}
           />
         </div>
-  
+
         <div className="reset-wrapper">
-          <button
-            onClick={() => {
-              setFilterText("");
-              setFechaInicio("");
-              setFechaFin("");
-            }}
-          >
+          <button onClick={() => { setFilterText(""); setFechaInicio(""); setFechaFin(""); }}>
             <FiRotateCcw /> Reset
           </button>
         </div>
       </div>
-  
-      {/* ✅ Tabla */}
+
       <DataTable
         columns={columns}
         data={filteredData}

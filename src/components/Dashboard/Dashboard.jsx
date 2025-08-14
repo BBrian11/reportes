@@ -45,38 +45,81 @@ export default function Dashboard() {
       onSnapshot(collection(db, path), (snapshot) => {
         const nuevos = snapshot.docs.map((doc) => {
           const d = doc.data();
-          let ubicacion = "Sin Ubicación";
-
-          if (cliente === "Edificios") {
-            const edificio = d["edificio"] || "";
-            const unidad = d["unidad"] ? ` - ${d["unidad"]}` : "";
-            ubicacion = edificio ? edificio + unidad : "Sin Ubicación";
-          } else {
-            ubicacion = d[ubicacionKey] || "Sin Ubicación";
-          }
-
+        
+          // 🚩 Normalizaciones
+          const edificio = d["edificio"] || "";
+          const unidad = d["unidad"] || "";
+        
+          const ubicacion =
+            cliente === "Edificios"
+              ? (edificio ? edificio + (unidad ? ` - ${unidad}` : "") : "Sin Ubicación")
+              : (d[ubicacionKey] || "Sin Ubicación");
+        
+          // ⏱️ Fecha
+          const fechaObj = d.fechaHoraEnvio
+            ? new Date(
+                (d.fechaHoraEnvio.seconds ?? d.fechaHoraEnvio._seconds) * 1000
+              )
+            : null;
+        
+          const fecha = fechaObj
+            ? fechaObj.toLocaleString("es-AR", {
+                hour12: false,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })
+            : "Sin Fecha";
+        
+          // 📝 Observación (mantengo tu convención existente)
+          const observacion =
+            d[`observaciones-${cliente.toLowerCase()}`] ??
+            d["observaciones-edificios"] ??
+            d.observacion ??
+            "Sin Observación";
+        
+          // ✅ RESOLUCIÓN (traerla del doc y exponerla con varios alias)
+          const resolucionValue =
+            d["resolusion-evento"] ??
+            d["resolucion-evento"] ??
+            d.resolucion ??
+            d.resolucionEvento ??
+            d.resolusionEvento ??
+            "";
+        
+          // (opcional) RESPUESTA residente si la querés mostrar luego
+          const respuestaResidente =
+            d["respuesta-residente"] ?? d.respuesta ?? "";
+        
           return {
             id: doc.id,
             cliente,
-            grupo: cliente === "Edificios" ? d["edificio"] || "General" : d[ubicacionKey]?.split(" ")[0] || "General",
+            grupo:
+              cliente === "Edificios"
+                ? edificio || "General"
+                : (d[ubicacionKey]?.split(" ")[0] || "General"),
             evento: d[eventoKey] || "Sin Evento",
             ubicacion,
-            fecha: d.fechaHoraEnvio
-              ? new Date(d.fechaHoraEnvio.seconds * 1000).toLocaleString("es-AR", {
-                  hour12: false,
-                  year: "numeric",
-                  month: "2-digit",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                })
-              : "Sin Fecha",
-            fechaObj: d.fechaHoraEnvio ? new Date(d.fechaHoraEnvio.seconds * 1000) : null,
-            observacion: d[`observaciones-${cliente.toLowerCase()}`] || "Sin Observación",
+            fecha,
+            fechaObj,
+            observacion,
+        
+            // 👇 Agrego explícitamente los campos que te faltaban
+            //   (dejo la clave EXACTA con guion para que la tabla la pueda leer por bracket)
+            ["resolusion-evento"]: d["resolusion-evento"] ?? null,
+            // y también una versión normalizada por si querés cambiar el selector
+            resolucion: resolucionValue,
+        
+            // extras útiles para columnas futuras
+            ["respuesta-residente"]: respuestaResidente,
+            edificio,
+            unidad,
           };
         });
-
+        
         setEventos((prev) => [...prev.filter((e) => e.cliente !== cliente), ...nuevos]);
       })
     );

@@ -135,3 +135,122 @@
 .tabla-head, .tabla-row {
   grid-template-columns: 200px 1fr 2fr 44px; /* más espacio para Estado y Nota */
 }
+/* Header mini barra */
+.items-header .progress-bar-sm{
+  width:160px; height:6px !important; border-radius:999px;
+}
+
+/* HORIZONTAL con scroll + snap */
+.items-hscroll{
+  display:flex; gap:12px; align-items:stretch;
+  overflow-x:auto; overflow-y:hidden; padding:6px 4px 10px;
+  scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
+}
+.items-hscroll > *{ scroll-snap-align:start; }
+.items-hscroll::-webkit-scrollbar{ height:8px; }
+.items-hscroll::-webkit-scrollbar-thumb{ background:#cbd5e1; border-radius:999px; }
+
+/* Cards */
+.item-card{
+  flex:0 0 auto;            /* 👈 clave para horizontal */
+  min-width:180px; max-width:320px;
+  border-radius:14px !important;
+  background:var(--panel) !important;
+  box-shadow:0 6px 16px rgba(2,6,23,.08) !important;
+  border:1px solid var(--bd);
+  display:flex; flex-direction:column; justify-content:space-between;
+}
+.item-card__content{ padding:12px 14px !important; }
+.item-card__row{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.item-label{ font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.item-actions{ display:flex; gap:8px; align-items:center; }
+.btn-status{ border:1px solid var(--bd) !important; border-radius:10px !important; }
+.btn-status.active{ box-shadow:0 0 0 3px rgba(34,197,94,.25); }
+.btn-status.warn.active{ box-shadow:0 0 0 3px rgba(245,158,11,.25); }
+.btn-status.na.active{ box-shadow:0 0 0 3px rgba(100,116,139,.25); }
+
+.item-note .MuiOutlinedInput-root{ background:#fff; }
+.item-ts{ color:var(--muted); font-size:.8rem; margin-top:6px; }
+
+.btn-add-item{
+  flex:0 0 auto;            /* 👈 que no se estire */
+  align-self:center;
+  border-radius:12px !important;
+  border-color:#cbd5e1 !important;
+  white-space:nowrap;
+}
+
+/* Estados visuales */
+.item-card.status-ok{ box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--ok) 50%, transparent); }
+.item-card.status-alerta{ box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--medio) 55%, transparent); }
+.item-card.status-na{ box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--muted) 45%, transparent); }
+
+/* Responsive */
+@media (max-width:640px){
+  .item-card{ min-width:88vw; }
+}
+.riesgo-container .MuiFormControl-root,
+.riesgo-container .MuiTextField-root {
+  width: 50% !important;
+}
+/* Solo el top-form puede usar 50% si querés columnas */
+.riesgo-top-form .MuiFormControl-root,
+.riesgo-top-form .MuiTextField-root {
+  width: 50% !important;
+  max-width: 520px;
+}
+/* Sección de Observaciones full-width, alineada al layout */
+.obs-section { 
+  margin-top: 16px; 
+}
+
+.obs-full {
+  width: 100% !important;      /* 👉 ocupa todo el ancho del contenedor */
+}
+
+.obs-full .MuiOutlinedInput-root{
+  background:#fff;
+  border-radius:12px;
+}
+
+@media (min-width: 1024px){
+  .obs-full { max-width: 100%; }  /* sin límite en desktop */
+}
+/* más ancho por ítem en el top form */
+.riesgo-top-form .top-field { min-width: 340px; }
+
+/* alto y padding cómodos + tipografía */
+.riesgo-top-form .big-control .MuiOutlinedInput-root{
+  height: 56px;                    /* alto del input */
+  border-radius: 12px;             /* mismo look del resto */
+  background: #fff;
+  font-size: 1rem;
+}
+.riesgo-top-form .big-control .MuiInputLabel-root{
+  font-size: 1rem;
+}
+
+/* padding del texto dentro del Select/TextField */
+.riesgo-top-form .big-control .MuiSelect-select,
+.riesgo-top-form .big-control .MuiOutlinedInput-input{
+  padding: 14px 14px;              /* más “aire” */
+  display: flex; align-items: center;
+}
+
+/* en pantallas grandes, que respiren aún más */
+@media (min-width: 1200px){
+  .riesgo-top-form .top-field { min-width: 380px; }
+}
+.obs-section {
+  margin-top: 16px;
+}
+
+.obs-full {
+  width: 350px !important;
+}
+/* HUD: que flote bonito */
+.riesgo-container .MuiPaper-root + .riesgo-progress{ margin-top: 8px; }
+
+/* chips de misión: sin brillos molestos */
+.MuiChip-root{ font-weight: 600; }

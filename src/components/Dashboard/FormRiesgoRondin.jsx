@@ -7,7 +7,7 @@ import {
   setDoc,
   addDoc,
   updateDoc,
-  serverTimestamp,
+  serverTimestamp, onSnapshot, query, orderBy, runTransaction, where, limit 
   
 } from "firebase/firestore";
 import { db } from "../../services/firebase";
@@ -43,10 +43,18 @@ import {
   AccessTime,
   DoneAll,
   Add,
-  Delete,
+  Delete,CheckCircle,
+  ReportProblem,
+   RemoveCircleOutline,
 } from "@mui/icons-material";
 
 import "../../styles/formRiesgoRondin.css";
+// ===== Gamification =====
+import { motion, AnimatePresence } from "framer-motion";
+import Confetti from "react-confetti";
+import useSound from "use-sound";
+
+
 const toast = Swal.mixin({
     toast: true,
     position: "top-end",
@@ -75,6 +83,13 @@ const ESTADOS = [
   { key: "medio", label: "Medio", color: "var(--medio)" },
   { key: "grave", label: "Grave", color: "var(--grave)" },
 ];
+const DEFAULT_ITEMS = [
+    { id: "chk-camaras", label: "Cámaras operativas / sin fallas" },
+    { id: "chk-pma",     label: "Eventos PMA controlados y cerrados" },
+   { id: "chk-alarma",  label: "Paneles de alarma conectados" },
+   { id: "chk-access",  label: "Control de accesos sin anomalías" },
+    { id: "chk-comunic", label: "Comunicaciones OK (IP/4G/)" },
+  ];
 
 const nuevaTanda = (id = Date.now()) => ({
   id: `tanda-${id}`,
@@ -91,6 +106,79 @@ export default function FormRiesgoRondin({
   operarios = OPERARIOS_DEFAULT,
   canalDefault = "",
 }) {
+  // ===== Plan de rondín =====
+const TOTAL_CLIENTES_PLAN = 10;
+const TANDAS_SALTOS = 6;           // 12 hs / 6 = 2 hs por tanda
+const SHIFT_DURATION_MS = 12 * 60 * 60 * 1000;
+const SLOT_INTERVAL_MS = Math.floor(SHIFT_DURATION_MS / TANDAS_SALTOS);
+
+const timeoutsRef = useRef([]);    // para cancelar timers en reset
+const planRef = useRef(null);      // para guardar el plan generado
+const makeShiftKey = (date = new Date(), turno = "Noche") => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth()+1).padStart(2,"0");
+  const d = String(date.getDate()).padStart(2,"0");
+  return `${y}-${m}-${d}_${turno}`;
+};
+const shuffle = (arr) =>
+  arr.map(v => [Math.random(), v]).sort((a,b)=>a[0]-b[0]).map(([,v])=>v);
+// arma plan: 20 clientes (con repetición si el catálogo es menor) y 6 slots
+const buildPlan = (clientesCat, totalClientes = TOTAL_CLIENTES_PLAN, slots = TANDAS_SALTOS) => {
+  const pool = clientesCat.map(c => c.nombre);
+  if (pool.length === 0) return { tandas: [], slotsMap: [] };
+
+  // selecciona con repetición si no alcanza
+  const picked = [];
+  while (picked.length < totalClientes) {
+    const faltan = totalClientes - picked.length;
+    const lote = shuffle(pool).slice(0, Math.min(pool.length, faltan));
+    picked.push(...lote);
+  }
+
+  // crea las 20 tandas (1 tanda = 1 cliente)
+  const allTandas = picked.map((name, i) => ({
+    ...nuevaTanda(Date.now() + i),
+    cliente: name,
+  }));
+
+  // slotsMap: array de 6 arrays con IDs de tandas que “tocan” en ese salto
+  const slotsMap = Array.from({ length: slots }, () => []);
+  allTandas.forEach((t, idx) => {
+    slotsMap[idx % slots].push(t.id);
+  });
+
+  return { tandas: allTandas, slotsMap };
+};
+
+// dispara avisos/“saltos” cada 2hs aprox
+const scheduleSlots = (slotsMap, getTandaById) => {
+  // limpia timers viejos
+  timeoutsRef.current.forEach(t => clearTimeout(t));
+  timeoutsRef.current = [];
+
+  slotsMap.forEach((ids, slotIdx) => {
+    const t = setTimeout(() => {
+      const clientes = ids
+        .map(id => getTandaById(id)?.cliente)
+        .filter(Boolean)
+        .join(" • ");
+
+      Swal.fire({
+        title: `Tanda ${slotIdx + 1} lista`,
+        html: `<div style="text-align:left"><b>Clientes:</b><br/>${clientes || "—"}</div>`,
+        icon: "info",
+        confirmButtonText: "OK",
+      });
+
+      // (opcional) scrollea al primer card de la tanda
+      const firstId = ids[0];
+      const el = document.getElementById(firstId);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, slotIdx * SLOT_INTERVAL_MS);
+    timeoutsRef.current.push(t);
+  });
+};
+
   // -------- Estado superior
   const [turno, setTurno] = useState("Noche");
   const [operario, setOperario] = useState("");
@@ -100,7 +188,9 @@ export default function FormRiesgoRondin({
 
   // -------- Tandas (cada tanda = un cliente alto riesgo)
   const [tandas, setTandas] = useState([nuevaTanda()]); // arranca con 1
-
+  const [items, setItems] = useState(
+      DEFAULT_ITEMS.map(i => ({ ...i, status: "pendiente", note: "", ts: null }))
+   );
   // -------- Control de ronda
   const [rondaId, setRondaId] = useState(null);
   const [startTime, setStartTime] = useState(null);
@@ -128,7 +218,97 @@ export default function FormRiesgoRondin({
     const completadas = tandas.reduce((acc, t) => acc + t.camaras.filter(c => !!c.estado).length, 0);
     return totalCamaras ? Math.round((completadas / totalCamaras) * 100) : 0;
   }, [tandas, totalCamaras]);
+// ✅ progreso del checklist
+const completedCount = useMemo(() => items.filter(i => i.status !== "pendiente").length, [items]);
+const checklistProgress = useMemo(
+  () => (items.length ? Math.round((completedCount / items.length) * 100) : 0),
+  [completedCount, items.length]
+);
+const LEVELS = [0, 100, 250, 500, 800, 1200]; // XP thresholds
+const badgeFor = (xp) => {
+  if (xp >= 800) return { key: "maestro", label: "Maestr@ del rondín" };
+  if (xp >= 500) return { key: "pro", label: "Pro del rondín" };
+  if (xp >= 250) return { key: "avanzado", label: "Avanzado" };
+  if (xp >= 100) return { key: "starter", label: "Starter" };
+  return null;
+};
 
+const [xp, setXp] = useState(0);
+const [level, setLevel] = useState(1);
+const [streak, setStreak] = useState(0);
+const [showConfetti, setShowConfetti] = useState(false);
+
+// sonidos (no hace falta archivo externo, usa un “bleep” embebido)
+const [playOk] = useSound("data:audio/mp3;base64,//uQZAAAAAAAA...", { volume: 0.2 });
+const [playWarn] = useSound("data:audio/mp3;base64,//uQZAAAAAAAA...", { volume: 0.2 });
+
+const recalcLevel = (newXp) => {
+  const lvl = LEVELS.filter(th => newXp >= th).length;
+  setLevel(lvl);
+};
+
+const awardXP = (amount) => {
+  setXp(prev => {
+    const nx = prev + amount;
+    recalcLevel(nx);
+    return nx;
+  });
+};
+
+const onMilestone = (type="small") => {
+  if (type === "big") {
+    setShowConfetti(true);
+    setTimeout(() => setShowConfetti(false), 3200);
+  }
+};
+
+// Resumen de progreso “gamificado”
+const totalChecks = items.length;
+const checksDone = items.filter(i=>i.status!=="pendiente").length;
+const tandaDone = Math.round((progress/100) * totalCamaras) > 0; // ya usás `progress`
+// ✅ acciones de checklist
+const setItemStatus = (id, nextStatus) => {
+  setItems(prev => {
+    return prev.map(it => {
+      if (it.id !== id) return it;
+
+      const prevStatus = it.status;
+      let { hasScored } = it;
+
+      // 👉 Otorgar XP sólo cuando pasamos de 'pendiente' a un estado (ok/na/alerta)
+      if (prevStatus === "pendiente" && nextStatus !== "pendiente" && !hasScored) {
+        if (nextStatus === "ok") { awardXP(10); playOk(); }
+        else if (nextStatus === "alerta") { awardXP(8); playWarn(); }
+        else if (nextStatus === "na") { awardXP(5); }
+        hasScored = true;
+      }
+
+      // Si vuelve a 'pendiente', permitimos volver a puntuar si luego lo completa de nuevo
+      if (nextStatus === "pendiente") {
+        hasScored = false;
+      }
+
+      return {
+        ...it,
+        status: nextStatus,
+        ts: new Date(),
+        note: nextStatus === "ok" ? "" : it.note,
+        hasScored,
+      };
+    });
+  });
+};
+
+const setItemNote = (id, note) => {
+  setItems(prev =>
+    prev.map(it => it.id === id ? { ...it, note } : it)
+  );
+};
+
+const addQuickItem = () => {
+  const newId = `custom-${Date.now()}`;
+  setItems(prev => [...prev, { id: newId, label: "Punto personalizado", status: "pendiente", note: "", ts: null }]);
+};
   // -------- Cargar catálogo clientes
   useEffect(() => {
     (async () => {
@@ -178,14 +358,25 @@ export default function FormRiesgoRondin({
     if (!operario) {
       return Swal.fire("Falta operario", "Seleccioná un operario.", "warning");
     }
-    if (tandas.some((t) => !t.cliente)) {
-      return Swal.fire("Clientes incompletos", "Completá el cliente en todas las tandas.", "warning");
+    if (!clientesCat.length) {
+      return Swal.fire("Sin catálogo", "No hay clientes cargados en Firestore.", "warning");
     }
   
-    const { isConfirmed } = await confirm("¿Iniciar ronda?", "Se comenzará a medir el tiempo.", "Iniciar");
+    const { isConfirmed } = await confirm(
+      "¿Iniciar ronda?",
+      `Se generarán ${TOTAL_CLIENTES_PLAN} clientes en ${TANDAS_SALTOS} tandas para las próximas 12 horas.`,
+      "Iniciar"
+    );
     if (!isConfirmed) return;
   
     try {
+      // 1) Generar plan
+      const { tandas: planTandas, slotsMap } = buildPlan(clientesCat);
+      if (!planTandas.length) {
+        return Swal.fire("Error", "No se pudo generar el plan.", "error");
+      }
+  
+      // 2) Persistencia base (igual que antes)
       const formId = await ensureTemplate();
       const ahora = new Date();
   
@@ -198,7 +389,7 @@ export default function FormRiesgoRondin({
           estado: "En Proceso",
           fechaEnvio: null,
           observacion: observaciones || "",
-          respuestas: { turno, novedades, observaciones, tandas },
+          respuestas: { turno, novedades, observaciones, tandas: planTandas, items },
           controlRonda: {
             startTime: ahora,
             endTime: null,
@@ -213,13 +404,21 @@ export default function FormRiesgoRondin({
         await updateDoc(doc(db, "respuestas-tareas", docId), { estado: "En Proceso" });
       }
   
+      // 3) Poner plan en UI + scheduler
+      setTandas(planTandas);
+      planRef.current = { slotsMap, startedAt: ahora };
+  
+      const getTandaById = (id) => planTandas.find(t => t.id === id);
+      scheduleSlots(slotsMap, getTandaById);
+  
+      // 4) Timer visual
       setStartTime(ahora);
       setPaused(false);
       setEndTime(null);
       pausasRef.current = [];
       startTicker(ahora);
   
-      toast.fire({ icon: "success", title: "Ronda iniciada" });
+      toast.fire({ icon: "success", title: "Ronda iniciada y plan generado" });
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No se pudo iniciar la ronda.", "error");
@@ -237,17 +436,84 @@ export default function FormRiesgoRondin({
   };
   
   const handleReanudar = async () => {
-    if (!paused) return;
-    const { isConfirmed } = await confirm("¿Reanudar ronda?", "Se reanudará el cronómetro.", "Reanudar");
-    if (!isConfirmed) return;
+    if (tickRef.current) clearInterval(tickRef.current);
+    tickRef.current = null;
+    pausasRef.current = [];
   
+    // ⛔ estado ronda
+    setRondaId(null);
+    setStartTime(null);
+    setEndTime(null);
     setPaused(false);
-    const last = pausasRef.current[pausasRef.current.length - 1];
-    if (last && last.to === null) last.to = Date.now();
-    toast.fire({ icon: "success", title: "Ronda reanudada" });
+    setElapsed(0);
+  
+    // 🧾 formulario
+    setTurno("Noche");
+    setOperario("");
+    setNovedades("");
+    setObservaciones("");
+  
+    // 👥 tandas (1 vacía)
+    setTandas([nuevaTanda()]);
+  
+    // ✅ checklist
+    setItems(
+      DEFAULT_ITEMS.map(i => ({ ...i, status: "pendiente", note: "", ts: null, hasScored:false }))
+    );
+  
+    // 🕹️ gamificación
+    setXp(0);
+    setLevel(1);
+    setStreak(0);
+    setShowConfetti(false);
+  
+    toast.fire({ icon: "info", title: "Reset visual realizado" });
+  };
+  const softReset = () => {
+    timeoutsRef.current.forEach(t => clearTimeout(t));
+  timeoutsRef.current = [];
+  planRef.current = null;
+
+  if (tickRef.current) clearInterval(tickRef.current);
+  tickRef.current = null;
+  pausasRef.current = [];
+  
+    // ⛔ estado ronda
+    setRondaId(null);
+    setStartTime(null);
+    setEndTime(null);
+    setPaused(false);
+    setElapsed(0);
+  
+    // 🧾 formulario
+    setTurno("Noche");
+    setOperario("");
+    setNovedades("");
+    setObservaciones("");
+  
+    // 👥 tandas (1 vacía)
+    setTandas([nuevaTanda()]);
+  
+    // ✅ checklist (incluye flag para XP)
+    setItems(
+      DEFAULT_ITEMS.map(i => ({ ...i, status: "pendiente", note: "", ts: null, hasScored: false }))
+    );
+  
+    // 🕹️ gamificación
+    setXp(0);
+    setLevel(1);
+    setStreak(0);
+    setShowConfetti(false);
+    
   };
   
   const handleFinalizar = async () => {
+    // bonus por performance
+const bonus = Math.round(progress/5) + Math.round(checklistProgress/5); // 0..40 aprox.
+awardXP(bonus);
+setStreak(s => s + 1);
+onMilestone("big");
+
     if (!rondaId || !startTime) {
       return Swal.fire("Sin ronda activa", "Primero iniciá la ronda.", "info");
     }
@@ -278,7 +544,7 @@ export default function FormRiesgoRondin({
       reverseButtons: true,
     });
     if (!isConfirmed) return;
-  
+    softReset();
     try {
       if (tickRef.current) clearInterval(tickRef.current);
       if (paused) {
@@ -299,7 +565,7 @@ export default function FormRiesgoRondin({
         estado: "Completada",
         fechaEnvio: serverTimestamp(),
         observacion: observaciones || "",
-        respuestas: { turno, novedades, observaciones, tandas },
+        respuestas: { turno, novedades, observaciones, tandas, items },
         controlRonda: { startTime, endTime: fin, pausas: pausasRef.current, totalPausedMs, durationMs },
       });
   
@@ -321,6 +587,7 @@ export default function FormRiesgoRondin({
   useEffect(() => {
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
+      timeoutsRef.current.forEach(t => clearTimeout(t));
     };
   }, []);
   
@@ -426,57 +693,72 @@ export default function FormRiesgoRondin({
       {/* CONTENEDOR */}
       <Paper className="riesgo-container">
         {/* Progreso global */}
-        <Box className="riesgo-progress">
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="subtitle2" className="muted">Avance total</Typography>
-            <Typography variant="subtitle2" className="muted">
-              {totalCamaras} cámaras • {progress}%
-            </Typography>
-          </Stack>
-          <LinearProgress variant="determinate" value={progress} className="progress-bar"/>
-        </Box>
+     
 
         {/* Datos superiores */}
-        <Grid container spacing={2} className="riesgo-top-form">
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
-              <InputLabel>Turno</InputLabel>
-              <Select value={turno} label="Turno" onChange={(e) => setTurno(e.target.value)}>
-                <MenuItem value="Noche">Noche</MenuItem>
-                <MenuItem value="Día">Día</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
+        <Grid container spacing={2} alignItems="center" className="riesgo-top-form">
+  <Grid item xs={12} md={4} className="top-field">
+    <FormControl fullWidth size="medium" className="big-control">
+      <InputLabel>Turno</InputLabel>
+      <Select
+        value={turno}
+        label="Turno"
+        onChange={(e) => setTurno(e.target.value)}
+      >
+        <MenuItem value="Noche">Nocturno</MenuItem>
+        <MenuItem value="Día">Día</MenuItem>
+      </Select>
+    </FormControl>
+  </Grid>
 
-          <Grid item xs={12} md={3}>
-            <FormControl fullWidth>
-              <InputLabel>Operario</InputLabel>
-              <Select value={operario} label="Operario" onChange={(e) => setOperario(e.target.value)}>
-                {OPERARIOS_DEFAULT.map((op) => (
-                  <MenuItem key={op} value={op}>{op}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+  <Grid item xs={12} md={4} className="top-field">
+    <FormControl fullWidth size="medium" className="big-control">
+      <InputLabel>Operador</InputLabel>
+      <Select
+        value={operario}
+        label="Operario"
+        onChange={(e) => setOperario(e.target.value)}
+      >
+        {OPERARIOS_DEFAULT.map(op => (
+          <MenuItem key={op} value={op}>{op}</MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  </Grid>
 
-          <Grid item xs={12} md={6}>
-            <TextField
-              label="Novedades Generales (opcional)"
-              fullWidth
-              multiline
-              minRows={2}
-              value={novedades}
-              onChange={(e) => setNovedades(e.target.value)}
-            />
-          </Grid>
-        </Grid>
+  </Grid>
+<Box className="obs-section">
+  <TextField
+    className="obs-full"
+    label="Novedades Generales"
+    fullWidth
+    multiline
+    rows={4}                // alto cómodo (podés subirlo a 6 si querés)
+    value={novedades}
+    onChange={(e) => setNovedades(e.target.value)}
+   
+    sx={{
+      "& .MuiOutlinedInput-root": {
+        fontSize: "1rem",
+        borderRadius: "12px",
+      },
+      "& .MuiInputLabel-root": {
+        fontSize: "1rem",
+      },
+      "& textarea": {
+        padding: "14px",
+      }
+    }}
+  />
+</Box>
+
 
         <Divider className="riesgo-divider" />
 
         {/* TANDAS (clientes) */}
         <Box className="tandas-grid">
           {tandas.map((t) => (
-            <Card key={t.id} className="tanda-card">
+         <Card key={t.id} id={t.id} className="tanda-card">
               <CardContent>
                 <div className="tanda-header-row">
                   <FormControl className="tanda-cliente">
@@ -494,7 +776,7 @@ export default function FormRiesgoRondin({
 
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Button variant="outlined" startIcon={<Add />} onClick={() => addCamRow(t.id)}>
-                      Agregar Equipo
+                      Agregar 
                     </Button>
                     <Tooltip title="Eliminar tanda">
                       <span>
@@ -592,20 +874,109 @@ export default function FormRiesgoRondin({
         </Box>
 
         <Divider className="riesgo-divider" />
+        {/* ✅ CHECKLIST EN CARDS (como el otro rondín) */}
+        <Box className="items-section">
+  <Stack direction="row" justifyContent="space-between" alignItems="center" className="items-header">
+  <Box sx={{ mb: 1.5, display:"flex", gap:1, flexWrap:"wrap" }}>
+  <Chip
+    label={`Misión: Completar ${Math.ceil(totalChecks*0.8)} ítems`}
+    variant={checksDone/totalChecks >= 0.8 ? "filled" : "outlined"}
+    color={checksDone/totalChecks >= 0.8 ? "success" : "default"}
+    onClick={()=>{}}
+  />
 
-        {/* Observaciones globales */}
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
+</Box>
+
+    <Typography variant="subtitle2" className="muted">Checklist de estado</Typography>
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Typography variant="subtitle2" className="muted">
+        {completedCount}/{items.length} ({checklistProgress}%)
+      </Typography>
+      <LinearProgress variant="determinate" value={checklistProgress} className="progress-bar-sm" />
+    </Stack>
+  </Stack>
+
+  {/* CONTENEDOR HORIZONTAL */}
+  <div className="items-hscroll" aria-label="Checklist horizontal">
+    {items.map((it) => (
+      <Card key={it.id} className={`item-card status-${it.status}`} role="group" aria-label={it.label} tabIndex={0}>
+        <CardContent className="item-card__content">
+          <div className="item-card__row">
+            <Typography className="item-label" title={it.label}>{it.label}</Typography>
+            <div className="item-actions" role="toolbar" aria-label="Acciones del ítem">
+              <Tooltip title="OK">
+                <span>
+                  <IconButton className={`btn-status ok ${it.status === "ok" ? "active" : ""}`} onClick={() => setItemStatus(it.id, "ok")} size="small">
+                    <CheckCircle />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Alerta">
+                <span>
+                  <IconButton className={`btn-status warn ${it.status === "alerta" ? "active" : ""}`} onClick={() => setItemStatus(it.id, "alerta")} size="small">
+                    <ReportProblem />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="No aplica">
+                <span>
+                  <IconButton className={`btn-status na ${it.status === "na" ? "active" : ""}`} onClick={() => setItemStatus(it.id, "na")} size="small">
+                    <RemoveCircleOutline />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </div>
+          </div>
+
+          {it.status !== "ok" && (
             <TextField
-              label="Observaciones Generales"
+              placeholder="Agregar detalle / novedad"
               fullWidth
+              value={it.note}
+              onChange={(e) => setItemNote(it.id, e.target.value)}
               multiline
-              minRows={3}
-              value={observaciones}
-              onChange={(e) => setObservaciones(e.target.value)}
+              minRows={2}
+              className="item-note"
+              aria-label={`Detalle para ${it.label}`}
             />
-          </Grid>
-        </Grid>
+          )}
+
+          {it.ts && <Typography className="item-ts">Marcado: {new Date(it.ts).toLocaleString("es-AR")}</Typography>}
+        </CardContent>
+      </Card>
+    ))}
+
+   
+  </div>
+</Box>
+
+        
+        <Box className="obs-section">
+  <TextField
+    className="obs-full"
+    label="Observaciones Generales"
+    fullWidth
+    multiline
+    rows={4}                // alto cómodo (podés subirlo a 6 si querés)
+    value={observaciones}
+    onChange={(e) => setObservaciones(e.target.value)}
+    sx={{
+      "& .MuiOutlinedInput-root": {
+        fontSize: "1rem",
+        borderRadius: "12px",
+      },
+      "& .MuiInputLabel-root": {
+        fontSize: "1rem",
+      },
+      "& textarea": {
+        padding: "14px",
+      }
+    }}
+  />
+</Box>
+
+
+       
 
         {/* Footer fijo */}
         <Box className="riesgo-footer">
@@ -616,9 +987,11 @@ export default function FormRiesgoRondin({
 
     {/* Controles unificados */}
     {estadoRonda === "lista" && (
-      <Button variant="contained" color="primary" startIcon={<PlayArrow />} onClick={handleIniciar}>
-        Iniciar
-      </Button>
+     <motion.div whileTap={{ scale: .96 }} whileHover={{ scale: 1.02 }}>
+     <Button variant="contained" color="primary" startIcon={<PlayArrow />} onClick={handleIniciar}>
+       Iniciar
+     </Button>
+   </motion.div>
     )}
 
     {estadoRonda === "enCurso" && (
@@ -639,15 +1012,64 @@ export default function FormRiesgoRondin({
       </Button>
     )}
 
-    <Tooltip title="Reset visual (no borra en Firestore)">
-      <span>
-        <IconButton onClick={() => setTandas([nuevaTanda()])} className="btn-reset">
-          <RestartAlt />
-        </IconButton>
-      </span>
-    </Tooltip>
+<Tooltip title="Reset visual (no borra en Firestore)">
+  <span>
+    <IconButton onClick={softReset} className="btn-reset">
+      <RestartAlt />
+    </IconButton>
+  </span>
+</Tooltip>
+
   </Stack>
+</Box>{/* ===== GAME HUD ===== */}
+<Box sx={{ position:"sticky", top: 8, zIndex: 3, mb: 2 }}>
+  <Paper sx={{ p:1.5, borderRadius: 3, display:"flex", alignItems:"center", gap:2 }}>
+    <Stack direction="row" spacing={2} alignItems="center" sx={{ flex:1 }}>
+      <Chip label={`Nivel ${level}`} color="primary" variant="filled" />
+      <Stack sx={{ flex:1 }}>
+        <Typography variant="caption" color="text.secondary">
+          XP: {xp} / {LEVELS[level] ?? `${LEVELS[LEVELS.length-1]}+`}
+        </Typography>
+        <LinearProgress
+          variant="determinate"
+          value={(() => {
+            const curr = LEVELS[level-1] ?? 0;
+            const next = LEVELS[level] ?? (LEVELS[LEVELS.length-1] + 300);
+            return Math.min(100, ((xp - curr) / (next - curr)) * 100);
+          })()}
+          sx={{ height: 8, borderRadius: 999 }}
+        />
+      </Stack>
+      <Chip icon={<DoneAll />} label={`Racha: ${streak}`} variant="outlined" />
+      <Chip icon={<AccessTime />} label={displayElapsed} variant="outlined" />
+    </Stack>
+
+    {/* mini-retos */}
+    <AnimatePresence>
+      {checksDone === totalChecks && (
+        <motion.div
+          initial={{ scale: .9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: .9, opacity: 0 }}
+          transition={{ type:"spring", stiffness: 300, damping: 18 }}
+        >
+          <Chip color="success" label="Checklist completo +20XP" />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </Paper>
 </Box>
+
+{/* confetti al lograr hitos */}
+{showConfetti && (
+  <Confetti
+    numberOfPieces={260}
+    recycle={false}
+    gravity={0.25}
+    tweenDuration={5400}
+  />
+)}
+
 
       </Paper>
     </Box>
