@@ -9,7 +9,7 @@ import "../../styles/eventstable.css";
 
 const MySwal = withReactContent(Swal);
 
-// ✅ Tema DataTable
+// ✅ Tema
 createTheme("g3tTheme", {
   text: { primary: "#1f2937", secondary: "#6b7280" },
   background: { default: "#ffffff" },
@@ -22,59 +22,240 @@ export default function EventsTable({ eventos }) {
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
 
-  // ✅ Getters robustos
-  // ✅ Getters simples y robustos (sin depender de cliente)
-const getObservacion = (row) =>
-row?.observacion ??
-row?.["observaciones-edificios"] ??
-"";
+  // ======================
+  // Getters robustos
+  // ======================
+  const getClienteLower = (row) =>
+    (row?.cliente || (row?.edificio ? "Edificios" : "otros")).toLowerCase();
 
-const getResolucion = (row) =>
-row?.["resolusion-evento"] ??        // nombre con guion y typo (el de tu DB)
-row?.["resolucion-evento"] ??        // por si en algún lado lo guardaste bien
-row?.resolucion ??                   // variantes comunes
-row?.resolucionEvento ??
-row?.resolusionEvento ??
-"";
-const getRespuestaResidente = (row) =>
-  row?.["respuesta-residente"] ??
-  row?.respuesta ??
-  "";
-  // ✅ Columnas (solo agrego Resolución)
+  const getObservacion = (row) =>
+    row?.observacion ??
+    row?.["observaciones-edificios"] ??
+    row?.[`observaciones-${getClienteLower(row)}`] ??
+    "";
+
+  const getResolucion = (row) =>
+    row?.["resolusion-evento"] ?? // typo original
+    row?.["resolucion-evento"] ??
+    row?.resolucion ??
+    row?.resolucionEvento ??
+    row?.resolusionEvento ??
+    "";
+
+  const getRespuestaResidente = (row) =>
+    row?.["respuesta-residente"] ??
+    row?.respuesta ??
+    "";
+
+  const getUbicacionDisplay = (row) =>
+    row?.ubicacion || row?.edificio || "";
+
+  // ======================
+  // Handlers de edición
+  // ======================
+
+  // Observación
+  const handleEditObservation = async (event) => {
+    const { value } = await MySwal.fire({
+      title: "Editar Observación",
+      html: `<textarea id="swal-obs" class="swal2-textarea" style="width:100%;padding:10px;">${getObservacion(event) || ""}</textarea>`,
+      showCancelButton: true,
+      confirmButtonText: "Guardar",
+      cancelButtonText: "Cancelar",
+      width: "520px",
+      preConfirm: () => document.getElementById("swal-obs").value ?? "",
+    });
+    if (value === undefined) return;
+
+    try {
+      const clienteLower = getClienteLower(event);
+      const path = `novedades/${clienteLower}/eventos/${event.id}`;
+      const fieldName =
+        clienteLower === "edificios" ? "observaciones-edificios" : `observaciones-${clienteLower}`;
+      await updateDoc(doc(db, path), { [fieldName]: value });
+      MySwal.fire("✅ Guardado", "Observación actualizada", "success");
+    } catch {
+      MySwal.fire("❌ Error", "No se pudo actualizar la observación", "error");
+    }
+  };
+
+  // Resolución
+  const handleEditResolucion = async (event) => {
+    const { value } = await MySwal.fire({
+      title: "Editar Resolución",
+      html: `<textarea id="swal-res" class="swal2-textarea" style="width:100%;padding:10px;">${getResolucion(event) || ""}</textarea>`,
+      showCancelButton: true,
+      confirmButtonText: "Guardar",
+      cancelButtonText: "Cancelar",
+      width: "520px",
+      preConfirm: () => document.getElementById("swal-res").value ?? "",
+    });
+    if (value === undefined) return;
+
+    try {
+      const clienteLower = getClienteLower(event);
+      const path = `novedades/${clienteLower}/eventos/${event.id}`;
+
+      // Escribo el campo EXACTO que usás en DB (`resolusion-evento`) y dejo espejo “resolucion” normalizado
+      await updateDoc(doc(db, path), {
+        ["resolusion-evento"]: value, // tu clave con typo
+        resolucion: value,            // espejo normalizado (opcional pero útil)
+      });
+
+      MySwal.fire("✅ Guardado", "Resolución actualizada", "success");
+    } catch {
+      MySwal.fire("❌ Error", "No se pudo actualizar la resolución", "error");
+    }
+  };
+
+  // Respuesta del residente
+  const handleEditRespuesta = async (event) => {
+    const { value } = await MySwal.fire({
+      title: "Editar Respuesta del Residente",
+      html: `<textarea id="swal-resp" class="swal2-textarea" style="width:100%;padding:10px;">${getRespuestaResidente(event) || ""}</textarea>`,
+      showCancelButton: true,
+      confirmButtonText: "Guardar",
+      cancelButtonText: "Cancelar",
+      width: "520px",
+      preConfirm: () => document.getElementById("swal-resp").value ?? "",
+    });
+    if (value === undefined) return;
+
+    try {
+      const clienteLower = getClienteLower(event);
+      const path = `novedades/${clienteLower}/eventos/${event.id}`;
+
+      // Escribo la clave original y una alternativa
+      await updateDoc(doc(db, path), {
+        ["respuesta-residente"]: value,
+        respuesta: value,
+      });
+
+      MySwal.fire("✅ Guardado", "Respuesta actualizada", "success");
+    } catch {
+      MySwal.fire("❌ Error", "No se pudo actualizar la respuesta", "error");
+    }
+  };
+
+  // Ubicación
+  const handleEditUbicacion = async (event) => {
+    const clienteLower = getClienteLower(event);
+
+    if (clienteLower === "edificios") {
+      // Para edificios, edito edificio y unidad por separado
+      const edificioActual = event.edificio || "";
+      const unidadActual = event.unidad || "";
+
+      const { value: formVals } = await MySwal.fire({
+        title: "Editar Ubicación (Edificios)",
+        html: `
+          <div style="text-align:left">
+            <label>Edificio</label>
+            <input id="swal-edificio" class="swal2-input" style="width:100%" value="${edificioActual}"/>
+            <label>Unidad (opcional)</label>
+            <input id="swal-unidad" class="swal2-input" style="width:100%" value="${unidadActual}"/>
+          </div>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: "Guardar",
+        cancelButtonText: "Cancelar",
+        width: "520px",
+        preConfirm: () => ({
+          edificio: document.getElementById("swal-edificio").value ?? "",
+          unidad: document.getElementById("swal-unidad").value ?? "",
+        }),
+      });
+      if (!formVals) return;
+
+      try {
+        const path = `novedades/${clienteLower}/eventos/${event.id}`;
+        await updateDoc(doc(db, path), {
+          edificio: formVals.edificio,
+          unidad: formVals.unidad || null,
+        });
+        MySwal.fire("✅ Guardado", "Ubicación actualizada", "success");
+      } catch {
+        MySwal.fire("❌ Error", "No se pudo actualizar la ubicación", "error");
+      }
+    } else {
+      // Otros clientes: guardo en campo 'ubicacion' (ajustá si tu colección usa otro nombre)
+      const { value } = await MySwal.fire({
+        title: "Editar Ubicación",
+        input: "text",
+        inputValue: getUbicacionDisplay(event) || "",
+        showCancelButton: true,
+        confirmButtonText: "Guardar",
+        cancelButtonText: "Cancelar",
+        width: "520px",
+        inputAttributes: { spellcheck: "false" },
+      });
+      if (value === undefined) return;
+
+      try {
+        const path = `novedades/${clienteLower}/eventos/${event.id}`;
+        await updateDoc(doc(db, path), { ubicacion: value });
+        MySwal.fire("✅ Guardado", "Ubicación actualizada", "success");
+      } catch {
+        MySwal.fire("❌ Error", "No se pudo actualizar la ubicación", "error");
+      }
+    }
+  };
+
+  // ======================
+  // Eliminar
+  // ======================
+  const handleDeleteEvent = async (event) => {
+    const confirm = await MySwal.fire({
+      title: "¿Eliminar este evento?",
+      text: `Se eliminará el evento: "${event.evento}" en "${event.ubicacion || event.edificio || ""}"`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+      const path = `novedades/${getClienteLower(event)}/eventos/${event.id}`;
+      await deleteDoc(doc(db, path));
+      MySwal.fire("✅ Eliminado", "El evento fue eliminado", "success");
+    } catch {
+      MySwal.fire("❌ Error", "No se pudo eliminar el evento", "error");
+    }
+  };
+
+  // ======================
+  // Columnas
+  // ======================
   const columns = [
     { name: "Cliente", selector: (row) => row.cliente, sortable: true },
     { name: "Evento", selector: (row) => row.evento || row["evento-edificio"], sortable: true },
     { name: "Ubicación", selector: (row) => row.ubicacion || row.edificio },
     { name: "Fecha", selector: (row) => row.fecha || row.fechaHoraEnvio, sortable: true },
-  
-    // ✅ Observación: toma la que exista (normal y/o de Edificios)
     { name: "Observación", selector: (row) => getObservacion(row) || "-", wrap: true },
-  
-    // ✅ Resolución: se muestra si el doc trae cualquiera de las variantes; si no, “-”
     { name: "Resolución", selector: (row) => getResolucion(row) || "-", wrap: true },
     { name: "Respuesta Residente", selector: (row) => getRespuestaResidente(row) || "-", wrap: true },
     {
       name: "Acciones",
       cell: (row) => (
-        <div className="flex gap-2">
-          <button
-            onClick={() => handleEditObservation(row)}
-            className="bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 transition"
-          >
-            ✏️ Editar
-          </button>
-          <button
-            onClick={() => handleDeleteEvent(row)}
-            className="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition"
-          >
-            🗑 Eliminar
-          </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => handleEditObservation(row)} className="bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 transition">Obs</button>
+          <button onClick={() => handleEditResolucion(row)} className="bg-emerald-600 text-white px-3 py-1 rounded-lg hover:bg-emerald-700 transition">Resolv</button>
+          <button onClick={() => handleEditRespuesta(row)} className="bg-sky-600 text-white px-3 py-1 rounded-lg hover:bg-sky-700 transition">Resp</button>
+          <button onClick={() => handleEditUbicacion(row)} className="bg-amber-600 text-white px-3 py-1 rounded-lg hover:bg-amber-700 transition">Ubic</button>
+          <button onClick={() => handleDeleteEvent(row)} className="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition">🗑</button>
         </div>
       ),
       ignoreRowClick: true,
     },
   ];
-  
+
+  // ======================
+  // Estilos tabla
+  // ======================
   const customStyles = {
     headCells: {
       style: {
@@ -92,22 +273,26 @@ const getRespuestaResidente = (row) =>
     },
   };
 
-  // ✅ Filtrado: busca también en la observación correcta y en resolución
+  // ======================
+  // Filtro
+  // ======================
   const filteredData = useMemo(() => {
     return (eventos || []).filter((item) => {
       const texto = (filterText || "").toLowerCase();
       const textMatch =
         item?.cliente?.toLowerCase().includes(texto) ||
         item?.evento?.toLowerCase().includes(texto) ||
-        item?.ubicacion?.toLowerCase().includes(texto) ||
-        (getObservacion(item) || "").toLowerCase().includes(texto) ||   // ✅
-        (getResolucion(item) || "").toLowerCase().includes(texto);      // ✅
-  
+        (getUbicacionDisplay(item) || "").toLowerCase().includes(texto) ||
+        (getObservacion(item) || "").toLowerCase().includes(texto) ||
+        (getResolucion(item) || "").toLowerCase().includes(texto) ||
+        (getRespuestaResidente(item) || "").toLowerCase().includes(texto);
+
       const fechaEvento =
-        item?.fechaObj || (item?.fecha instanceof Date ? item.fecha : new Date(item?.fecha ?? item?.fechaHoraEnvio));
+        item?.fechaObj ||
+        (item?.fecha instanceof Date ? item.fecha : new Date(item?.fecha ?? item?.fechaHoraEnvio));
       const desde = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : null;
       const hasta = fechaFin ? new Date(`${fechaFin}T23:59:59`) : null;
-  
+
       return (
         textMatch &&
         (!desde || (fechaEvento && fechaEvento >= desde)) &&
@@ -115,65 +300,10 @@ const getRespuestaResidente = (row) =>
       );
     });
   }, [eventos, filterText, fechaInicio, fechaFin]);
-  
-  // ✅ Editar Observación (escribe en el campo correcto)
-  const handleEditObservation = async (event) => {
-    const { value: newObservation } = await MySwal.fire({
-      title: "Editar Observación",
-      html: `
-        <textarea id="swal-observation" class="swal2-textarea" style="width:100%;padding:10px;">${getObservacion(event) || ""}</textarea>
-      `,
-      showCancelButton: true,
-      confirmButtonText: "Guardar",
-      cancelButtonText: "Cancelar",
-      width: "500px",
-      preConfirm: () => document.getElementById("swal-observation").value,
-    });
-    if (newObservation === undefined) return;
 
-    try {
-      // decidir colección
-      const clienteLower = (event?.cliente || (event?.edificio ? "Edificios" : "otros")).toLowerCase();
-      const path = `novedades/${clienteLower}/eventos/${event.id}`;
-
-      // decidir campo de observación
-      const fieldName =
-        clienteLower === "edificios"
-          ? "observaciones-edificios"
-          : `observaciones-${clienteLower}`;
-
-      await updateDoc(doc(db, path), { [fieldName]: newObservation });
-      MySwal.fire("✅ Guardado", "Observación actualizada", "success");
-    } catch {
-      MySwal.fire("❌ Error", "No se pudo actualizar", "error");
-    }
-  };
-
-  // ✅ Eliminar Evento
-  const handleDeleteEvent = async (event) => {
-    const confirm = await MySwal.fire({
-      title: "¿Eliminar este evento?",
-      text: `Se eliminará el evento: "${event.evento}" en "${event.ubicacion || event.edificio || ""}"`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Sí, eliminar",
-      cancelButtonText: "Cancelar",
-    });
-
-    if (confirm.isConfirmed) {
-      try {
-        const clienteLower = (event?.cliente || (event?.edificio ? "Edificios" : "otros")).toLowerCase();
-        const path = `novedades/${clienteLower}/eventos/${event.id}`;
-        await deleteDoc(doc(db, path));
-        MySwal.fire("✅ Eliminado", "El evento fue eliminado", "success");
-      } catch {
-        MySwal.fire("❌ Error", "No se pudo eliminar el evento", "error");
-      }
-    }
-  };
-
+  // ======================
+  // Render
+  // ======================
   return (
     <div className="bg-white shadow-lg rounded-2xl p-6 mb-6 border border-gray-200">
       <h2 className="text-lg font-semibold text-gray-700 mb-4">Filtros de búsqueda</h2>
@@ -183,7 +313,7 @@ const getRespuestaResidente = (row) =>
           <FiSearch />
           <input
             type="text"
-            placeholder="Buscar cliente, evento, observación o resolución..."
+            placeholder="Buscar cliente, evento, observación, resolución, respuesta..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
           />
