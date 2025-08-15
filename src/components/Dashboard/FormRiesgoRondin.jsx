@@ -73,7 +73,8 @@ const toast = Swal.mixin({
       cancelButtonText: "Cancelar",
       reverseButtons: true,
     });
-  
+  // --- Filtro de clientes de alto riesgo (whitelist) ---
+
 /** Helpers */
 const OPERARIOS_DEFAULT = ["Brisa","Luis","Bruno","Benjamín","Denise","Pedro","Romina"];
 const MAX_TANDAS = 20;
@@ -107,7 +108,7 @@ export default function FormRiesgoRondin({
   canalDefault = "",
 }) {
   // ===== Plan de rondín =====
-const TOTAL_CLIENTES_PLAN = 10;
+const TOTAL_CLIENTES_PLAN =2;
 const TANDAS_SALTOS = 6;           // 12 hs / 6 = 2 hs por tanda
 const SHIFT_DURATION_MS = 12 * 60 * 60 * 1000;
 const SLOT_INTERVAL_MS = Math.floor(SHIFT_DURATION_MS / TANDAS_SALTOS);
@@ -310,20 +311,38 @@ const addQuickItem = () => {
   setItems(prev => [...prev, { id: newId, label: "Punto personalizado", status: "pendiente", note: "", ts: null }]);
 };
   // -------- Cargar catálogo clientes
-  useEffect(() => {
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, "clientes"));
-        const lista = snap.docs.map((d) => ({
-          id: d.id,
-          nombre: d.data().nombre || "Sin nombre",
-        }));
-        setClientesCat(lista);
-      } catch (e) {
-        console.error("Error cargando clientes:", e);
-      }
-    })();
-  }, []);
+// --- Filtro de clientes de alto riesgo (whitelist) ---
+const RISK_WHITELIST = [
+  "LOMAS DE PETION",
+  "CHACRA PETION",
+  "DROGUERIA BETAPHARMA",
+  "LA CASCADA",
+];
+const norm = (s = "") => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toUpperCase();
+const RISK_SET = new Set(RISK_WHITELIST.map(norm));
+
+useEffect(() => {
+  (async () => {
+    try {
+      // Trae TODOS los clientes
+      const snap = await getDocs(collection(db, "clientes"));
+
+      // Filtra por los nombres del whitelist (case/acentos-insensitive)
+      const lista = snap.docs
+        .map(d => {
+          const data = d.data() || {};
+          const nombre = (data.nombre || "").toString();
+          return { id: d.id, nombre };
+        })
+        .filter(c => RISK_SET.has(norm(c.nombre)));
+
+      setClientesCat(lista);
+    } catch (e) {
+      console.error("Error cargando clientes riesgo:", e);
+      setClientesCat([]);
+    }
+  })();
+}, []);
 
   // -------- Asegurar plantilla fija
   const ensureTemplate = async () => {
