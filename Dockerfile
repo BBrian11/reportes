@@ -1,31 +1,48 @@
-# Imagen base
-FROM node:20-alpine AS builder
-
-# Directorio de trabajo
-WORKDIR /app
-
-# Copiar dependencias primero para cache
-COPY package*.json ./
-
-# Instalar dependencias
-RUN npm install
-
-# Copiar todo el proyecto
-COPY . .
-
-# Compilar la app (Vite build)
-RUN npm run build
-
-# -----------------------------
-# Etapa final (servidor NGINX)
-# -----------------------------
-FROM nginx:alpine
-
-# Copiar la build al servidor NGINX
-COPY --from=builder /app/dist /usr/share/nginx/html
-
-# Exponer puerto 80
-EXPOSE 80
-
-# Iniciar NGINX
-CMD ["nginx", "-g", "daemon off;"]
+# ------------ Build (Vite) ------------
+    FROM node:20-alpine AS builder
+    WORKDIR /app
+    
+    # Dependencias primero (cache)
+    COPY package*.json ./
+    RUN npm install
+    
+    # Código
+    COPY . .
+    
+    # Build de producción
+    RUN npm run build
+    
+    
+    # ------------ Serve (Nginx + fallback) ------------
+    FROM nginx:1.25-alpine
+    
+    # Config Nginx con fallback a /index.html (SPA)
+    # OJO: hay que escapar $ como $$ en Dockerfile
+    RUN printf '%s\n' \
+      'server {' \
+      '  listen 80;' \
+      '  server_name _;' \
+      '' \
+      '  root /usr/share/nginx/html;' \
+      '  index index.html;' \
+      '' \
+      '  location /assets/ {' \
+      '    try_files $$uri =404;' \
+      '    access_log off;' \
+      '  }' \
+      '' \
+      '  location / {' \
+      '    try_files $$uri /index.html;' \
+      '  }' \
+      '' \
+      '  gzip on;' \
+      '  gzip_types text/plain text/css application/javascript application/json image/svg+xml;' \
+      '  gzip_min_length 1024;' \
+      '}' > /etc/nginx/conf.d/default.conf
+    
+    # Archivos estáticos
+    COPY --from=builder /app/dist /usr/share/nginx/html
+    
+    EXPOSE 80
+    CMD ["nginx", "-g", "daemon off;"]
+    
