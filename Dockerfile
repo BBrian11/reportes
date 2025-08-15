@@ -16,8 +16,8 @@
     # ------------ Serve (Nginx + fallback) ------------
     FROM nginx:1.25-alpine
     
-    # Config Nginx con fallback a /index.html (SPA)
-    # OJO: hay que escapar $ como $$ en Dockerfile
+    # Escribimos la config de Nginx con fallback SPA
+    # (En Dockerfile se escapa $ como $$)
     RUN printf '%s\n' \
       'server {' \
       '  listen 80;' \
