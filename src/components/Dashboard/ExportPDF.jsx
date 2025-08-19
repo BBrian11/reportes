@@ -13,7 +13,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: "bold", color: "#2563eb" },
   subtitle: { fontSize: 9, color: "#555", marginTop: 2 },
   sectionTitle: { marginTop: 8, marginBottom: 6, fontSize: 12, fontWeight: "bold", color: "#111" },
-  img: { width: 520, height: 260, marginBottom: 8, alignSelf: "center" },
+  img: { width: 555, marginBottom: 8, alignSelf: "center" },
   tableHeader: { flexDirection: "row", backgroundColor: "#2563eb", color: "#fff", padding: 4, fontWeight: "bold" },
   tableRow: { flexDirection: "row", borderBottom: "1px solid #ddd", paddingVertical: 3, paddingHorizontal: 2 },
   col: { flex: 1, fontSize: 8 },
@@ -25,7 +25,15 @@ const chunk = (arr, size) => { const out=[]; for (let i=0;i<arr.length;i+=size) 
 const safe = (v) => (v === undefined || v === null ? "" : String(v));
 
 // === Captura un selector a imagen base64 (robusto) ===
-async function captureAsImage(selector) {
+// === Captura un selector a imagen base64 con alta resolución ===
+async function captureAsImage(selector, opts = {}) {
+  const {
+    scale = Math.max(3, (window.devicePixelRatio || 1) * 2), // ↑ DPI
+    format = "png",            // "png" | "jpeg"
+    quality = 0.92,            // solo aplica a jpeg
+    bg = "#ffffff",
+  } = opts;
+
   const originalEl = document.querySelector(selector);
   if (!originalEl) return null;
 
@@ -36,10 +44,9 @@ async function captureAsImage(selector) {
   const snapWith = async (useFO) => {
     const cs = getComputedStyle(originalEl);
     const widthPx = cs.width;
-    const bg = "#ffffff";
 
     const canvas = await html2canvas(originalEl, {
-      scale: 2,
+      scale,
       backgroundColor: bg,
       useCORS: true,
       allowTaint: true,
@@ -74,14 +81,19 @@ async function captureAsImage(selector) {
     return canvas;
   };
 
+  const toData = (canvas) =>
+    format === "jpeg"
+      ? canvas.toDataURL("image/jpeg", quality)
+      : canvas.toDataURL("image/png");
+
   try {
     const c1 = await snapWith(false);
-    if (c1 && c1.width > 50 && c1.height > 50) return c1.toDataURL("image/png");
+    if (c1 && c1.width > 50 && c1.height > 50) return toData(c1);
   } catch {}
 
   try {
     const c2 = await snapWith(true);
-    if (c2 && c2.width > 50 && c2.height > 50) return c2.toDataURL("image/png");
+    if (c2 && c2.width > 50 && c2.height > 50) return toData(c2);
   } catch {}
 
   // Fallback: clonar fuera de pantalla
@@ -98,24 +110,24 @@ async function captureAsImage(selector) {
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   try {
     const canvas = await html2canvas(clone, {
-      scale: 2,
-      backgroundColor: "#ffffff",
+      scale,
+      backgroundColor: bg,
       useCORS: true,
       allowTaint: true,
       foreignObjectRendering: false,
     });
-    return canvas?.toDataURL("image/png") ?? null;
+    return canvas ? toData(canvas) : null;
   } finally {
     document.body.removeChild(portal);
   }
 }
 
-// === Captura múltiples selectores (A NIVEL MÓDULO) ===
-async function captureAll(selectors) {
+// === Captura múltiples selectores (acepta opts y las propaga) ===
+async function captureAll(selectors, opts = {}) {
   const imgs = [];
   for (const sel of selectors) {
     try {
-      const img = await captureAsImage(sel);
+      const img = await captureAsImage(sel, opts);
       if (img) imgs.push(img);
     } catch (e) {
       console.error("captureAll error en", sel, e);
@@ -123,6 +135,7 @@ async function captureAll(selectors) {
   }
   return imgs;
 }
+
 
 // ===== Documento PDF =====
 const ReportDocument = ({ eventos, capturedImages }) => {
@@ -165,21 +178,21 @@ const ReportDocument = ({ eventos, capturedImages }) => {
             <Text style={{ fontSize: 12, fontWeight: "bold" }}>{safe(topEvento[0])}</Text>
           </View>
           <View style={{ width: "32%", textAlign: "center", padding: 6, border: "1px solid #ccc", borderRadius: 4 }}>
-            <Text>Ocur. top</Text>
+            <Text>Cantidad de PMA</Text>
             <Text style={{ fontSize: 14, fontWeight: "bold" }}>{safe(topEvento[1])}</Text>
           </View>
         </View>
 
         {capturedImages.kpi && (
           <>
-            <Text style={styles.sectionTitle}>KPI (Tarjetas)</Text>
+            <Text style={styles.sectionTitle}> (Tarjetas)</Text>
             <Image src={capturedImages.kpi} style={styles.img} />
           </>
         )}
 
         {capturedImages.edificio && (
           <>
-            <Text style={styles.sectionTitle}>Estadística Edificios</Text>
+          
             <Image src={capturedImages.edificio} style={styles.img} />
           </>
         )}
@@ -268,19 +281,21 @@ export default function ExportPDF({ eventos }) {
   const [capturedImages, setCapturedImages] = useState({ kpi:null, edificio:null, pma:null, charts:[] });
 
   const doCapture = useCallback(async () => {
-    const kpi = await captureAsImage("#kpi-cards");
-    const edificio = await captureAsImage("#edificio-stats-capture");
-    const pma = await captureAsImage("#analitica-pma-capture");
-
-    const charts = await captureAll([
-      "#charts-capture",
-      "#mini-charts-capture",
-      "#line-analytics-capture",
-    ]);
-
+    // KPIs y tarjetas a 3x
+    const kpi = await captureAsImage("#kpi-cards", { scale: 3 });
+    const edificio = await captureAsImage("#edificio-stats-capture", { scale: 3 });
+    const pma = await captureAsImage("#analitica-pma-capture", { scale: 3 });
+  
+    // Gráficos a 4x (más nítidos)
+    const charts = await captureAll(
+      ["#charts-capture", "#mini-charts-capture", "#line-analytics-capture"],
+      { scale: 4, format: "jpeg", quality: 0.9 }
+    );
+    
     setCapturedImages({ kpi, edificio, pma, charts });
     return { kpi, edificio, pma, charts };
   }, []);
+  
 
   const handleExport = useCallback(async () => {
     try {
