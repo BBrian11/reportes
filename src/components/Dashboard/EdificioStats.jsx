@@ -1,7 +1,8 @@
+// src/components/Edificios/EdificioStats.jsx
 import React from "react";
 import "../../styles/edificiostats.css";
 
-export default function EdificioStats({ eventos }) {
+export default function EdificioStats({ eventos = [], noWrapper = false }) {
   const totalPMA = eventos.filter(e => e.evento.includes("Puerta Mantenida Abierta")).length;
   const totalForzada = eventos.filter(e => e.evento.includes("Puerta Forzada")).length;
 
@@ -14,8 +15,9 @@ export default function EdificioStats({ eventos }) {
 
   const topEncargados = Object.entries(encargados).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  return (
-    <div className="edificio-card">
+  // === Contenido sin wrapper externo ===
+  const Content = (
+    <>
       <h3 className="section-title">Edificios - Accesos</h3>
 
       {/* KPIs */}
@@ -52,6 +54,9 @@ export default function EdificioStats({ eventos }) {
           <p className="ranking-empty">No hay datos</p>
         )}
       </div>
-    </div>
+    </>
   );
+
+  // === Devolver según noWrapper ===
+  return noWrapper ? Content : <div className="edificio-card">{Content}</div>;
 }

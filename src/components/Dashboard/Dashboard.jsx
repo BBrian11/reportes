@@ -13,11 +13,16 @@ import MiniCharts from "./MiniCharts.jsx";
 import OtrosStats from "./OtrosStats.jsx";
 import LineAnalytics from "./LineAnalytics.jsx";
 import TareasPanel from "./TareasPanel.jsx";
+
+import AnaliticaDetalladaPMA from "./AnaliticaDetalladaPMA.jsx";
+
+
 import { Link } from "react-router-dom";
 import { FaSync, FaTasks, FaBars, FaWpforms } from "react-icons/fa";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import "../../styles/dashboard.css";
+
 
 export default function Dashboard() {
   const [eventos, setEventos] = useState([]);
@@ -220,7 +225,7 @@ ecargar */}
                 </>
               ) : (
                 <>
-                  <div className="grid-layout">
+                  <div className="grid-layout" >
                     <MiniCharts eventos={eventosFiltrados} />
                     <LineAnalytics
                       eventos={eventosFiltrados}
@@ -229,7 +234,23 @@ ecargar */}
                       fechaFin={filtros.fechaFin}
                     />
                     {filtros.cliente === "TGS" && <TgsStats eventos={eventosFiltrados} />}
-                    {filtros.cliente === "Edificios" && <EdificioStats eventos={eventosFiltrados} />}
+                    {filtros.cliente === "Edificios" && (
+  <>
+    {/* bloque EdificioStats solo */}
+    <div className="seccion-edificio">
+      <EdificioStats eventos={eventosFiltrados} noWrapper showTitle={false} />
+    </div>
+
+    {/* bloque Analítica Detallada aparte */}
+    <div className="seccion-analitica">
+      <AnaliticaDetalladaPMA eventos={eventosFiltrados} noWrapper />
+    </div>
+  </>
+)}
+
+
+
+
                     {filtros.cliente === "VTV" && <VtvStats eventos={eventosFiltrados} />}
                     {filtros.cliente === "Otros" && <OtrosStats eventos={eventosFiltrados} />}
                   </div>

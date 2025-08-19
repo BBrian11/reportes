@@ -1193,3 +1193,48 @@
 .tareas-panel li:last-child {
   border-bottom: none;
 }
+.table-section{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:40px;
+  width:100%;
+}
+
+/* Asegura que los cards ocupen todo el ancho de su columna */
+.table-section > .edificio-card{
+  width:100%;
+  max-width:none;
+  margin:0;
+}
+
+/* Quitá límites que achicaban */
+.edificio-card{ max-width:none; }         /* si querés mantenerlo global */
+.ranking-card{ max-width:none; margin:0;} /* ya no centrado */
+/* contenedor principal del dashboard */
+.table-section,
+.grid-edificios,
+.edificio-card {
+  width: 100% !important;   /* que use todo el ancho disponible */
+  max-width: 100% !important;
+}
+
+/* si el padre tiene un max-width fijo, lo anulamos */
+.dashboard-container {
+  max-width: 100% !important;
+  padding-left: 20px;   /* opcional: espacio lateral */
+  padding-right: 20px;
+}
+.seccion-edificio,
+.seccion-analitica {
+  width: 100%;        /* que ocupen todo el ancho */
+  margin-bottom: 20px; /* espacio entre secciones */
+}
+
+/* si querés que cada sección tenga estilo de "card" */
+.seccion-edificio,
+.seccion-analitica {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 20px;
+}

@@ -75,4 +75,167 @@
     color: #9ca3af;
     font-size: 0.9rem;
   }
-  
+  /* Opcional, para el nuevo card */
+.analytics-card { margin-top: 12px; }
+.mini-stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; margin-bottom: 8px; }
+.mini-stats { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; background:#f7f7f7; border-radius:8px; }
+.mini-kpi-label { font-size:.9rem; opacity:.8; }
+.mini-kpi-value { font-weight:700; }
+.analytics-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; }
+.ranking-subtitle { margin:6px 0 8px; font-size:1rem; }
+
+.edificio-card,
+.analytics-card {
+  padding: 24px;   /* más aire adentro */
+}
+/* ====== Layout a 2 columnas bien ancho ====== */
+
+
+/* Forzar a las cards a ocupar el ancho de su columna dentro del grid */
+
+
+/* === Contenedor en dos columnas === */
+.table-section {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* dos columnas iguales */
+  gap: 40px; /* espacio entre cards */
+  width: 100%;
+}
+
+/* === Quitar límites que achican === */
+.table-section .edificio-card,
+.table-section .ranking-card,
+.table-section .analytics-card {
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+
+.mini-kpi-value,
+.ranking-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.table-section{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:40px;
+  width:100%;
+}
+
+/* Asegura que los cards ocupen todo el ancho de su columna */
+.table-section > .edificio-card{
+  width:100%;
+  max-width:none;
+  margin:0;
+}
+
+/* Quitá límites que achicaban */
+.edificio-card{ max-width:none; }         /* si querés mantenerlo global */
+.ranking-card{ max-width:none; margin:0;} /* ya no centrado */
+.table-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 40px;
+  width: 100%;
+}
+
+.table-section > .edificio-card {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+/* ===== Un solo card contenedor que ocupe TODO el ancho ===== */
+.edificios-wrap {
+  max-width: none !important;  /* anula el 500px */
+  width: 100%;
+  margin: 0;                  /* sin centrado */
+  padding: 24px;               /* aire del card */
+}
+
+/* Dos columnas adentro del card */
+.edificios-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  align-items: start;
+}
+
+/* Si tus estilos globales achican .ranking-card/.edificio-card internos, neutralizalos aquí */
+.edificios-grid .edificio-card,
+.edificios-grid .ranking-card,
+.edificios-grid .analytics-card {
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* Responsive opcional: 1 columna en pantallas chicas */
+@media (max-width: 992px) {
+  .edificios-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* Card contenedor grande */
+.edificios-wrap {
+  width: 100%;
+  max-width: none;
+  padding: 24px;
+  margin: 0 auto 24px auto;
+}
+
+/* Grid interno: 2 columnas iguales */
+.edificios-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  align-items: start;
+}
+
+/* Neutraliza max-width heredados dentro */
+.edificios-grid > * {
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+/* Responsive: 1 columna en pantallas chicas */
+@media (max-width: 992px) {
+  .edificios-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* Dos cards bien anchos y separados */
+.grid-edificios {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  width: 100%;
+}
+
+/* Asegura que cada card ocupe toda su columna */
+.grid-edificios > .edificio-card {
+  max-width: none;
+  margin: 0;
+}
+
+/* Opcional: en móviles, una sola columna */
+@media (max-width: 992px) {
+  .grid-edificios {
+    grid-template-columns: 1fr;
+  }
+}
+.seccion-edificio,
+.seccion-analitica {
+  width: 100%;        /* que ocupen todo el ancho */
+  margin-bottom: 20px; /* espacio entre secciones */
+}
+
+/* si querés que cada sección tenga estilo de "card" */
+.seccion-edificio,
+.seccion-analitica {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 20px;
+}

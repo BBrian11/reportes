@@ -6,6 +6,8 @@ import {
 import { Add, Delete } from "@mui/icons-material";
 import CameraTable from "./CameraTable";
 import ChecklistPanel from "./ChecklistPanel";
+import useCamarasHistoricas from "./useCamarasHistoricas";
+import { norm } from "./helpers";
 
 export default function TandaCard({
   t, clientesCat,
@@ -14,6 +16,12 @@ export default function TandaCard({
   setChecklistVal, resetFallan, toggleFallan,
   setResumen
 }) {
+  // 👇 clave normalizada del cliente seleccionado en esta tanda
+  const clienteKey = t?.cliente ? norm(t.cliente) : null;
+
+  // 👇 histórico de estados por canal para este cliente (ok|medio|grave)
+  const historicos = useCamarasHistoricas(clienteKey); // { 1:"ok", 2:"grave", ... }
+
   return (
     <Card sx={{ overflow: "hidden" }}>
       <CardHeader
@@ -58,12 +66,15 @@ export default function TandaCard({
         <Grid container spacing={2.25}>
           {/* Tabla */}
           <Grid item xs={12} md={7}>
-            <CameraTable
-              tanda={t}
-              onCamField={onCamField}
-              onCamRemove={onCamRemove}
-              onCamState={onCamState}
-            />
+          <CameraTable
+  tanda={t}
+  // ✅ ahora sí existe
+  historicos={historicos}
+  onCamField={onCamField}
+  onCamRemove={onCamRemove}
+  onCamState={onCamState}
+/>
+
           </Grid>
 
           {/* Checklist */}
