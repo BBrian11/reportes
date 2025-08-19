@@ -4,7 +4,7 @@ import Dashboard from "./components/Dashboard/Dashboard.jsx";
 import FormBuilder from "./components/Dashboard/FormBuilder.jsx";
 import DynamicForm from "./components/Dashboard/DynamicForm.jsx";
 import FormRondin from "./components/Dashboard/FormRondin.jsx";
-import FormRiesgoRondin from "./components/Dashboard/FormRiesgoRondin.jsx";
+import FormRiesgoRondin from "./components/Dashboard/riesgoRondin/FormRiesgoRondin.jsx";
 
 export default function App() {
   return (

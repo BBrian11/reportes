@@ -80,7 +80,14 @@ export default function Dashboard() {
             d["observaciones-edificios"] ??
             d.observacion ??
             "Sin Observación";
-        
+        // ✅ RAZONES (todas las variantes + alias normalizado)
+const razonesValue =
+d["razones-pma"] ??
+d["razones_pma"] ??
+d["razonesPma"] ??
+d.razones ??
+"";
+
           // ✅ RESOLUCIÓN (traerla del doc y exponerla con varios alias)
           const resolucionValue =
             d["resolusion-evento"] ??
@@ -112,7 +119,10 @@ export default function Dashboard() {
             ["resolusion-evento"]: d["resolusion-evento"] ?? null,
             // y también una versión normalizada por si querés cambiar el selector
             resolucion: resolucionValue,
-        
+            razones: razonesValue,                 // alias sin guion (cómodo para buscar/filtrar)
+            ["razones-pma"]: d["razones-pma"] ?? null,
+            ["razones_pma"]: d["razones_pma"] ?? null,
+            razonesPma: d["razonesPma"] ?? null,
             // extras útiles para columnas futuras
             ["respuesta-residente"]: respuestaResidente,
             edificio,

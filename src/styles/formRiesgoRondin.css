@@ -254,3 +254,8 @@
 
 /* chips de misión: sin brillos molestos */
 .MuiChip-root{ font-weight: 600; }
+.progress-bar-sm { height: 10px !important; border-radius: 999px !important; }
+.progress-bar-xs { height: 6px !important; border-radius: 999px !important; }
+.item-card.status-pendiente { outline: 1px dashed var(--medio); }
+.progress-bar-sm { height: 10px !important; border-radius: 999px !important; }
+.progress-bar-xs { height: 6px !important; border-radius: 999px !important; }

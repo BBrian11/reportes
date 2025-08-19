@@ -1,11 +1,12 @@
+// src/components/EventsTable.jsx
 import React, { useState, useMemo } from "react";
 import DataTable, { createTheme } from "react-data-table-component";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import { FiSearch, FiRotateCcw, FiCalendar } from "react-icons/fi";
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { db } from "../../services/firebase";
-import "../../styles/eventstable.css";
+import { db } from "../../services/firebase"; // ajustá la ruta
+import "../../styles/eventstable.css";        // opcional
 
 const MySwal = withReactContent(Swal);
 
@@ -47,6 +48,13 @@ export default function EventsTable({ eventos }) {
     row?.respuesta ??
     "";
 
+    const getRazones = (row) =>
+    row?.["razones-pma"] ??
+    row?.["razones_pma"] ??
+    row?.["razonesPma"] ??
+    row?.razones ??     // ← alias normalizado si lo agregás en el loader
+    "";
+  
   const getUbicacionDisplay = (row) =>
     row?.ubicacion || row?.edificio || "";
 
@@ -96,10 +104,10 @@ export default function EventsTable({ eventos }) {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
 
-      // Escribo el campo EXACTO que usás en DB (`resolusion-evento`) y dejo espejo “resolucion” normalizado
+      // guardo la clave “original” y espejo normalizado
       await updateDoc(doc(db, path), {
-        ["resolusion-evento"]: value, // tu clave con typo
-        resolucion: value,            // espejo normalizado (opcional pero útil)
+        ["resolusion-evento"]: value,
+        resolucion: value,
       });
 
       MySwal.fire("✅ Guardado", "Resolución actualizada", "success");
@@ -124,8 +132,6 @@ export default function EventsTable({ eventos }) {
     try {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
-
-      // Escribo la clave original y una alternativa
       await updateDoc(doc(db, path), {
         ["respuesta-residente"]: value,
         respuesta: value,
@@ -142,7 +148,6 @@ export default function EventsTable({ eventos }) {
     const clienteLower = getClienteLower(event);
 
     if (clienteLower === "edificios") {
-      // Para edificios, edito edificio y unidad por separado
       const edificioActual = event.edificio || "";
       const unidadActual = event.unidad || "";
 
@@ -179,7 +184,6 @@ export default function EventsTable({ eventos }) {
         MySwal.fire("❌ Error", "No se pudo actualizar la ubicación", "error");
       }
     } else {
-      // Otros clientes: guardo en campo 'ubicacion' (ajustá si tu colección usa otro nombre)
       const { value } = await MySwal.fire({
         title: "Editar Ubicación",
         input: "text",
@@ -236,6 +240,7 @@ export default function EventsTable({ eventos }) {
     { name: "Ubicación", selector: (row) => row.ubicacion || row.edificio },
     { name: "Fecha", selector: (row) => row.fecha || row.fechaHoraEnvio, sortable: true },
     { name: "Observación", selector: (row) => getObservacion(row) || "-", wrap: true },
+    { name: "Razones", selector: (row) => getRazones(row) || "-", wrap: true },
     { name: "Resolución", selector: (row) => getResolucion(row) || "-", wrap: true },
     { name: "Respuesta Residente", selector: (row) => getRespuestaResidente(row) || "-", wrap: true },
     {
@@ -264,6 +269,7 @@ export default function EventsTable({ eventos }) {
         backgroundColor: "#f9fafb",
         color: "#111827",
         borderBottom: "1px solid #e5e7eb",
+
       },
     },
     rows: {
@@ -274,10 +280,18 @@ export default function EventsTable({ eventos }) {
   };
 
   // ======================
-  // Filtro
+  // Filtro + orden por fecha (desc)
   // ======================
   const filteredData = useMemo(() => {
-    return (eventos || []).filter((item) => {
+    const base = (eventos || [])
+      .slice()
+      .sort((a, b) => {
+        const da = a?.fechaObj?.getTime?.() || 0;
+        const db = b?.fechaObj?.getTime?.() || 0;
+        return db - da; // más nuevos primero
+      });
+
+    return base.filter((item) => {
       const texto = (filterText || "").toLowerCase();
       const textMatch =
         item?.cliente?.toLowerCase().includes(texto) ||
@@ -285,7 +299,8 @@ export default function EventsTable({ eventos }) {
         (getUbicacionDisplay(item) || "").toLowerCase().includes(texto) ||
         (getObservacion(item) || "").toLowerCase().includes(texto) ||
         (getResolucion(item) || "").toLowerCase().includes(texto) ||
-        (getRespuestaResidente(item) || "").toLowerCase().includes(texto);
+        (getRespuestaResidente(item) || "").toLowerCase().includes(texto) ||
+        (getRazones(item) || "").toLowerCase().includes(texto);
 
       const fechaEvento =
         item?.fechaObj ||
@@ -313,7 +328,7 @@ export default function EventsTable({ eventos }) {
           <FiSearch />
           <input
             type="text"
-            placeholder="Buscar cliente, evento, observación, resolución, respuesta..."
+            placeholder="Buscar cliente, evento, observación, resolución, respuesta, razones..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
           />
