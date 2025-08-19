@@ -5,6 +5,8 @@ import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import Swal from "sweetalert2";
 import html2canvas from "html2canvas";
+  // --- Contexto del reporte ---
+ 
 
 // ===== Estilos PDF =====
 const styles = StyleSheet.create({
@@ -136,7 +138,6 @@ async function captureAll(selectors, opts = {}) {
   return imgs;
 }
 
-
 // ===== Documento PDF =====
 const ReportDocument = ({ eventos, capturedImages }) => {
   const totalEventos = eventos.length;
@@ -146,6 +147,16 @@ const ReportDocument = ({ eventos, capturedImages }) => {
     return acc;
   }, {});
   const topEvento = Object.entries(eventoFrecuente).sort((a,b)=>b[1]-a[1])[0] || ["Sin datos", 0];
+
+  // --- Contexto ---
+  const clientes = Array.from(new Set(eventos.map(e => (e.cliente || "").trim()).filter(Boolean)));
+  const ubicaciones = Array.from(new Set(eventos.map(e => (e.ubicacion || e.edificio || "").trim()).filter(Boolean)));
+  const listify = (arr, max = 4) => {
+    if (!arr.length) return "—";
+    if (arr.length <= max) return arr.join(", ");
+    const shown = arr.slice(0, max).join(", ");
+    return `${shown} (+${arr.length - max} más)`;
+  };
 
   const rows = eventos.map((e) => ({
     cliente: safe(e.cliente),
@@ -161,13 +172,40 @@ const ReportDocument = ({ eventos, capturedImages }) => {
 
   return (
     <Document>
+      {/* ===== PÁGINA 1: Header + Contexto + KPI (números) + KPI Tarjetas ===== */}
       <Page size="A4" style={styles.page}>
+        {/* HEADER */}
         <View style={styles.header}>
           <Text style={styles.title}>Reporte de Monitoreo</Text>
           <Text style={styles.subtitle}>Generado el: {new Date().toLocaleString("es-AR")}</Text>
         </View>
 
-        <Text style={styles.sectionTitle}>KPI</Text>
+        {/* CONTEXTO */}
+        <View style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 4,
+          padding: 8,
+          marginTop: 6,
+          marginBottom: 8,
+          backgroundColor: "#f9fafb",
+        }}>
+      
+          <View style={{ marginBottom: 2 }}>
+            <Text style={{ fontSize: 9 }}>
+              <Text style={{ fontWeight: "bold" }}>Cliente(s): </Text>
+              {listify(clientes)}
+            </Text>
+          </View>
+          <View>
+            <Text style={{ fontSize: 9 }}>
+              <Text style={{ fontWeight: "bold" }}>Edificio(s) / Ubicación(es): </Text>
+              {listify(ubicaciones, 6)}
+            </Text>
+          </View>
+        </View>
+
+        {/* KPI NUMÉRICOS */}
+    
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
           <View style={{ width: "32%", textAlign: "center", padding: 6, border: "1px solid #ccc", borderRadius: 4 }}>
             <Text>Total Eventos</Text>
@@ -183,16 +221,22 @@ const ReportDocument = ({ eventos, capturedImages }) => {
           </View>
         </View>
 
+        {/* KPI TARJETAS (CAPTURA) */}
         {capturedImages.kpi && (
           <>
-            <Text style={styles.sectionTitle}> (Tarjetas)</Text>
+            <Text style={styles.sectionTitle}>(Tarjetas)</Text>
             <Image src={capturedImages.kpi} style={styles.img} />
           </>
         )}
 
+        <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
+      </Page>
+
+      {/* ===== PÁGINA 2: EdificioStats + PMA + Gráficos ===== */}
+      <Page size="A4" style={styles.page}>
         {capturedImages.edificio && (
           <>
-          
+            <Text style={styles.sectionTitle}>Estadística Edificios</Text>
             <Image src={capturedImages.edificio} style={styles.img} />
           </>
         )}
@@ -206,7 +250,7 @@ const ReportDocument = ({ eventos, capturedImages }) => {
 
         {capturedImages.charts?.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Gráficos</Text>
+        
             {capturedImages.charts.map((src, i) => (
               <Image key={i} src={src} style={styles.img} />
             ))}
@@ -216,6 +260,7 @@ const ReportDocument = ({ eventos, capturedImages }) => {
         <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
       </Page>
 
+      {/* ===== TABLAS (páginas adicionales) ===== */}
       {tablePages.map((pageRows, idx) => (
         <Page key={idx} size="A4" style={styles.page}>
           <Text style={styles.sectionTitle}>Tabla de eventos (pág. {idx + 1})</Text>
@@ -247,6 +292,8 @@ const ReportDocument = ({ eventos, capturedImages }) => {
     </Document>
   );
 };
+
+
 
 // ===== Excel =====
 const generateExcel = (eventos) => {
