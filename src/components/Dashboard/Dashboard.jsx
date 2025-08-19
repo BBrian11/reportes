@@ -170,12 +170,7 @@ d.razones ??
         <button className="icon-btn dark" onClick={() => setSidebarOpen(true)}>
           <FaBars size={20} />
         </button>
-
-        {/* Botón R    <button className="icon-btn green" onClick={() => loadEventos()}>
-          <FaSync size={20} />
-        </button>
-ecargar */}
-    
+  
         {/* Botón Cambiar Vista */}
         <button
           className={`icon-btn purple ${vista === "tareas" ? "active" : ""}`}
@@ -183,13 +178,14 @@ ecargar */}
         >
           <FaTasks size={20} />
         </button>
+  
         <Link to="/form-builder">
           <button className="icon-btn blue">
             <FaWpforms size={20} />
           </button>
         </Link>
       </div>
-
+  
       {/* ✅ Sidebar (intacto con submenús) */}
       <Sidebar
         eventos={eventos}
@@ -205,7 +201,7 @@ ecargar */}
           setFiltros({ cliente, grupo, ubicacion: "" })
         }
       />
-
+  
       {/* ✅ Contenido principal */}
       <main className="dashboard-main">
         <Header />
@@ -213,48 +209,65 @@ ecargar */}
           {vista === "dashboard" ? (
             <>
               <Filters filtros={filtros} setFiltros={setFiltros} eventos={eventos} />
+  
               {!filtros.cliente ? (
                 <>
                   <div className="grid-layout">
-                    <GlobalStats eventos={eventosFiltrados} />
-                    <Charts eventos={eventosFiltrados} />
+                    {/* KPI globales */}
+                    <div id="kpi-cards">
+                      <GlobalStats eventos={eventosFiltrados} />
+                    </div>
+  
+                    {/* Charts principales */}
+                    <div id="charts-capture">
+                      <Charts eventos={eventosFiltrados} />
+                    </div>
                   </div>
+  
                   <div className="table-section">
                     <EventsTable eventos={eventosFiltrados} filtros={filtros} />
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="grid-layout" >
-                    <MiniCharts eventos={eventosFiltrados} />
-                    <LineAnalytics
-                      eventos={eventosFiltrados}
-                      cliente={filtros.cliente}
-                      fechaInicio={filtros.fechaInicio}
-                      fechaFin={filtros.fechaFin}
-                    />
+                  <div className="grid-layout">
+                    {/* Mini charts */}
+                    <div id="mini-charts-capture">
+                      <MiniCharts eventos={eventosFiltrados} />
+                    </div>
+  
+                    {/* Line analytics */}
+                    <div id="line-analytics-capture">
+                      <LineAnalytics
+                        eventos={eventosFiltrados}
+                        cliente={filtros.cliente}
+                        fechaInicio={filtros.fechaInicio}
+                        fechaFin={filtros.fechaFin}
+                      />
+                    </div>
+  
                     {filtros.cliente === "TGS" && <TgsStats eventos={eventosFiltrados} />}
+  
                     {filtros.cliente === "Edificios" && (
-  <>
-    {/* bloque EdificioStats solo */}
-    <div className="seccion-edificio">
-      <EdificioStats eventos={eventosFiltrados} noWrapper showTitle={false} />
-    </div>
-
-    {/* bloque Analítica Detallada aparte */}
-    <div className="seccion-analitica">
-      <AnaliticaDetalladaPMA eventos={eventosFiltrados} noWrapper />
-    </div>
-  </>
-)}
-
-
-
-
+                      <>
+                        {/* EdificioStats (para captura en PDF) */}
+                        <div id="edificio-stats-capture" className="seccion-edificio">
+                          <EdificioStats eventos={eventosFiltrados} noWrapper showTitle={false} />
+                        </div>
+  
+                        {/* Analítica Detallada PMA (si querés capturarla, avisá y le agrego un id) */}
+                        <div id="analitica-pma-capture" className="seccion-analitica">
+  <AnaliticaDetalladaPMA eventos={eventosFiltrados} noWrapper />
+</div>
+                      </>
+                    )}
+  
                     {filtros.cliente === "VTV" && <VtvStats eventos={eventosFiltrados} />}
                     {filtros.cliente === "Otros" && <OtrosStats eventos={eventosFiltrados} />}
                   </div>
+  
                   <div className="table-section">
+                    {/* ⬇️ Exportador nuevo que captura KPI + gráficos + EdificioStats y exporta Excel */}
                     <ExportPDF eventos={eventosFiltrados} />
                     <EventsTable eventos={eventosFiltrados} filtros={filtros} />
                   </div>
@@ -268,4 +281,5 @@ ecargar */}
       </main>
     </div>
   );
+  
 }
