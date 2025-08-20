@@ -3,16 +3,17 @@ export const MAX_TANDAS = 20;
 export const CANALES_OPCIONES = Array.from({ length: 64 }, (_, i) => i + 1);
 // helpers.js
 // helpers.js
+// helpers.js (ejemplo)
 export const ESTADOS = [
   { key: "ok",    label: "OK",    color: "#16a34a" },
   { key: "medio", label: "Medio", color: "#f59e0b" },
-  { key: "grave", label: "Grave", color: "#dc2626" },
+  { key: "grave", label: "Grave", color: "#ef4444" },
 ];
 
-export const estadoMeta = (key) => {
-  const m = ESTADOS.find(e => e.key === key);
-  return m || { key: null, label: "—", color: "#94a3b8" }; // gris para desconocido
-};
+export function estadoMeta(k) {
+  const def = { label: "Sin estado", color: "#9ca3af" };
+  return ESTADOS.find(e => e.key === k) || def;
+}
 
 export const nuevaTanda = (id = Date.now()) => ({
   id: `tanda-${id}`,
@@ -36,7 +37,7 @@ export const nuevaTanda = (id = Date.now()) => ({
 });
 
 
-export const MIN_CAMERAS_REQUIRED = 50;
+export const MIN_CAMERAS_REQUIRED = 6;
 
 export const RISK_WHITELIST = ["LOMAS DE PETION","CHACRA PETION","DROGUERIA BETAPHARMA","LA CASCADA"];
 export const norm = (s = "") =>

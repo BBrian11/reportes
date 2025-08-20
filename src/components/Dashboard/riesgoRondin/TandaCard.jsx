@@ -1,7 +1,6 @@
-// TandaCard.jsx
 import {
   Card, CardHeader, CardContent, Stack, Tooltip, IconButton, Button,
-  Grid, FormControl, InputLabel, Select, MenuItem, TextField, Chip, Divider
+  Grid, FormControl, InputLabel, Select, MenuItem, TextField, Chip
 } from "@mui/material";
 import { Add, Delete } from "@mui/icons-material";
 import CameraTable from "./CameraTable";
@@ -10,49 +9,57 @@ import useCamarasHistoricas from "./useCamarasHistoricas";
 import { norm } from "./helpers";
 
 export default function TandaCard({
-  t, clientesCat,
-  onSetCliente, onAddCam, onRemoveTanda,
-  onCamField, onCamRemove, onCamState,
-  setChecklistVal, resetFallan, toggleFallan,
-  setResumen
+  tanda,
+  historicos: historicosProp,
+  onSetCliente,
+  onAddCam,
+  onRemoveTanda,
+  onCamField,
+  onCamRemove,
+  onCamState,
+  setChecklistVal,
+  resetFallan,
+  toggleFallan,
+  setResumen,
+  clientesCat = [],
 }) {
-  // 👇 clave normalizada del cliente seleccionado en esta tanda
-  const clienteKey = t?.cliente ? norm(t.cliente) : null;
+  if (!tanda) return null;
 
-  // 👇 histórico de estados por canal para este cliente (ok|medio|grave)
-  const historicos = useCamarasHistoricas(clienteKey); // { 1:"ok", 2:"grave", ... }
+  const clienteKey = norm(tanda.cliente || "");
+  const historicosHook = useCamarasHistoricas(clienteKey);
+  const historicos = historicosProp ?? historicosHook;
 
   return (
-    <Card sx={{ overflow: "hidden" }}>
+    <Card id={tanda.id} sx={{ overflow: "hidden" }}>
       <CardHeader
         titleTypographyProps={{ variant: "h6" }}
         subheaderTypographyProps={{ sx: { mt: .5, color: "text.secondary" } }}
-        title={t.cliente || "Seleccioná cliente"}
+        title={tanda.cliente || "Seleccioná cliente"}
         subheader={
           <Stack direction="row" spacing={1} alignItems="center">
             <FormControl size="small" sx={{ minWidth: 280 }}>
               <InputLabel>Cliente</InputLabel>
               <Select
-                value={t.cliente}
+                value={tanda.cliente}
                 label="Cliente"
-                onChange={(e) => onSetCliente(t.id, e.target.value)}
+                onChange={(e) => onSetCliente(tanda.id, e.target.value)}
               >
                 {clientesCat.map((c) => (
                   <MenuItem key={c.id} value={c.nombre}>{c.nombre}</MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <Chip size="small" label={`${t.camaras.length} cámaras`} variant="outlined" />
+            <Chip size="small" label={`${tanda.camaras.length} cámaras`} variant="outlined" />
           </Stack>
         }
         action={
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<Add />} onClick={() => onAddCam(t.id)}>
+            <Button variant="outlined" startIcon={<Add />} onClick={() => onAddCam(tanda.id)}>
               Agregar cámara
             </Button>
             <Tooltip title="Eliminar tanda">
               <span>
-                <IconButton onClick={() => onRemoveTanda(t.id)}>
+                <IconButton onClick={() => onRemoveTanda?.(tanda.id)} disabled={!onRemoveTanda}>
                   <Delete />
                 </IconButton>
               </span>
@@ -64,23 +71,18 @@ export default function TandaCard({
 
       <CardContent sx={{ pt: 1.5 }}>
         <Grid container spacing={2.25}>
-          {/* Tabla */}
           <Grid item xs={12} md={7}>
-          <CameraTable
-  tanda={t}
-  // ✅ ahora sí existe
-  historicos={historicos}
-  onCamField={onCamField}
-  onCamRemove={onCamRemove}
-  onCamState={onCamState}
-/>
-
+            <CameraTable
+              tanda={tanda}
+              historicos={historicos}
+              onCamField={onCamField}
+              onCamRemove={onCamRemove}
+              onCamState={onCamState}
+            />
           </Grid>
-
-          {/* Checklist */}
           <Grid item xs={12} md={5}>
             <ChecklistPanel
-              t={t}
+              t={tanda}
               setChecklistVal={setChecklistVal}
               resetFallan={resetFallan}
               toggleFallan={toggleFallan}
@@ -91,8 +93,8 @@ export default function TandaCard({
         <TextField
           label="Resumen (opcional)"
           fullWidth multiline minRows={2}
-          value={t.resumen}
-          onChange={(e) => setResumen(t.id, e.target.value)}
+          value={tanda.resumen}
+          onChange={(e) => setResumen(tanda.id, e.target.value)}
           sx={{ mt: 2 }}
         />
       </CardContent>

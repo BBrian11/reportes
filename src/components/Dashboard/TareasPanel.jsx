@@ -26,13 +26,101 @@ import {
   DialogActions,
   TextField,
   IconButton,
-  Tooltip
+  Tooltip,Stack, Chip, Divider
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { FaFilter, FaFilePdf, FaPlus, FaMinus } from "react-icons/fa";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+
+
+
+const RespuestasView = ({ respuestas }) => {
+  if (!respuestas) return null;
+
+  const { turno, novedades, observaciones, tandas = [] } = respuestas;
+  const color = { ok: "#16a34a", medio: "#f59e0b", grave: "#ef4444" };
+
+  return (
+    <Box sx={{ mt: 1.5, display: "grid", gap: 1.25 }}>
+      <Typography><strong>Turno:</strong> {turno || "—"}</Typography>
+      {novedades ? <Typography><strong>Novedades:</strong> {novedades}</Typography> : null}
+      {observaciones ? <Typography><strong>Observaciones:</strong> {observaciones}</Typography> : null}
+
+      {Array.isArray(tandas) && tandas.length > 0 && (
+        <Box sx={{ display: "grid", gap: 1.25 }}>
+          {tandas.map((t, i) => (
+            <Box key={i} sx={{ p: 1.25, borderRadius: 1, bgcolor: "#fafafa" }}>
+              <Typography sx={{ fontWeight: 700, mb: .5 }}>
+                {t?.cliente || "Cliente sin nombre"}
+              </Typography>
+
+              {/* Checklist */}
+              {t?.checklist && (
+                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1 }}>
+                  {"grabacionesOK" in t.checklist && (
+                    <Chip size="small" label={`Grabaciones ${t.checklist.grabacionesOK ? "OK" : "Falla"}`} />
+                  )}
+                  {"cortes220v" in t.checklist && (
+                    <Chip size="small" label={`Cortes 220V ${t.checklist.cortes220v ? "Sí" : "No"}`} />
+                  )}
+                  {"equipoOffline" in t.checklist && (
+                    <Chip size="small" label={`Equipo offline ${t.checklist.equipoOffline ? "Sí" : "No"}`} />
+                  )}
+                </Stack>
+              )}
+
+              {/* Cámaras */}
+              {Array.isArray(t?.camaras) && t.camaras.length > 0 && (
+                <Box component="table" sx={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign:"left", padding:"6px 8px" }}>Canal</th>
+                      <th style={{ textAlign:"left", padding:"6px 8px" }}>Estado</th>
+                      <th style={{ textAlign:"left", padding:"6px 8px" }}>Nota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {t.camaras.map((c, j) => {
+                      const est = c?.estado ?? null;
+                      const label = est ? est.toUpperCase() : "—";
+                      const clr = est ? color[est] : "#9ca3af";
+                      return (
+                        <tr key={j}>
+                          <td style={{ padding:"6px 8px" }}>{c?.canal ?? "—"}</td>
+                          <td style={{ padding:"6px 8px" }}>
+                            <Chip
+                              size="small"
+                              label={label}
+                              sx={{
+                                bgcolor: `${clr}22`,
+                                border: `1px solid ${clr}55`,
+                                fontWeight: 600
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding:"6px 8px" }}>{c?.nota || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Box>
+              )}
+
+              {t?.resumen && (
+                <>
+                  <Divider sx={{ my: 1 }} />
+                  <Typography><strong>Resumen:</strong> {t.resumen}</Typography>
+                </>
+              )}
+            </Box>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+};
 
 export default function TareasPanel() {
   const [tareas, setTareas] = useState([]);
@@ -47,45 +135,102 @@ export default function TareasPanel() {
   // ✅ Cargar tareas desde Firestore
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "respuestas-tareas"), async (snapshot) => {
-        const data = await Promise.all(
-            snapshot.docs.map(async (docSnap) => {
-              const d = docSnap.data();
-          
-              // Fecha de respuesta viene de respuestas-tareas (fechaEnvio)
-              const fechaRespuesta = d.fechaEnvio ? d.fechaEnvio.toDate() : null;
-          
-              // Buscar fecha de creación del formulario desde formularios-tareas
-              let fechaAsignacion = null;
-              if (d.formId) {
-                const formDoc = await getDoc(doc(db, "formularios-tareas", d.formId));
-                if (formDoc.exists()) {
-                  const formData = formDoc.data();
-                  fechaAsignacion = formData.fechaCreacion ? formData.fechaCreacion.toDate() : null;
-                }
-              }
-          
-              return {
-                id: docSnap.id,
-                formName: d.nombreFormulario || "Formulario",
-                cliente: d.cliente || "Sin cliente",
-                operador: d.operador || "Sin operador",
-                fechaAsignacion,
-                fechaRespuesta,
-                estado: d.estado || "Pendiente",
-                respuestas: d.respuestas || {},
-                observacion: d.observacion || ""
-              };
-            })
-          );
-          
+      const tsToDate = (ts) => ts?.toDate?.() || (ts ? new Date(ts) : null);
+const msToHMS = (ms) => {
+  if (ms == null) return "—";
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const ss = String(s % 60).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+};
+const sumPausedMs = (pausas = [], end) =>
+  pausas.reduce((acc, p) => {
+    const from = tsToDate(p?.from);
+    const to   = tsToDate(p?.to) || end; // si está en curso, usa 'end' o null
+    if (from && to) acc += Math.max(0, to - from);
+    return acc;
+  }, 0);
 
-      setTareas(data);
+const data = await Promise.all(
+  snapshot.docs.map(async (docSnap) => {
+    const d = docSnap.data();
 
+    // Control de ronda
+    const start = tsToDate(d?.controlRonda?.startTime);
+    const end   = tsToDate(d?.controlRonda?.endTime);
+    const pausasArr = Array.isArray(d?.controlRonda?.pausas) ? d.controlRonda.pausas : [];
+    const totalPausedMsRaw = d?.controlRonda?.totalPausedMs;
+    const totalPausedMs = (typeof totalPausedMsRaw === "number")
+      ? totalPausedMsRaw
+      : sumPausedMs(pausasArr, end || new Date());
+    const durationMsRaw = d?.controlRonda?.durationMs;
+    const durationMs = (typeof durationMsRaw === "number")
+      ? durationMsRaw
+      : (start ? ((end || new Date()) - start - totalPausedMs) : null);
+
+    // Fechas para listado/Gantt
+    const fechaAsignacion = start;
+    const fechaRespuesta  = end || tsToDate(d?.fechaEnvio);
+
+    // Clientes desde respuestas.tandas
+    const clientesFromTandas = Array.isArray(d?.respuestas?.tandas)
+      ? [...new Set(d.respuestas.tandas.map(t => t?.cliente).filter(Boolean))]
+      : [];
+    const clienteLabel =
+      clientesFromTandas.length === 0 ? "Sin cliente" :
+      clientesFromTandas.length === 1 ? clientesFromTandas[0] :
+      `${clientesFromTandas[0]} + ${clientesFromTandas.length - 1} más`;
+
+    // Métricas de cámaras verificadas
+    const totalCamaras = (d?.respuestas?.tandas || []).reduce(
+      (acc, t) => acc + (Array.isArray(t?.camaras) ? t.camaras.length : 0), 0
+    );
+    const camVerificadas = (d?.respuestas?.tandas || []).reduce((acc, t) => {
+      const cams = Array.isArray(t?.camaras) ? t.camaras : [];
+      return acc + cams.filter(c => c?.touched && c?.estado != null).length;
+    }, 0);
+    const progreso = totalCamaras ? Math.round((camVerificadas / totalCamaras) * 100) : 0;
+
+    return {
+      id: docSnap.id,
+      formName: d.nombreFormulario || "Formulario",
+      clienteLabel,
+      clientes: clientesFromTandas,
+      operador: d.operador || "Sin operador",
+      fechaAsignacion,
+      fechaRespuesta,
+      estado: d.estado || (fechaRespuesta ? "Completada" : (fechaAsignacion ? "En Proceso" : "Pendiente")),
+      respuestas: d.respuestas || {},
+      observacion: d.observacion || "",
+
+      // 👇 info de control y métricas derivadas
+      control: {
+        start, end, pausas: pausasArr, totalPausedMs, durationMs,
+        pausasCount: Array.isArray(pausasArr) ? pausasArr.length : 0,
+        pretty: {
+          totalPaused: msToHMS(totalPausedMs),
+          duration: msToHMS(durationMs),
+          bruto: (start && end) ? msToHMS(end - start) : "—",
+        }
+      },
+      metrics: {
+        totalCamaras,
+        camVerificadas,
+        progreso, // %
+      }
+    };
+  })
+);
+
+setTareas(data);
+
+      // (opcional) si armás datos del Gantt acá, reúsalos con data
       const ganttData = data.map((t) => {
         const color =
           t.estado === "Completada" ? "#4caf50" :
           t.estado === "En Proceso" ? "#ff9800" : "#f44336";
-
+  
         return {
           id: t.id,
           name: `${t.operador} - ${t.formName}`,
@@ -97,12 +242,12 @@ export default function TareasPanel() {
           onClick: () => handleSelectTask(t)
         };
       });
-
       setTasksGantt(ganttData);
     });
-
+  
     return () => unsub();
   }, [filtroOperador]);
+  
 
   const handleSelectTask = (task) => {
     setSelectedTask(task);
@@ -155,7 +300,7 @@ export default function TareasPanel() {
       t.operador,
       t.estado,
       t.fechaAsignacion ? t.fechaAsignacion.toLocaleString("es-AR") : "-",
-      t.fechaRespuesta ? t.fechaRespuesta.toLocaleString("es-AR") : "En espera",
+    
       t.observacion || "-",
       Object.entries(t.respuestas)
         .map(([k, v]) => (typeof v === "string" ? v : JSON.stringify(v)))
@@ -163,7 +308,7 @@ export default function TareasPanel() {
     ]);
 
     doc.autoTable({
-      head: [["Formulario", "Cliente", "Operador", "Estado", "Fecha Asignación", "Fecha Respuesta", "Observación", "Respuestas"]],
+      head: [["Formulario", "Cliente", "Operador", "Estado", "Fecha Asignación", "Observación", "Respuestas"]],
       body: tableData,
       styles: { fontSize: 8 }
     });
@@ -234,7 +379,8 @@ export default function TareasPanel() {
               rows={tareas}
               columns={[
                 { field: "formName", headerName: "Formulario", flex: 1 },
-                { field: "cliente", headerName: "Cliente", flex: 1 },
+                { field: "clienteLabel", headerName: "Cliente", flex: 1 },
+
                 { field: "operador", headerName: "Operador", flex: 1 },
                 { field: "estado", headerName: "Estado", flex: 1 },
                 {
@@ -244,13 +390,7 @@ export default function TareasPanel() {
                   valueFormatter: (p) => (p && p.value ? p.value.toLocaleString("es-AR") : "")
 
                 },
-                {
-                  field: "fechaRespuesta",
-                  headerName: "Fecha Respuesta",
-                  flex: 1,
-                  valueFormatter: (p) => (p && p.value ? p.value.toLocaleString("es-AR") : "En espera")
-
-                }
+                
               ]}
               pageSize={5}
               onRowClick={(params) => handleSelectTask(params.row)}
@@ -347,26 +487,38 @@ export default function TareasPanel() {
           {selectedTask && (
             <>
               <Typography variant="h6">{selectedTask.formName}</Typography>
-              <Typography><strong>Cliente:</strong> {selectedTask.cliente}</Typography>
-              <Typography><strong>Operador:</strong> {selectedTask.operador}</Typography>
+              <Typography><strong>Cliente:</strong> {selectedTask.clienteLabel}</Typography>
               <Typography><strong>Estado:</strong> {selectedTask.estado}</Typography>
               <Typography>
                 <strong>Fecha Asignación:</strong>{" "}
                 {selectedTask.fechaAsignacion ? selectedTask.fechaAsignacion.toLocaleString("es-AR") : "Sin asignación"}
               </Typography>
-              <Typography>
-                <strong>Fecha Respuesta:</strong>{" "}
-                {selectedTask.fechaRespuesta ? selectedTask.fechaRespuesta.toLocaleString("es-AR") : "En espera"}
-              </Typography>
+           
+              <Typography><strong>Operador:</strong> {selectedTask.operador}</Typography>
+              <RespuestasView respuestas={selectedTask.respuestas} />
+              {/* Tiempos */}
+<Box sx={{ mt: 1.5 }}>
+  <Typography variant="subtitle1">Tiempos</Typography>
+  <Box sx={{ display:"grid", gridTemplateColumns:{ xs:"1fr", sm:"1fr 1fr" }, gap: 1 }}>
+    <Typography><strong>Inicio:</strong> {selectedTask.control?.start ? selectedTask.control.start.toLocaleString("es-AR") : "—"}</Typography>
+    <Typography><strong>Fin:</strong> {selectedTask.control?.end ? selectedTask.control.end.toLocaleString("es-AR") : "—"}</Typography>
 
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle1">Respuestas:</Typography>
-                {Object.entries(selectedTask.respuestas).map(([k, v], i) => (
-                  <Typography key={i} variant="body2">
-                    {k}: {typeof v === "string" ? (v.startsWith("http") ? <a href={v}>Archivo</a> : v) : JSON.stringify(v)}
-                  </Typography>
-                ))}
-              </Box>
+    <Typography><strong>Duración efectiva:</strong> {selectedTask.control?.pretty?.duration || "—"}</Typography>
+    <Typography><strong>Tiempo en pausa:</strong> {selectedTask.control?.pretty?.totalPaused || "—"}</Typography>
+
+    <Typography><strong>Pausas:</strong> {selectedTask.control?.pausasCount ?? 0}</Typography>
+    <Typography><strong>Duración bruta (fin-inicio):</strong> {selectedTask.control?.pretty?.bruto || "—"}</Typography>
+  </Box>
+</Box>
+<Box sx={{ mt: 1 }}>
+  <Typography variant="body2">
+    <strong>Progreso cámaras:</strong> {selectedTask.metrics?.camVerificadas ?? 0}/{selectedTask.metrics?.totalCamaras ?? 0} ({selectedTask.metrics?.progreso ?? 0}%)
+  </Typography>
+</Box>
+
+             
+
+
               <Box sx={{ mt: 3 }}>
                 <TextField
                   label="Observación"

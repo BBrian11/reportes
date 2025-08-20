@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, serverTimestamp,writeBatch
+  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, serverTimestamp, writeBatch,  
+  onSnapshot
 } from "firebase/firestore";
 import { db } from "../../../services/firebase";
 import { Box, Paper, Divider, Grid, TextField, Button,Container, Stack, Typography, Card } from "@mui/material";
@@ -31,7 +32,8 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
   const [clientesCat, setClientesCat] = useState([]);
   const [novedades, setNovedades] = useState("");
   const [observaciones, setObservaciones] = useState("");
-
+  const LS_RONDA_KEY = "rondin:activo";
+  const LS_OPERARIO_KEY = "rondin:operario";
   // -------- TANDAS
   const [tandas, setTandas] = useState([nuevaTanda()]);
 
@@ -222,7 +224,10 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
 
       setTandas(planTandas);
       planRef.current = { slotsMap, startedAt: ahora };
-
+      setRondaId(docId);
+      localStorage.setItem(LS_RONDA_KEY, docId);
+      localStorage.setItem(LS_OPERARIO_KEY, operario);
+      
       const getTandaById = (id) => planTandas.find(t => t.id === id);
       const SHIFT_DURATION_MS = 12 * 60 * 60 * 1000;
       const SLOT_INTERVAL_MS = Math.floor(SHIFT_DURATION_MS / 64);
@@ -245,45 +250,73 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     if (paused || !startTime) return;
     const { isConfirmed } = await confirm("¿Pausar ronda?", "El cronómetro se detendrá hasta reanudar.", "Pausar");
     if (!isConfirmed) return;
+  
     setPaused(true);
     pausasRef.current.push({ from: Date.now(), to: null });
+  
+    // persistir ya mismo
+    await saveControlRondaNow({ estado: "En Proceso" }); // o "Pausada" si querés un campo visible
     toast.fire({ icon: "info", title: "Ronda en pausa" });
   };
-
+  
   const handleReanudar = async () => {
     if (!paused || !startTime) return;
     const last = pausasRef.current[pausasRef.current.length - 1];
     if (last && last.to === null) last.to = Date.now();
+  
     setPaused(false);
     startTicker(startTime);
+  
+    // persistir ya mismo
+    await saveControlRondaNow({ estado: "En Proceso" });
     toast.fire({ icon: "success", title: "Ronda reanudada" });
   };
-
+  
   const softReset = () => {
+    // 🔇 cortar listeners de clientes
+    Object.values(unsubRef.current || {}).forEach(u => { try { u(); } catch {} });
+    unsubRef.current = {};
+  
+    // 🔇 cortar listener de la ronda
+    if (rondaDocUnsubRef.current) { try { rondaDocUnsubRef.current(); } catch {} }
+    rondaDocUnsubRef.current = null;
+  
+    // 🕒 timers y plan
     timeoutsRef.current.forEach(t => clearTimeout(t));
     timeoutsRef.current = [];
     planRef.current = null;
-
+  
+    // ⏱️ ticker
     if (tickRef.current) clearInterval(tickRef.current);
     tickRef.current = null;
-    pausasRef.current = [];
-
+  
+    // 💾 autosave
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+  
+    // 🧮 estado mínimo para que NO corra autosave
     setRondaId(null);
+  
+    // 🧽 UI y refs
+    pausasRef.current = [];
     setStartTime(null);
     setEndTime(null);
     setPaused(false);
     setElapsed(0);
-
     setTurno("Noche");
     setOperario("");
     setNovedades("");
     setObservaciones("");
-
     setTandas([nuevaTanda()]);
-
-    toast.fire({ icon: "info", title: "Reset visual realizado" });
+    setHistoricosPorCliente({}); // limpias los colores históricos
+  
+    // 🗂️ storage
+    localStorage.removeItem(LS_RONDA_KEY);
+    localStorage.removeItem(LS_OPERARIO_KEY);
+  
+    toast.fire({ icon: "info", title: "Listo: ronda cerrada y reseteada" });
   };
-
+  
   const checklistIssues = () => {
     const issues = [];
     tandas.forEach((t) => {
@@ -303,16 +336,17 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     });
     return issues;
   };
-
+  const rondaDocUnsubRef = useRef(null);
   const handleFinalizar = async () => {
     if (!rondaId || !startTime) return Swal.fire("Sin ronda activa", "Primero iniciá la ronda.", "info");
-
-    if (tandas.reduce((acc,t)=>acc + t.camaras.filter(c=>c.touched && c.estado!==null).length,0) < MIN_CAMERAS_REQUIRED) {
+  
+    const completadas = tandas.reduce((acc,t)=>acc + t.camaras.filter(c=>c.touched && c.estado!==null).length,0);
+    if (completadas < MIN_CAMERAS_REQUIRED) {
       return Swal.fire("Falta completar",
-        `Necesitás al menos ${MIN_CAMERAS_REQUIRED} cámaras verificadas (actual: ${camarasCompletadas}).`,
+        `Necesitás al menos ${MIN_CAMERAS_REQUIRED} cámaras verificadas (actual: ${completadas}).`,
         "info");
     }
-
+  
     const issues = checklistIssues();
     if (issues.length) {
       return Swal.fire({
@@ -322,15 +356,16 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
         confirmButtonText: "OK",
       });
     }
-
+  
+    // calcular métricas
     const totalPausedMs = pausasRef.current.reduce((acc, p) => acc + (p.to ? p.to - p.from : 0), 0);
-    const durationMs = Date.now() - startTime.getTime() - totalPausedMs;
-
+    const durationMsPreview = Date.now() - startTime.getTime() - totalPausedMs;
+  
     const { isConfirmed } = await Swal.fire({
       title: "¿Finalizar ronda?",
       html: `
         <div style="text-align:left">
-          <p><b>Duración parcial:</b> ${hh(durationMs)}:${mm(durationMs)}:${ss(durationMs)}</p>
+          <p><b>Duración parcial:</b> ${hh(durationMsPreview)}:${mm(durationMsPreview)}:${ss(durationMsPreview)}</p>
           <p><b>Pausas:</b> ${pausasRef.current.length}</p>
         </div>
       `,
@@ -341,59 +376,65 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       reverseButtons: true,
     });
     if (!isConfirmed) return;
-
+  
     try {
+      // cerrar pausa abierta si la hubiera
       if (tickRef.current) clearInterval(tickRef.current);
       if (paused) {
         const last = pausasRef.current[pausasRef.current.length - 1];
         if (last && last.to === null) last.to = Date.now();
         setPaused(false);
       }
+  
       const fin = new Date();
-    const totalPausedMs = pausasRef.current.reduce((acc, p) => acc + (p.to ? p.to - p.from : 0), 0);
-    const durationMs = fin.getTime() - startTime.getTime() - totalPausedMs;
-
-    await updateDoc(doc(db, "respuestas-tareas", rondaId), {
-      estado: "Completada",
-      fechaEnvio: serverTimestamp(),
-      observacion: observaciones || "",
-      respuestas: { turno, novedades, observaciones, tandas },
-      controlRonda: { startTime, endTime: fin, pausas: pausasRef.current, totalPausedMs, durationMs },
-    });
-
-    const batch = writeBatch(db);
-    tandas.forEach((t) => {
-      if (!t?.cliente) return;
-      const clienteKey = norm(t.cliente);
-      t.camaras.forEach((c) => {
-        if (!c?.canal || !c?.estado) return;
-        const ref = doc(db, "rondin-index", clienteKey, "camaras", String(c.canal));
-        batch.set(ref, {
-          estado: c.estado,           // "ok" | "medio" | "grave"
-          updatedAt: serverTimestamp(),
-          rondaId,
-        }, { merge: true });
+      const totalPausedMs2 = pausasRef.current.reduce((acc, p) => acc + (p.to ? p.to - p.from : 0), 0);
+      const durationMs = fin.getTime() - startTime.getTime() - totalPausedMs2;
+  
+      // persistir doc principal
+      await updateDoc(doc(db, "respuestas-tareas", rondaId), {
+        estado: "Completada",
+        fechaEnvio: serverTimestamp(),
+        observacion: observaciones || "",
+        respuestas: { turno, novedades, observaciones, tandas },
+        controlRonda: { startTime, endTime: fin, pausas: pausasRef.current, totalPausedMs: totalPausedMs2, durationMs },
+        updatedAt: serverTimestamp(),
       });
-    });
-    await batch.commit();
-
-
-    setEndTime(fin);
-    setElapsed(durationMs);
-
-    await Swal.fire({
-      title: "Ronda finalizada",
-      html: `<p><b>Duración:</b> ${hh(durationMs)}:${mm(durationMs)}:${ss(durationMs)}</p>`,
-      icon: "success",
-      confirmButtonText: "OK",
-    });
-
+  
+      // persistir índice por cliente/canal
+      const batch = writeBatch(db);
+      tandas.forEach((t) => {
+        if (!t?.cliente) return;
+        const clienteKey = norm(t.cliente);
+        t.camaras.forEach((c) => {
+          if (!c?.canal || !c?.estado) return;
+          const ref = doc(db, "rondin-index", clienteKey, "camaras", String(c.canal));
+          batch.set(ref, {
+            estado: c.estado,
+            updatedAt: serverTimestamp(),
+            rondaId,
+          }, { merge: true });
+        });
+      });
+      await batch.commit();
+  
+      setEndTime(fin);
+      setElapsed(durationMs);
+  
+      await Swal.fire({
+        title: "Ronda finalizada",
+        html: `<p><b>Duración:</b> ${hh(durationMs)}:${mm(durationMs)}:${ss(durationMs)}</p>`,
+        icon: "success",
+        confirmButtonText: "OK",
+      });
+  
+      // 🧹 ahora sí: todo a 0
       softReset();
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No se pudo finalizar la ronda.", "error");
     }
   };
+  
 
   // Mutadores TANDAS y checklist
   const addTanda = () => {
@@ -422,7 +463,11 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     // FormRiesgoRondin.jsx
 // 👇 Esta es la función correcta
 // FormRiesgoRondin.jsx
-const onCamState = (tandaId, camId, next) => {
+// imports ya los tenés, pero asegurate:
+
+// ...
+const onCamState = async (tandaId, camId, next) => {
+  // 1) UI inmediata
   setTandas(prev =>
     prev.map(t =>
       t.id === tandaId
@@ -433,8 +478,8 @@ const onCamState = (tandaId, camId, next) => {
               const ts = Date.now();
               return {
                 ...c,
-                estadoPrevio: c.estado ?? c.estadoPrevio ?? null, // guarda anterior
-                estado: next,                                     // setea nuevo
+                estadoPrevio: c.estado ?? c.estadoPrevio ?? null,
+                estado: next,
                 touched: true,
                 history: [...(c.history || []), { at: ts, from: c.estado, to: next }],
               };
@@ -443,21 +488,167 @@ const onCamState = (tandaId, camId, next) => {
         : t
     )
   );
+
+  // 2) Persistencia en índice
+  try {
+    const tSel = tandas.find(t => t.id === tandaId);
+    if (!tSel?.cliente) return;
+    const camSel = tSel.camaras.find(c => c.id === camId);
+    if (!camSel?.canal) return;
+
+    const clienteKey = norm(tSel.cliente);
+    await setDoc(
+      doc(db, "rondin-index", clienteKey, "camaras", String(Number(camSel.canal))),
+      { estado: next, updatedAt: serverTimestamp(), rondaId: rondaId || "en-curso" },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error("live-index update failed:", err);
+  }
 };
-
-
-
     
   const setChecklistVal = (tandaId, field, value) =>
     setTandas(prev => prev.map(t => t.id === tandaId ? { ...t, checklist: { ...t.checklist, [field]: value } } : t));
 
   const resetFallan = (tandaId) =>
     setTandas(prev => prev.map(t => t.id === tandaId ? { ...t, checklist: { ...t.checklist, grabacionesFallan: { cam1:false,cam2:false,cam3:false,cam4:false } } } : t));
+    const toggleGrabacionFalla = (tandaId, key) =>
+    setTandas(prev => prev.map(t => {
+      if (t.id !== tandaId) return t;
+      const cl = t.checklist || {
+        grabacionesOK: null,
+        cortes220v: null,
+        equipoOffline: null,
+        grabacionesFallan: { cam1:false, cam2:false, cam3:false, cam4:false }
+      };
+      return {
+        ...t,
+        checklist: {
+          ...cl,
+          grabacionesFallan: {
+            ...(cl.grabacionesFallan || {}),
+            [key]: !((cl.grabacionesFallan || {})[key])
+          }
+        }
+      };
+    }));
+  
+    useEffect(() => {
+      const onHide = () => { if (document.visibilityState === "hidden") saveControlRondaNow(); };
+      const onBeforeUnload = () => { saveControlRondaNow(); };
+    
+      document.addEventListener("visibilitychange", onHide);
+      window.addEventListener("beforeunload", onBeforeUnload);
+      return () => {
+        document.removeEventListener("visibilitychange", onHide);
+        window.removeEventListener("beforeunload", onBeforeUnload);
+      };
+    }, [rondaId, startTime, endTime]);
+    
+    useEffect(() => {
+      const savedId = localStorage.getItem(LS_RONDA_KEY);
+      if (!savedId) return;
+    
+      const ref = doc(db, "respuestas-tareas", savedId);
+      const unsub = onSnapshot(ref, (snap) => {
+        if (!snap.exists()) {
+          localStorage.removeItem(LS_RONDA_KEY);
+          localStorage.removeItem(LS_OPERARIO_KEY);
+          return;
+        }
+        const d = snap.data();
+    
+        setRondaId(savedId);
+        setOperario(d.operador || "");
+        setTurno(d?.respuestas?.turno || "Noche");
+        setNovedades(d?.respuestas?.novedades || "");
+        setObservaciones(d?.respuestas?.observaciones || "");
+        setTandas(Array.isArray(d?.respuestas?.tandas) && d.respuestas.tandas.length ? d.respuestas.tandas : [nuevaTanda()]);
+    
+        const started = d?.controlRonda?.startTime?.toDate?.() || (d?.controlRonda?.startTime ? new Date(d.controlRonda.startTime) : null);
+        const ended   = d?.controlRonda?.endTime?.toDate?.()   || (d?.controlRonda?.endTime ? new Date(d.controlRonda.endTime)   : null);
+        const pausas  = Array.isArray(d?.controlRonda?.pausas) ? d.controlRonda.pausas : [];
+    
+        setStartTime(started);
+        setEndTime(ended);
+        pausasRef.current = pausas;
+    
+        const last = pausas[pausas.length - 1];
+        setPaused(!!(last && last.to == null));
+    
+        if (started) startTicker(started);
+      });
+    
+      rondaDocUnsubRef.current = unsub;
+      return () => { try { unsub(); } catch {} };
+    }, []);
+    
 
-  const toggleGrabacionFalla = (tandaId, key) =>
-    setTandas(prev => prev.map(t => t.id === tandaId ? {
-      ...t, checklist: { ...t.checklist, grabacionesFallan: { ...t.checklist.grabacionesFallan, [key]: !t.checklist.grabacionesFallan[key] } }
-    } : t));
+
+const saveControlRondaNow = async (extra = {}) => {
+  if (!rondaId) return;
+  try {
+    const totalPausedMs = pausasRef.current.reduce((acc, p) => acc + (p.to ? p.to - p.from : 0), 0);
+    const durationMs = startTime ? (Date.now() - startTime.getTime() - totalPausedMs) : 0;
+
+    await updateDoc(doc(db, "respuestas-tareas", rondaId), {
+      ...extra,
+      controlRonda: {
+        startTime: startTime || null,
+        endTime: endTime || null,
+        pausas: pausasRef.current,         // [{ from:number, to:number|null }, ...]
+        totalPausedMs,
+        durationMs,
+      },
+      updatedAt: serverTimestamp(),        // útil para monitoreo/debug
+    });
+  } catch (e) {
+    console.error("saveControlRondaNow failed", e);
+  }
+};
+
+const saveTimerRef = useRef(null);
+
+const queueAutosave = () => {
+  if (!rondaId) return;
+  if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+
+  saveTimerRef.current = setTimeout(async () => {
+    try {
+      const pausedMs = pausasRef.current.reduce((acc, p) => acc + (p.to ? p.to - p.from : 0), 0);
+      const dur = startTime ? (Date.now() - startTime.getTime() - pausedMs) : 0;
+
+      // para consultas rápidas por cliente/operario/día
+      const clientesKeys = Array.from(new Set(tandas.map(t => norm(t.cliente || "")).filter(Boolean)));
+
+      await updateDoc(doc(db, "respuestas-tareas", rondaId), {
+        operador: operario,
+        estado: endTime ? "Completada" : "En Proceso",
+        observacion: observaciones || "",
+        respuestas: {
+          turno, novedades, observaciones, tandas,
+        },
+        controlRonda: {
+          startTime: startTime || null,
+          endTime: endTime || null,
+          pausas: pausasRef.current,
+          totalPausedMs: pausedMs,
+          durationMs: dur,
+        },
+        // facilitan la relación ronda-cliente-operador
+        clientesKeys,                 // p.ej. ["LA CASCADA","LOMAS DE PETION"]
+        operadorKey: (operario || "").toUpperCase(),
+        diaKey: new Date().toISOString().slice(0,10), // AAAA-MM-DD local
+      });
+    } catch (e) {
+      console.error("autosave failed", e);
+    }
+  }, 400); // 400ms de debounce
+};
+
+
+useEffect(() => { queueAutosave(); }, [tandas, novedades, observaciones, turno]);
+useEffect(() => { queueAutosave(); }, [startTime, endTime, paused]); // por si querés
 
   const estadoRonda = useMemo(() => {
     if (endTime) return "finalizada";
@@ -497,11 +688,12 @@ return (
   <Stack spacing={2}>
     {tandas.map((t) => (
      <TandaCard
-     t={t}
+     key={t.id}
+     tanda={t}
      clientesCat={clientesCat}
      onSetCliente={setTandaCliente}
      onAddCam={addCamRow}
-     onRemoveTanda={(id) => tandas.length === 1 ? null : removeTanda(id)}
+     onRemoveTanda={(id) => (tandas.length === 1 ? null : removeTanda(id))}
      onCamField={setCamField}
      onCamRemove={removeCamRow}
      onCamState={onCamState}
@@ -509,8 +701,7 @@ return (
      resetFallan={resetFallan}
      toggleFallan={toggleGrabacionFalla}
      setResumen={setTandaResumen}
-     // 👇 histórico específico de este cliente
-     historicos={historicosPorCliente[norm(t.cliente || "")] || {}}
+     historicos={historicosPorCliente[norm(t.cliente || "")]}
    />
    
     ))}

@@ -1,122 +1,105 @@
 import React, { useMemo } from "react";
 import {
-  Box, IconButton, Select, MenuItem, TextField, Tooltip, Chip, Stack, ListItemIcon, ListItemText
+  Box, IconButton, Select, MenuItem, TextField, Tooltip, Chip, Stack,
+  ListItemIcon, ListItemText, OutlinedInput
 } from "@mui/material";
 import { Delete, RadioButtonUnchecked } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
 import { CANALES_OPCIONES, ESTADOS, estadoMeta } from "./helpers";
 
-export default function CameraTable({ tanda, onCamField, onCamRemove, onCamState }) {
-  // Mapa: canal -> estado actual (ok/medio/grave/null)
-  const canalEstado = useMemo(() => {
-    const m = {};
-    tanda.camaras.forEach(c => { m[c.canal] = c.estado ?? null; });
-    return m;
-  }, [tanda.camaras]);
+export default function CameraTable({ tanda, historicos = {}, onCamField, onCamRemove, onCamState }) {
+  if (!tanda || !Array.isArray(tanda.camaras)) return null;
 
-  // Canales usados por otras filas (para aviso visual)
+  // para marcar canales repetidos
   const usadosPorOtro = useMemo(() => {
-    const count = tanda.camaras.reduce((acc, c) => {
-      acc[c.canal] = (acc[c.canal] || 0) + 1;
-      return acc;
-    }, {});
-    return count; // si >1, está repetido
+    const count = {};
+    for (const c of tanda.camaras) {
+      const key = Number(c.canal);
+      count[key] = (count[key] || 0) + 1;
+    }
+    return count;
   }, [tanda.camaras]);
 
   return (
-    <Box sx={{
-      border: "1px solid rgba(2,6,23,.06)",
-      borderRadius: 2,
-      overflow: "hidden"
-    }}>
+    <Box sx={{ border: "1px solid rgba(2,6,23,.06)", borderRadius: 2, overflow: "hidden" }}>
       {/* Head */}
       <Box sx={{
-        display:"grid",
-        gridTemplateColumns: "minmax(120px,1fr) 1fr 1.3fr auto",
-        gap: 1,
-        px: 1.5, py: 1,
-        bgcolor: "grey.100",
-        borderBottom: "1px solid rgba(2,6,23,.06)",
-        fontSize: 13, fontWeight: 600, color: "text.secondary"
+        display:"grid", gridTemplateColumns:"minmax(120px,1fr) 1fr 1.3fr auto",
+        gap:1, px:1.5, py:1, bgcolor:"grey.100",
+        borderBottom:"1px solid rgba(2,6,23,.06)", fontSize:13, fontWeight:600, color:"text.secondary"
       }}>
-        <span>Equipo</span>
-        <span>Estado</span>
-        <span>Nota</span>
-        <span></span>
+        <span>Equipo</span><span>Estado</span><span>Nota</span><span />
       </Box>
 
       {/* Rows */}
       <Box>
         {tanda.camaras.map((cam, idx) => {
-          const metaNow = estadoMeta(cam.estado); // color/label del estado ACTUAL
+          const canalNum = Number(cam.canal);
+          // estado efectivo: local si existe; si no, lo último de Firestore (historicos)
+          const estadoNow = cam.estado ?? historicos[canalNum] ?? null;
+          const metaNow   = estadoMeta(estadoNow);
 
           return (
             <Box
               key={cam.id}
               sx={{
                 display:"grid",
-                gridTemplateColumns: "minmax(120px,1fr) 1fr 1.3fr auto",
-                gap: 1,
-                px: 1.5, py: 1,
-                alignItems: "center",
-                ...(idx % 2 === 1 && { bgcolor: "grey.50" }),
-                borderTop: "1px solid rgba(2,6,23,.04)"
+                gridTemplateColumns:"minmax(120px,1fr) 1fr 1.3fr auto",
+                gap:1, px:1.5, py:1, alignItems:"center",
+                ...(idx % 2 === 1 && { bgcolor:"grey.50" }),
+                borderTop:"1px solid rgba(2,6,23,.04)"
               }}
             >
-              {/* Select equipo — coloreado por estado ACTUAL */}
+              {/* Select equipo — coloreado por estado efectivo */}
               <Select
-                value={cam.canal}
-                onChange={(e) => onCamField(tanda.id, cam.id, "canal", e.target.value)}
+              key={`${cam.id}-${estadoNow || 'null'}`}
+                value={canalNum}
+                onChange={(e) => onCamField(tanda.id, cam.id, "canal", Number(e.target.value))}
+                input={
+                  <OutlinedInput
+                    sx={{
+                      bgcolor: alpha(metaNow.color || "#9ca3af", 0.16),
+                      borderLeft: `4px solid ${metaNow.color || "#9ca3af"}`,
+                      borderRadius: 1,
+                      "& .MuiOutlinedInput-notchedOutline": { border: 0 },
+                      "& .MuiSelect-select": { py: 0.75 },
+                    }}
+                  />
+                }
                 renderValue={(v) => {
-                  const m = estadoMeta(canalEstado[v]);
+                  const vNum = Number(v);
+                  const local = tanda.camaras.find(x => Number(x.canal) === vNum)?.estado ?? null;
+                  const estEff = local ?? historicos[vNum] ?? null;
+                  const m = estadoMeta(estEff);
                   return (
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 0.5 }}>
-                      <span
-                        style={{
-                          display: "inline-block",
-                          width: 8, height: 8, borderRadius: 999,
-                          background: m.color
-                        }}
-                      />
-                      <span>{`Cámara ${v}`}</span>
+                      <span style={{ display:"inline-block", width:8, height:8, borderRadius:999, background:m.color }} />
+                      <span>{`Cámara ${vNum}`}</span>
                       <Chip
                         size="small"
                         label={m.label}
                         sx={{
-                          ml: .5,
-                          height: 22,
-                          borderRadius: 999,
+                          ml:.5, height:22, borderRadius:999,
                           bgcolor: alpha(m.color, .15),
-                          border: `1px solid ${alpha(m.color, .4)}`,
-                          color: "inherit",
-                          fontWeight: 600
+                          border:`1px solid ${alpha(m.color, .4)}`,
+                          color:"inherit", fontWeight:600
                         }}
                       />
                     </Stack>
                   );
                 }}
-                sx={{
-                  "& .MuiSelect-select": {
-                    backgroundColor: alpha(metaNow.color, 0.14),
-                    borderLeft: `4px solid ${metaNow.color}`,
-                    borderRadius: 1,
-                    py: 0.75
-                  }
-                }}
-                MenuProps={{
-                  PaperProps: { sx: { maxHeight: 400 } }
-                }}
+                MenuProps={{ PaperProps: { sx: { maxHeight: 400 } } }}
               >
                 {CANALES_OPCIONES.map((n) => {
-                  const est = canalEstado[n] ?? null;
-                  const m = estadoMeta(est);
-                  const repetido = (usadosPorOtro[n] || 0) > 0 && n !== cam.canal;
+                  const eff = (tanda.camaras.find(x => Number(x.canal) === n)?.estado) ?? historicos[n] ?? null;
+                  const m = estadoMeta(eff);
+                  const repetido = (usadosPorOtro[n] || 0) > 1 && n !== canalNum;
                   return (
                     <MenuItem
                       key={n}
                       value={n}
                       sx={{
-                        borderLeft: `4px solid ${m.color}`,
+                        borderLeft:`4px solid ${m.color}`,
                         backgroundColor: alpha(m.color, 0.06),
                         "&.Mui-selected": { backgroundColor: alpha(m.color, 0.18) },
                         "&:hover": { backgroundColor: alpha(m.color, 0.12) },
@@ -137,8 +120,8 @@ export default function CameraTable({ tanda, onCamField, onCamRemove, onCamState
                 })}
               </Select>
 
-              {/* Estado como chips/pills clicables */}
-              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              {/* Estado chips */}
+              <Stack direction="row" spacing={1} sx={{ flexWrap:"wrap" }}>
                 {ESTADOS.map((opt) => (
                   <Chip
                     key={opt.key}
@@ -159,10 +142,9 @@ export default function CameraTable({ tanda, onCamField, onCamRemove, onCamState
               {/* Nota */}
               <TextField
                 placeholder="Detalle (opcional)"
-                value={cam.nota}
+                value={cam.nota || ""}
                 onChange={(e) => onCamField(tanda.id, cam.id, "nota", e.target.value)}
-                fullWidth
-                size="small"
+                fullWidth size="small"
               />
 
               {/* Acciones */}
