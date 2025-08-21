@@ -5,7 +5,7 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import { FiSearch, FiRotateCcw, FiCalendar } from "react-icons/fi";
 import { doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { db } from "../../services/firebase"; // ajustá la ruta
+import { db } from "../../services/firebase"; // ajustá la ruta si hace falta
 import "../../styles/eventstable.css";        // opcional
 
 const MySwal = withReactContent(Swal);
@@ -27,7 +27,9 @@ export default function EventsTable({ eventos }) {
   // Getters robustos
   // ======================
   const getClienteLower = (row) =>
-    (row?.cliente || (row?.edificio ? "Edificios" : "otros")).toLowerCase();
+    (row?.cliente || (row?.edificio ? "Edificios" : "otros"))
+      .toString()
+      .toLowerCase();
 
   const getObservacion = (row) =>
     row?.observacion ??
@@ -48,15 +50,23 @@ export default function EventsTable({ eventos }) {
     row?.respuesta ??
     "";
 
-    const getRazones = (row) =>
+  const getRazones = (row) =>
     row?.["razones-pma"] ??
     row?.["razones_pma"] ??
     row?.["razonesPma"] ??
-    row?.razones ??     // ← alias normalizado si lo agregás en el loader
+    row?.razones ??
     "";
-  
+
   const getUbicacionDisplay = (row) =>
     row?.ubicacion || row?.edificio || "";
+
+  // ¿Es una fila de EDIFICIO(S)?
+  const isEdificioRow = (row) => {
+    const cl = (row?.cliente || "").toString().trim().toUpperCase();
+    if (cl.includes("EDIFICIO")) return true; // "EDIFICIO"/"EDIFICIOS"
+    if (row?.edificio) return true;           // tiene campo 'edificio'
+    return getClienteLower(row) === "edificios";
+  };
 
   // ======================
   // Handlers de edición
@@ -87,7 +97,7 @@ export default function EventsTable({ eventos }) {
     }
   };
 
-  // Resolución
+  // Resolución (solo sentido para EDIFICIO)
   const handleEditResolucion = async (event) => {
     const { value } = await MySwal.fire({
       title: "Editar Resolución",
@@ -103,20 +113,17 @@ export default function EventsTable({ eventos }) {
     try {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
-
-      // guardo la clave “original” y espejo normalizado
       await updateDoc(doc(db, path), {
-        ["resolusion-evento"]: value,
-        resolucion: value,
+        ["resolusion-evento"]: value, // espejo
+        resolucion: value,            // clave normalizada
       });
-
       MySwal.fire("✅ Guardado", "Resolución actualizada", "success");
     } catch {
       MySwal.fire("❌ Error", "No se pudo actualizar la resolución", "error");
     }
   };
 
-  // Respuesta del residente
+  // Respuesta del residente (solo EDIFICIO)
   const handleEditRespuesta = async (event) => {
     const { value } = await MySwal.fire({
       title: "Editar Respuesta del Residente",
@@ -133,10 +140,9 @@ export default function EventsTable({ eventos }) {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
       await updateDoc(doc(db, path), {
-        ["respuesta-residente"]: value,
-        respuesta: value,
+        ["respuesta-residente"]: value, // original
+        respuesta: value,               // normalizada
       });
-
       MySwal.fire("✅ Guardado", "Respuesta actualizada", "success");
     } catch {
       MySwal.fire("❌ Error", "No se pudo actualizar la respuesta", "error");
@@ -206,9 +212,7 @@ export default function EventsTable({ eventos }) {
     }
   };
 
-  // ======================
   // Eliminar
-  // ======================
   const handleDeleteEvent = async (event) => {
     const confirm = await MySwal.fire({
       title: "¿Eliminar este evento?",
@@ -232,54 +236,6 @@ export default function EventsTable({ eventos }) {
   };
 
   // ======================
-  // Columnas
-  // ======================
-  const columns = [
-    { name: "Cliente", selector: (row) => row.cliente, sortable: true },
-    { name: "Evento", selector: (row) => row.evento || row["evento-edificio"], sortable: true },
-    { name: "Ubicación", selector: (row) => row.ubicacion || row.edificio },
-    { name: "Fecha", selector: (row) => row.fecha || row.fechaHoraEnvio, sortable: true },
-    { name: "Observación", selector: (row) => getObservacion(row) || "-", wrap: true },
-    { name: "Razones", selector: (row) => getRazones(row) || "-", wrap: true },
-    { name: "Resolución", selector: (row) => getResolucion(row) || "-", wrap: true },
-    { name: "Respuesta Residente", selector: (row) => getRespuestaResidente(row) || "-", wrap: true },
-    {
-      name: "Acciones",
-      cell: (row) => (
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => handleEditObservation(row)} className="bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 transition">Obs</button>
-          <button onClick={() => handleEditResolucion(row)} className="bg-emerald-600 text-white px-3 py-1 rounded-lg hover:bg-emerald-700 transition">Resolv</button>
-          <button onClick={() => handleEditRespuesta(row)} className="bg-sky-600 text-white px-3 py-1 rounded-lg hover:bg-sky-700 transition">Resp</button>
-          <button onClick={() => handleEditUbicacion(row)} className="bg-amber-600 text-white px-3 py-1 rounded-lg hover:bg-amber-700 transition">Ubic</button>
-          <button onClick={() => handleDeleteEvent(row)} className="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition">🗑</button>
-        </div>
-      ),
-      ignoreRowClick: true,
-    },
-  ];
-
-  // ======================
-  // Estilos tabla
-  // ======================
-  const customStyles = {
-    headCells: {
-      style: {
-        fontWeight: "700",
-        fontSize: "14px",
-        backgroundColor: "#f9fafb",
-        color: "#111827",
-        borderBottom: "1px solid #e5e7eb",
-
-      },
-    },
-    rows: {
-      style: {
-        "&:hover": { backgroundColor: "#f3f4f6", transition: "0.2s" },
-      },
-    },
-  };
-
-  // ======================
   // Filtro + orden por fecha (desc)
   // ======================
   const filteredData = useMemo(() => {
@@ -294,8 +250,8 @@ export default function EventsTable({ eventos }) {
     return base.filter((item) => {
       const texto = (filterText || "").toLowerCase();
       const textMatch =
-        item?.cliente?.toLowerCase().includes(texto) ||
-        item?.evento?.toLowerCase().includes(texto) ||
+        (item?.cliente || "").toLowerCase().includes(texto) ||
+        (item?.evento || "").toLowerCase().includes(texto) ||
         (getUbicacionDisplay(item) || "").toLowerCase().includes(texto) ||
         (getObservacion(item) || "").toLowerCase().includes(texto) ||
         (getResolucion(item) || "").toLowerCase().includes(texto) ||
@@ -315,6 +271,105 @@ export default function EventsTable({ eventos }) {
       );
     });
   }, [eventos, filterText, fechaInicio, fechaFin]);
+
+  // ======================
+  // Columnas dinámicas
+  // ======================
+
+  // ¿La vista actual contiene SOLO edificios?
+  const onlyEdificio = useMemo(
+    () => filteredData.length > 0 && filteredData.every(isEdificioRow),
+    [filteredData]
+  );
+
+  // Base (común)
+  const baseColumns = useMemo(() => ([
+    { name: "Cliente", selector: (row) => row.cliente, sortable: true },
+    { name: "Evento", selector: (row) => row.evento || row["evento-edificio"], sortable: true },
+    { name: "Ubicación", selector: (row) => row.ubicacion || row.edificio },
+    { name: "Fecha", selector: (row) => row.fecha || row.fechaHoraEnvio, sortable: true },
+    { name: "Observación", selector: (row) => getObservacion(row) || "-", wrap: true },
+  ]), []);
+
+  // Extras (solo EDIFICIO)
+  const edificioOnlyColumns = useMemo(() => ([
+    { name: "Razones", selector: (row) => getRazones(row) || "-", wrap: true },
+    { name: "Resolución", selector: (row) => getResolucion(row) || "-", wrap: true },
+    { name: "Respuesta Residente", selector: (row) => getRespuestaResidente(row) || "-", wrap: true },
+  ]), []);
+
+  const columns = useMemo(() => {
+    const cols = [...baseColumns];
+    if (onlyEdificio) cols.push(...edificioOnlyColumns);
+
+    // Acciones al final (Resolv/Resp solo si la fila es de edificio)
+    cols.push({
+      name: "Acciones",
+      cell: (row) => (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => handleEditObservation(row)}
+            className="bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 transition"
+          >
+            Obs
+          </button>
+
+          {isEdificioRow(row) && (
+            <>
+              <button
+                onClick={() => handleEditResolucion(row)}
+                className="bg-emerald-600 text-white px-3 py-1 rounded-lg hover:bg-emerald-700 transition"
+              >
+                Resolv
+              </button>
+              <button
+                onClick={() => handleEditRespuesta(row)}
+                className="bg-sky-600 text-white px-3 py-1 rounded-lg hover:bg-sky-700 transition"
+              >
+                Resp
+              </button>
+            </>
+          )}
+
+          <button
+            onClick={() => handleEditUbicacion(row)}
+            className="bg-amber-600 text-white px-3 py-1 rounded-lg hover:bg-amber-700 transition"
+          >
+            Ubic
+          </button>
+          <button
+            onClick={() => handleDeleteEvent(row)}
+            className="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition"
+          >
+            🗑
+          </button>
+        </div>
+      ),
+      ignoreRowClick: true,
+    });
+
+    return cols;
+  }, [baseColumns, edificioOnlyColumns, onlyEdificio]);
+
+  // ======================
+  // Estilos tabla
+  // ======================
+  const customStyles = {
+    headCells: {
+      style: {
+        fontWeight: "700",
+        fontSize: "14px",
+        backgroundColor: "#f9fafb",
+        color: "#111827",
+        borderBottom: "1px solid #e5e7eb",
+      },
+    },
+    rows: {
+      style: {
+        "&:hover": { backgroundColor: "#f3f4f6", transition: "0.2s" },
+      },
+    },
+  };
 
   // ======================
   // Render
