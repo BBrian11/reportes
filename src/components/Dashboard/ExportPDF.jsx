@@ -23,6 +23,42 @@ const styles = StyleSheet.create({
 const chunk = (arr, size) => { const out=[]; for (let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size)); return out; };
 const safe = (v) => (v === undefined || v === null ? "" : String(v));
 
+const getClienteLower = (row) =>
+  (row?.cliente || (row?.edificio ? "Edificios" : "otros")).toString().toLowerCase();
+
+const getObservacion = (row) =>
+  row?.observacion ??
+  row?.["observaciones-edificios"] ??
+  row?.[`observaciones-${getClienteLower(row)}`] ??
+  "";
+
+const getResolucion = (row) =>
+  row?.["resolusion-evento"] ?? // typo original
+  row?.["resolucion-evento"] ??
+  row?.resolucion ??
+  row?.resolucionEvento ??
+  row?.resolusionEvento ??
+  "";
+
+const getRespuestaResidente = (row) =>
+  row?.["respuesta-residente"] ??
+  row?.respuesta ??
+  "";
+
+const getRazones = (row) =>
+  row?.["razones-pma"] ??
+  row?.["razones_pma"] ??
+  row?.["razonesPma"] ??
+  row?.razones ??
+  "";
+
+const isEdificioRow = (row) => {
+  const cl = (row?.cliente || "").toString().trim().toUpperCase();
+  if (cl.includes("EDIFICIO")) return true;
+  if (row?.edificio) return true;
+  return getClienteLower(row) === "edificios";
+};
+
 // === Captura DOM a imagen base64 con alta resolución ===
 async function captureAsImage(selector, opts = {}) {
   const {
@@ -101,6 +137,8 @@ const fit = (img, maxW = 520, maxH = 300) => {
 
 // ===== Documento PDF =====
 const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
+  const onlyEdificio = eventos.length > 0 && eventos.every(isEdificioRow);
+
   const totalEventos = eventos.length;
   const eventoFrecuente = eventos.reduce((acc, e) => {
     const k = e.evento || "Sin Evento"; acc[k] = (acc[k] || 0) + 1; return acc;
@@ -112,136 +150,148 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
   const ubicaciones = Array.from(new Set(eventos.map(e => (e.ubicacion || e.edificio || "").trim()).filter(Boolean)));
   const listify = (arr, max = 4) => !arr.length ? "—" : (arr.length <= max ? arr.join(", ") : `${arr.slice(0,max).join(", ")} (+${arr.length-max} más)`);
 
-  // Tabla
-  const rows = eventos.map((e) => ({
-    cliente: safe(e.cliente), evento: safe(e.evento),
-    ubicacion: safe(e.ubicacion || e.edificio), fecha: safe(e.fecha),
-    observacion: safe(e.observacion ?? e["observaciones-edificios"] ?? e[`observaciones-${(e?.cliente||"").toLowerCase()}`]),
-    razones: safe(e["razones-pma"] ?? e["razones_pma"] ?? e["razonesPma"] ?? e.razones),
-    resolucion: safe(e["resolusion-evento"] ?? e["resolucion-evento"] ?? e.resolucion ?? e.resolucionEvento ?? e.resolusionEvento),
-    respuesta: safe(e["respuesta-residente"] ?? e.respuesta),
-  }));
+  // Tabla (dinámica)
+  const baseRow = (e) => ({
+    cliente: safe(e.cliente),
+    evento: safe(e.evento),
+    ubicacion: safe(e.ubicacion || e.edificio),
+    fecha: safe(e.fecha || e.fechaHoraEnvio || ""),
+    observacion: safe(getObservacion(e)),
+  });
+  const extraRow = (e) => ({
+    razones: safe(getRazones(e)),
+    resolucion: safe(getResolucion(e)),
+    respuesta: safe(getRespuestaResidente(e)),
+  });
+
+  const rows = eventos.map((e) => onlyEdificio ? { ...baseRow(e), ...extraRow(e) } : baseRow(e));
   const tablePages = chunk(rows, 30);
 
   const chartsChunks = chunk(capturedImages.charts || [], 2);
-  const joinFirstPage =
-  (observaciones?.trim().length || 0) <= 280; // umbral ajustable
+  const joinFirstPage = (observaciones?.trim().length || 0) <= 280;
 
-// helper para tamaños distintos según la página
-const fitFirst = (img) => fit(img, 520, joinFirstPage ? 220 : 280);
+  const fitFirst = (img) => fit(img, 520, joinFirstPage ? 220 : 280);
 
   return (
     <Document>
-    {/* ===== PÁGINA 1 ===== */}
-    <Page size="A4" style={styles.page}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Reporte de Monitoreo</Text>
-        <Text style={styles.subtitle}>Generado el: {new Date().toLocaleString("es-AR")}</Text>
-      </View>
-  
-      {/* CONTEXTO */}
-      <View style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: 8, marginTop: 6, marginBottom: 8, backgroundColor: "#f9fafb" }}>
-        <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4, color: "#111827" }}>Contexto</Text>
-        <Text style={{ fontSize: 9 }}><Text style={{ fontWeight: "bold" }}>Cliente(s): </Text>{listify(clientes)}</Text>
-        <Text style={{ fontSize: 9 }}><Text style={{ fontWeight: "bold" }}>Edificio(s) / Ubicación(es): </Text>{listify(ubicaciones, 6)}</Text>
-      </View>
-  
-      {/* KPI Nativos */}
-      <View style={{ flexDirection: "row", gap: 6 }}>
-        {[
-          { label: "Total Eventos", value: totalEventos },
-          { label: "Evento más frecuente", value: safe(topEvento[0]) },
-          { label: "Cantidad de PMA", value: safe(topEvento[1]) },
-        ].map((k, i) => (
-          <View key={i} style={{ flexGrow: 1, border: "1px solid #ddd", borderRadius: 6, padding: 8, textAlign: "center" }}>
-            <Text style={{ fontSize: 9, marginBottom: 2 }}>{k.label}</Text>
-            <Text style={{ fontSize: 14, fontWeight: "bold" }}>{k.value}</Text>
-          </View>
-        ))}
-      </View>
-  
-      {/* Observaciones */}
-      {observaciones?.trim() ? (
-        <View style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: 8, marginTop: 8, backgroundColor: "#fffbea" }}>
-          <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4, color: "#92400e" }}>Observaciones</Text>
-          <Text style={{ fontSize: 9, lineHeight: 1.35 }}>{observaciones}</Text>
+      {/* ===== PÁGINA 1 ===== */}
+      <Page size="A4" style={styles.page}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Reporte de Monitoreo</Text>
+          <Text style={styles.subtitle}>Generado el: {new Date().toLocaleString("es-AR")}</Text>
         </View>
-      ) : null}
-  
-      {/* OPCIONAL: Tarjetas KPI como imagen */}
-      {capturedImages.kpi && (
-        <>
-          <Text style={styles.sectionTitle}>KPI (Tarjetas visuales)</Text>
-          {(() => { const s = fit(capturedImages.kpi, 520, 200); return <Image src={capturedImages.kpi.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
-        </>
-      )}
-  
-      {/* ⬇️ NUEVO: si hay espacio, subo Edificios + PMA a esta misma página */}
-      {joinFirstPage && (
-        <>
+
+        {/* CONTEXTO */}
+        <View style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: 8, marginTop: 6, marginBottom: 8, backgroundColor: "#f9fafb" }}>
+          <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4, color: "#111827" }}>Contexto</Text>
+          <Text style={{ fontSize: 9 }}><Text style={{ fontWeight: "bold" }}>Cliente(s): </Text>{listify(clientes)}</Text>
+          <Text style={{ fontSize: 9 }}><Text style={{ fontWeight: "bold" }}>Edificio(s) / Ubicación(es): </Text>{listify(ubicaciones, 6)}</Text>
+        </View>
+
+        {/* KPI Nativos */}
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          {[
+            { label: "Total Eventos", value: totalEventos },
+            { label: "Evento más frecuente", value: safe(topEvento[0]) },
+            { label: "Cantidad de PMA", value: safe(topEvento[1]) },
+          ].map((k, i) => (
+            <View key={i} style={{ flexGrow: 1, border: "1px solid #ddd", borderRadius: 6, padding: 8, textAlign: "center" }}>
+              <Text style={{ fontSize: 9, marginBottom: 2 }}>{k.label}</Text>
+              <Text style={{ fontSize: 14, fontWeight: "bold" }}>{k.value}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Observaciones */}
+        {observaciones?.trim() ? (
+          <View style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: 8, marginTop: 8, backgroundColor: "#fffbea" }}>
+            <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4, color: "#92400e" }}>Observaciones</Text>
+            <Text style={{ fontSize: 9, lineHeight: 1.35 }}>{observaciones}</Text>
+          </View>
+        ) : null}
+
+        {/* KPI cards */}
+        {capturedImages.kpi && (
+          <>
+            <Text style={styles.sectionTitle}>KPI (Tarjetas visuales)</Text>
+            {(() => { const s = fit(capturedImages.kpi, 520, 200); return <Image src={capturedImages.kpi.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
+          </>
+        )}
+
+        {/* Si hay espacio, subimos Edificios + PMA a esta página */}
+        {joinFirstPage && (
+          <>
+            {capturedImages.edificio && (
+              <>
+                <Text style={styles.sectionTitle}>Estadística Edificios</Text>
+                {(() => { const s = fitFirst(capturedImages.edificio); return <Image src={capturedImages.edificio.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
+              </>
+            )}
+            {capturedImages.pma && (
+              <>
+                <Text style={styles.sectionTitle}>Analítica Detallada (PMA)</Text>
+                {(() => { const s = fitFirst(capturedImages.pma); return <Image src={capturedImages.pma.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
+              </>
+            )}
+          </>
+        )}
+
+        <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
+      </Page>
+
+      {/* ===== PÁGINA 2 (si hace falta) ===== */}
+      {!joinFirstPage && (
+        <Page size="A4" style={styles.page}>
           {capturedImages.edificio && (
             <>
               <Text style={styles.sectionTitle}>Estadística Edificios</Text>
-              {(() => { const s = fitFirst(capturedImages.edificio); return <Image src={capturedImages.edificio.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
+              {(() => { const s = fit(capturedImages.edificio, 520, 300); return <Image src={capturedImages.edificio.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
             </>
           )}
           {capturedImages.pma && (
             <>
               <Text style={styles.sectionTitle}>Analítica Detallada (PMA)</Text>
-              {(() => { const s = fitFirst(capturedImages.pma); return <Image src={capturedImages.pma.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
+              {(() => { const s = fit(capturedImages.pma, 520, 300); return <Image src={capturedImages.pma.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
             </>
           )}
-        </>
+          <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
+        </Page>
       )}
-  
-      <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
-    </Page>
-  
-    {/* ===== PÁGINA 2 (solo si NO subimos Edificios/PMA) ===== */}
-    {!joinFirstPage && (
-      <Page size="A4" style={styles.page}>
-        {capturedImages.edificio && (
-          <>
-            <Text style={styles.sectionTitle}>Estadística Edificios</Text>
-            {(() => { const s = fit(capturedImages.edificio, 520, 300); return <Image src={capturedImages.edificio.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
-          </>
-        )}
-        {capturedImages.pma && (
-          <>
-            <Text style={styles.sectionTitle}>Analítica Detallada (PMA)</Text>
-            {(() => { const s = fit(capturedImages.pma, 520, 300); return <Image src={capturedImages.pma.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
-          </>
-        )}
-        <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
-      </Page>
-    )}
-  
-    {/* Gráficos (2 por página) */}
-    {chartsChunks.map((chunkImgs, idx) => (
-      <Page key={`charts-${idx}`} size="A4" style={styles.page}>
-        <Text style={styles.sectionTitle}>Gráficos{idx ? " (cont.)" : ""}</Text>
-        {chunkImgs.map((img, i) => {
-          const s = fit(img, 520, 300);
-          return <Image key={i} src={img.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />;
-        })}
-        <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
-      </Page>
-    ))}
 
-      {/* TABLAS */}
+      {/* Gráficos (2 por página) */}
+      {chartsChunks.map((chunkImgs, idx) => (
+        <Page key={`charts-${idx}`} size="A4" style={styles.page}>
+          <Text style={styles.sectionTitle}>Gráficos{idx ? " (cont.)" : ""}</Text>
+          {chunkImgs.map((img, i) => {
+            const s = fit(img, 520, 300);
+            return <Image key={i} src={img.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />;
+          })}
+          <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
+        </Page>
+      ))}
+
+      {/* TABLAS (dinámicas) */}
       {tablePages.map((pageRows, idx) => (
         <Page key={idx} size="A4" style={styles.page}>
           <Text style={styles.sectionTitle}>Tabla de eventos (pág. {idx + 1})</Text>
+
+          {/* Header dinámico */}
           <View style={styles.tableHeader}>
             <Text style={[styles.col, { flex: 0.7 }]}>Cliente</Text>
             <Text style={[styles.col, { flex: 1.1 }]}>Evento</Text>
             <Text style={[styles.col, { flex: 1.1 }]}>Ubicación</Text>
             <Text style={[styles.col, { flex: 0.9 }]}>Fecha</Text>
             <Text style={[styles.col, { flex: 1.2 }]}>Observación</Text>
-            <Text style={[styles.col, { flex: 1.1 }]}>Razones</Text>
-            <Text style={[styles.col, { flex: 1.1 }]}>Resolución</Text>
-            <Text style={[styles.col, { flex: 1.1 }]}>Respuesta</Text>
+            {onlyEdificio && (
+              <>
+                <Text style={[styles.col, { flex: 1.1 }]}>Razones</Text>
+                <Text style={[styles.col, { flex: 1.1 }]}>Resolución</Text>
+                <Text style={[styles.col, { flex: 1.1 }]}>Respuesta</Text>
+              </>
+            )}
           </View>
+
+          {/* Rows */}
           {pageRows.map((r, i) => (
             <View key={i} style={styles.tableRow}>
               <Text style={[styles.col, { flex: 0.7 }]}>{r.cliente}</Text>
@@ -249,11 +299,16 @@ const fitFirst = (img) => fit(img, 520, joinFirstPage ? 220 : 280);
               <Text style={[styles.col, { flex: 1.1 }]}>{r.ubicacion}</Text>
               <Text style={[styles.col, { flex: 0.9 }]}>{r.fecha}</Text>
               <Text style={[styles.col, { flex: 1.2 }]}>{r.observacion}</Text>
-              <Text style={[styles.col, { flex: 1.1 }]}>{r.razones}</Text>
-              <Text style={[styles.col, { flex: 1.1 }]}>{r.resolucion}</Text>
-              <Text style={[styles.col, { flex: 1.1 }]}>{r.respuesta}</Text>
+              {onlyEdificio && (
+                <>
+                  <Text style={[styles.col, { flex: 1.1 }]}>{r.razones}</Text>
+                  <Text style={[styles.col, { flex: 1.1 }]}>{r.resolucion}</Text>
+                  <Text style={[styles.col, { flex: 1.1 }]}>{r.respuesta}</Text>
+                </>
+              )}
             </View>
           ))}
+
           <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
         </Page>
       ))}
@@ -261,20 +316,32 @@ const fitFirst = (img) => fit(img, 520, joinFirstPage ? 220 : 280);
   );
 };
 
-// ===== Excel =====
+// ===== Excel (dinámico igual que PDF) =====
 const generateExcel = (eventos) => {
   if (!eventos?.length) return Swal.fire("Aviso", "No hay datos para exportar.", "warning");
-  const header = ["Cliente","Evento","Ubicación","Fecha","Observación","Razones","Resolución","Respuesta"];
-  const rows = eventos.map(e => ([
+
+  const onlyEdificio = eventos.length > 0 && eventos.every(isEdificioRow);
+
+  const headerBase = ["Cliente","Evento","Ubicación","Fecha","Observación"];
+  const headerExtra = ["Razones","Resolución","Respuesta"];
+  const header = onlyEdificio ? [...headerBase, ...headerExtra] : headerBase;
+
+  const rowBase = (e) => ([
     e.cliente || "",
     e.evento || "",
     e.ubicacion || e.edificio || "",
-    e.fecha || "",
-    e.observacion ?? e["observaciones-edificios"] ?? e[`observaciones-${(e?.cliente||"").toLowerCase()}`] ?? "",
-    e["razones-pma"] ?? e["razones_pma"] ?? e["razonesPma"] ?? e.razones ?? "",
-    e["resolusion-evento"] ?? e["resolucion-evento"] ?? e.resolucion ?? e.resolucionEvento ?? e.resolusionEvento ?? "",
-    e["respuesta-residente"] ?? e.respuesta ?? "",
-  ]));
+    e.fecha || e.fechaHoraEnvio || "",
+    getObservacion(e) || "",
+  ]);
+
+  const rowExtra = (e) => ([
+    getRazones(e) || "",
+    getResolucion(e) || "",
+    getRespuestaResidente(e) || "",
+  ]);
+
+  const rows = eventos.map(e => onlyEdificio ? [...rowBase(e), ...rowExtra(e)] : rowBase(e));
+
   const wsData = [
     ["Reporte de Monitoreo"],
     [`Generado el: ${new Date().toLocaleString("es-AR")}`],
@@ -284,7 +351,10 @@ const generateExcel = (eventos) => {
   ];
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws["!cols"] = [{ wch: 18 }, { wch: 28 }, { wch: 26 }, { wch: 20 }, { wch: 40 }, { wch: 30 }, { wch: 30 }, { wch: 30 }];
+  ws["!cols"] = [
+    { wch: 18 }, { wch: 28 }, { wch: 26 }, { wch: 20 }, { wch: 40 },
+    ...(onlyEdificio ? [{ wch: 30 }, { wch: 30 }, { wch: 30 }] : [])
+  ];
   XLSX.utils.book_append_sheet(wb, ws, "Reporte");
   XLSX.writeFile(wb, `REPORTE_MONITOREO_${Date.now()}.xlsx`);
 };
@@ -293,7 +363,7 @@ const generateExcel = (eventos) => {
 export default function ExportPDF({ eventos }) {
   const [capturedImages, setCapturedImages] = useState({ kpi:null, edificio:null, pma:null, charts:[] });
 
-  // 🔸 NUEVO: pedir observaciones antes de exportar
+  // Observaciones para el PDF
   const askObservaciones = useCallback(async () => {
     const { value, isConfirmed } = await Swal.fire({
       title: "Agregar observaciones",
@@ -304,7 +374,7 @@ export default function ExportPDF({ eventos }) {
       confirmButtonText: "Usar en PDF",
       cancelButtonText: "Omitir",
       showCancelButton: true,
-      heightAuto: false, // evita saltos en móviles
+      heightAuto: false,
     });
     return isConfirmed ? (value || "") : "";
   }, []);
@@ -329,18 +399,18 @@ export default function ExportPDF({ eventos }) {
         return;
       }
 
-      // 1) Pide Observaciones
+      // 1) Observaciones
       const observaciones = await askObservaciones();
 
       // 2) Capturas HD
       const imgs = await doCapture();
 
-      // 3) Genera PDF con Observaciones
+      // 3) PDF
       const doc = <ReportDocument eventos={eventos} capturedImages={imgs} observaciones={observaciones} />;
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `REPORTE_MONITOREO_${Date.now()}.pdf`);
 
-      // 4) Excel
+      // 4) Excel (mismas columnas dinámicas)
       generateExcel(eventos);
     } catch (err) {
       console.error("Export error:", err);
