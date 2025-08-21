@@ -4,7 +4,7 @@ import DataTable, { createTheme } from "react-data-table-component";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import { FiSearch, FiRotateCcw, FiCalendar } from "react-icons/fi";
-import { doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc, Timestamp } from "firebase/firestore";
 import { db } from "../../services/firebase"; // ajustá la ruta si hace falta
 import "../../styles/eventstable.css";        // opcional
 
@@ -60,12 +60,29 @@ export default function EventsTable({ eventos }) {
   const getUbicacionDisplay = (row) =>
     row?.ubicacion || row?.edificio || "";
 
+  // 👇 Proveedor para TGS (robusto a nombres de campo)
+  const getProveedorTGS = (row) =>
+    row?.["proveedor-personal"] ??
+    row?.proveedor_personal ??
+    row?.proveedorPersonal ??
+    row?.proveedor ??
+    row?.personal ??
+    "";
+
   // ¿Es una fila de EDIFICIO(S)?
   const isEdificioRow = (row) => {
     const cl = (row?.cliente || "").toString().trim().toUpperCase();
     if (cl.includes("EDIFICIO")) return true; // "EDIFICIO"/"EDIFICIOS"
     if (row?.edificio) return true;           // tiene campo 'edificio'
     return getClienteLower(row) === "edificios";
+  };
+
+  // ¿Es una fila TGS?
+  const isTGSRow = (row) => {
+    const tipo = (row?.tipoCliente || "").toString().trim().toUpperCase();
+    if (tipo === "TGS") return true;
+    const cl = (row?.cliente || "").toString().trim().toUpperCase();
+    return cl.includes("TGS");
   };
 
   // ======================
@@ -146,6 +163,63 @@ export default function EventsTable({ eventos }) {
       MySwal.fire("✅ Guardado", "Respuesta actualizada", "success");
     } catch {
       MySwal.fire("❌ Error", "No se pudo actualizar la respuesta", "error");
+    }
+  };
+
+  // 🕒 NUEVO: Fecha y hora
+  const toDatetimeLocal = (date) => {
+    const d = date instanceof Date && !isNaN(date) ? date : new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const MM = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mm = pad(d.getMinutes());
+    return `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
+  };
+
+  const handleEditFechaHora = async (event) => {
+    // fechaObj viene armado en el loader (Dashboard)
+    const initial = toDatetimeLocal(event?.fechaObj || new Date());
+
+    const { value } = await MySwal.fire({
+      title: "Editar fecha y hora",
+      html: `
+        <div style="text-align:left">
+          <label style="font-size:12px;color:#374151">Fecha y hora</label>
+          <input id="swal-dt" type="datetime-local" class="swal2-input" style="width:100%" value="${initial}" />
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Guardar",
+      cancelButtonText: "Cancelar",
+      width: "420px",
+      focusConfirm: false,
+      preConfirm: () => document.getElementById("swal-dt").value || "",
+    });
+
+    if (!value) return;
+
+    // value viene como "YYYY-MM-DDTHH:mm" en hora local
+    const newDate = new Date(value);
+    if (Number.isNaN(newDate.getTime())) {
+      MySwal.fire("❌ Error", "Fecha/hora inválida.", "error");
+      return;
+    }
+
+    try {
+      const clienteLower = getClienteLower(event);
+      const path = `novedades/${clienteLower}/eventos/${event.id}`;
+
+      await updateDoc(doc(db, path), {
+        // guardamos como Timestamp de Firestore
+        fechaHoraEnvio: Timestamp.fromDate(newDate),
+      });
+
+      MySwal.fire("✅ Guardado", "Fecha y hora actualizadas", "success");
+    } catch (e) {
+      console.error(e);
+      MySwal.fire("❌ Error", "No se pudo actualizar la fecha y hora", "error");
     }
   };
 
@@ -256,7 +330,8 @@ export default function EventsTable({ eventos }) {
         (getObservacion(item) || "").toLowerCase().includes(texto) ||
         (getResolucion(item) || "").toLowerCase().includes(texto) ||
         (getRespuestaResidente(item) || "").toLowerCase().includes(texto) ||
-        (getRazones(item) || "").toLowerCase().includes(texto);
+        (getRazones(item) || "").toLowerCase().includes(texto) ||
+        (getProveedorTGS(item) || "").toLowerCase().includes(texto); // 👈 busca por proveedor también
 
       const fechaEvento =
         item?.fechaObj ||
@@ -282,6 +357,12 @@ export default function EventsTable({ eventos }) {
     [filteredData]
   );
 
+  // ¿La vista actual contiene SOLO TGS?
+  const onlyTGS = useMemo(
+    () => filteredData.length > 0 && filteredData.every(isTGSRow),
+    [filteredData]
+  );
+
   // Base (común)
   const baseColumns = useMemo(() => ([
     { name: "Cliente", selector: (row) => row.cliente, sortable: true },
@@ -298,9 +379,19 @@ export default function EventsTable({ eventos }) {
     { name: "Respuesta Residente", selector: (row) => getRespuestaResidente(row) || "-", wrap: true },
   ]), []);
 
+  // Extra (solo TGS)
+  const tgsOnlyColumns = useMemo(() => ([
+    { name: "Proveedor", selector: (row) => getProveedorTGS(row) || "-", wrap: true },
+  ]), []);
+
   const columns = useMemo(() => {
     const cols = [...baseColumns];
-    if (onlyEdificio) cols.push(...edificioOnlyColumns);
+
+    if (onlyEdificio) {
+      cols.push(...edificioOnlyColumns);
+    } else if (onlyTGS) {
+      cols.push(...tgsOnlyColumns);
+    }
 
     // Acciones al final (Resolv/Resp solo si la fila es de edificio)
     cols.push({
@@ -312,6 +403,15 @@ export default function EventsTable({ eventos }) {
             className="bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 transition"
           >
             Obs
+          </button>
+
+          {/* 🕒 NUEVO botón de fecha/hora */}
+          <button
+            onClick={() => handleEditFechaHora(row)}
+            className="bg-violet-600 text-white px-3 py-1 rounded-lg hover:bg-violet-700 transition"
+            title="Editar fecha y hora"
+          >
+            Fecha
           </button>
 
           {isEdificioRow(row) && (
@@ -349,7 +449,7 @@ export default function EventsTable({ eventos }) {
     });
 
     return cols;
-  }, [baseColumns, edificioOnlyColumns, onlyEdificio]);
+  }, [baseColumns, edificioOnlyColumns, tgsOnlyColumns, onlyEdificio, onlyTGS]);
 
   // ======================
   // Estilos tabla
@@ -383,7 +483,7 @@ export default function EventsTable({ eventos }) {
           <FiSearch />
           <input
             type="text"
-            placeholder="Buscar cliente, evento, observación, resolución, respuesta, razones..."
+            placeholder="Buscar cliente, evento, observación, resolución, respuesta, razones, proveedor..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
           />

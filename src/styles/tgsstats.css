@@ -105,4 +105,96 @@
     text-align: center;
     color: #9ca3af;
   }
-  
+  /* tgsstats.css */
+
+.providers-card {
+  margin-top: 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.providers-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.providers-sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.providers-chart-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 8px;
+}
+
+/* ya tenías estas, pero por si acaso */
+.section-title { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #111827; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.stats-card { display:flex; gap:10px; align-items:center; padding:12px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; }
+.stats-icon { font-size: 22px; }
+.stats-title { margin:0; font-size:12px; color:#6b7280; }
+.stats-value { margin:0; font-size:20px; font-weight:700; color:#111827; }
+.ranking-card { margin-top: 16px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; }
+.ranking-title { margin:0 0 8px; font-weight:700; font-size:14px; }
+.ranking-list { list-style:none; padding:0; margin:0; display:grid; gap:6px; }
+.ranking-item { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border:1px solid #f3f4f6; border-radius:10px; background:#fbfdff; }
+.ranking-otros { opacity: .8; }
+.ranking-name { color:#111827; }
+.ranking-count { font-weight:700; color:#111827; }
+.ranking-empty { margin: 4px 0 0; color:#6b7280; font-size: 13px; }
+/* Grid simple 2 columnas (1 col en mobile) */
+.tgs-two-col {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1fr;        /* mobile */
+}
+@media (min-width: 992px) {
+  .tgs-two-col { grid-template-columns: 1fr 1fr; } /* desktop */
+}
+
+/* Reutiliza estilos existentes de .card, .stats-grid, etc. */
+.card {
+  background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px;
+  box-shadow:0 4px 8px rgba(0,0,0,.08);
+}
+.card-title { margin:0 0 12px; font-weight:600; color:#111827; }
+
+.stats-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+.stats-card { display:flex; align-items:center; gap:12px; padding:12px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; }
+.stats-icon { font-size:1.5rem; background:#f3f4f6; width:45px; height:45px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+.stats-title { margin:0; font-size:.9rem; color:#6b7280; font-weight:500; }
+.stats-value { margin:0; font-size:1.4rem; font-weight:700; color:#111827; }
+
+/* Proveedores */
+.providers-header { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.providers-sub { margin:0; font-size:12px; color:#6b7280; }
+.providers-chart-wrapper { width:100%; overflow-x:auto; }
+
+/* Ranking list */
+.ranking-list { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.ranking-item { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#f9fafb; border:1px solid #f3f4f6; border-radius:8px; }
+.ranking-name { color:#111827; }
+.ranking-count { font-weight:700; color:#2563eb; }
+.ranking-empty { color:#9ca3af; text-align:center; }
+.ranking-otros { opacity:.85; }
+/* contenedor 2 columnas (1 col en mobile) */
+.tgs-two-col {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1fr;           /* mobile */
+}
+@media (min-width: 992px) {
+  .tgs-two-col { grid-template-columns: 1fr 1fr; } /* desktop */
+}
+
+/* opcional: que las cards llenen la altura */
+.tgs-two-col > .seccion-edificio { display: flex; }
+.tgs-two-col > .seccion-edificio > * { width: 100%; }

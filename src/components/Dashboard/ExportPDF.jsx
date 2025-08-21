@@ -1,5 +1,4 @@
-// src/components/ExportPDFExcel.jsx
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Document, Page, Text, View, StyleSheet, Image, pdf } from "@react-pdf/renderer";
 import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
@@ -33,7 +32,7 @@ const getObservacion = (row) =>
   "";
 
 const getResolucion = (row) =>
-  row?.["resolusion-evento"] ?? // typo original
+  row?.["resolusion-evento"] ??
   row?.["resolucion-evento"] ??
   row?.resolucion ??
   row?.resolucionEvento ??
@@ -104,7 +103,7 @@ async function captureAsImage(selector, opts = {}) {
   try { const c1 = await snapWith(false); if (c1?.width > 50 && c1?.height > 50) return toData(c1); } catch {}
   try { const c2 = await snapWith(true);  if (c2?.width > 50 && c2?.height > 50) return toData(c2); } catch {}
 
-  // Fallback fuera de pantalla
+  // Fallback
   const portal = document.createElement("div");
   portal.style.cssText = "position:fixed;left:-10000px;top:0;background:#fff;display:block;z-index:-1;";
   const clone = originalEl.cloneNode(true);
@@ -259,19 +258,21 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
       )}
 
       {/* Gráficos (2 por página) */}
-      {chartsChunks.map((chunkImgs, idx) => (
-        <Page key={`charts-${idx}`} size="A4" style={styles.page}>
-          <Text style={styles.sectionTitle}>Gráficos{idx ? " (cont.)" : ""}</Text>
-          {chunkImgs.map((img, i) => {
-            const s = fit(img, 520, 300);
-            return <Image key={i} src={img.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />;
-          })}
-          <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
-        </Page>
-      ))}
+      {(capturedImages.charts || []).length > 0 &&
+        chunk(capturedImages.charts, 2).map((chunkImgs, idx) => (
+          <Page key={`charts-${idx}`} size="A4" style={styles.page}>
+            <Text style={styles.sectionTitle}>Gráficos{idx ? " (cont.)" : ""}</Text>
+            {chunkImgs.map((img, i) => {
+              const s = fit(img, 520, 300);
+              return <Image key={i} src={img.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />;
+            })}
+            <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
+          </Page>
+        ))
+      }
 
       {/* TABLAS (dinámicas) */}
-      {tablePages.map((pageRows, idx) => (
+      {chunk(rows, 30).map((pageRows, idx) => (
         <Page key={idx} size="A4" style={styles.page}>
           <Text style={styles.sectionTitle}>Tabla de eventos (pág. {idx + 1})</Text>
 
@@ -360,10 +361,17 @@ const generateExcel = (eventos) => {
 };
 
 // ===== Componente exportador =====
-export default function ExportPDF({ eventos }) {
+export default function ExportPDFExcel({ eventos, filteredEventos, selectedEventos }) {
   const [capturedImages, setCapturedImages] = useState({ kpi:null, edificio:null, pma:null, charts:[] });
 
-  // Observaciones para el PDF
+  // 👇 Dataset definitivo: seleccionados -> filtrados -> global -> todos
+  const dataset = useMemo(() => {
+    if (Array.isArray(selectedEventos) && selectedEventos.length) return selectedEventos;
+    if (Array.isArray(filteredEventos) && filteredEventos.length) return filteredEventos;
+    if (Array.isArray(window.__FILTERED_EVENTOS__) && window.__FILTERED_EVENTOS__.length) return window.__FILTERED_EVENTOS__;
+    return Array.isArray(eventos) ? eventos : [];
+  }, [eventos, filteredEventos, selectedEventos]);
+
   const askObservaciones = useCallback(async () => {
     const { value, isConfirmed } = await Swal.fire({
       title: "Agregar observaciones",
@@ -394,29 +402,24 @@ export default function ExportPDF({ eventos }) {
 
   const handleExport = useCallback(async () => {
     try {
-      if (!eventos?.length) {
+      if (!dataset.length) {
         await Swal.fire("Aviso", "No hay datos para exportar.", "warning");
         return;
       }
 
-      // 1) Observaciones
       const observaciones = await askObservaciones();
-
-      // 2) Capturas HD
       const imgs = await doCapture();
 
-      // 3) PDF
-      const doc = <ReportDocument eventos={eventos} capturedImages={imgs} observaciones={observaciones} />;
+      const doc = <ReportDocument eventos={dataset} capturedImages={imgs} observaciones={observaciones} />;
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `REPORTE_MONITOREO_${Date.now()}.pdf`);
 
-      // 4) Excel (mismas columnas dinámicas)
-      generateExcel(eventos);
+      generateExcel(dataset);
     } catch (err) {
       console.error("Export error:", err);
       Swal.fire("Error", String(err?.message || err || "Fallo exportando el PDF/Excel."), "error");
     }
-  }, [askObservaciones, doCapture, eventos]);
+  }, [askObservaciones, doCapture, dataset]);
 
   return (
     <div className="report-button-container" style={{ display: "flex", gap: 10 }}>

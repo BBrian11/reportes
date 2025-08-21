@@ -56,7 +56,7 @@ export default function LineAnalytics({ eventos, cliente, fechaInicio, fechaFin 
     if (ev.includes("puerta mantenida")) grouped[key].pma++;
     if (ev.includes("puerta forzada")) grouped[key].forzada++;
     if (["alarma", "coacción", "pánico"].some((w) => ev.includes(w))) grouped[key].alarmas++;
-    if (ev.includes("confirmado")) grouped[key].confirmados++;
+    if (ev.includes("Evento confirmado")) grouped[key].confirmados++;
     if (ev.includes("falso")) grouped[key].falsos++;
     if (ev.includes("cctv fuera de línea")) grouped[key].cctvOffline++;
     if (ev.includes("cctv en línea")) grouped[key].cctvOnline++;
@@ -74,12 +74,12 @@ export default function LineAnalytics({ eventos, cliente, fechaInicio, fechaFin 
 
   // ✅ Categorías dinámicas por cliente
   const categorias = {
-    TGS: ["ingreso", "energia", "confirmados", "falsos"],
-    Edificios: ["pma", "forzada", "alarmas", "confirmados", "falsos"],
-    VTV:["ingreso", "energia", "confirmados", "falsos"],
-    Otros: ["energia", "alarmas", "confirmados", "falsos"], // <-- agrega si falta
-    Barrios: ["energia", "cctvOffline", "cctvOnline", "confirmados", "falsos"],
-    General: ["ingreso", "salida", "pma", "forzada", "energia", "confirmados", "falsos"],
+    TGS: ["ingreso", "energia", "Evento confirmado", "falsos"],
+    Edificios: ["pma", "forzada", "alarmas", "Evento confirmado", "falsos"],
+    VTV:["ingreso", "energia", "Evento confirmado", "falsos"],
+    Otros: ["energia", "alarmas", "Evento confirmado", "falsos"], // <-- agrega si falta
+    Barrios: ["energia", "cctvOffline", "cctvOnline", "Evento confirmado", "falsos"],
+    General: ["ingreso",  "pma", "forzada", "energia", "Evento confirmado", "falsos"],
   };
 
   const colores = {

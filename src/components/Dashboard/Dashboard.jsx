@@ -13,6 +13,8 @@ import MiniCharts from "./MiniCharts.jsx";
 import OtrosStats from "./OtrosStats.jsx";
 import LineAnalytics from "./LineAnalytics.jsx";
 import TareasPanel from "./TareasPanel.jsx";
+import TgsKpi from "./TgsKpi.jsx";
+import TgsProviders from "./TgsProviders.jsx";
 
 import AnaliticaDetalladaPMA from "./AnaliticaDetalladaPMA.jsx";
 
@@ -54,6 +56,13 @@ export default function Dashboard() {
           // 🚩 Normalizaciones
           const edificio = d["edificio"] || "";
           const unidad = d["unidad"] || "";
+          const proveedorTgs =
+          d["proveedor-personal"] ??
+          d.proveedor_personal ??
+          d.proveedorPersonal ??
+          d.proveedor ??
+          d.personal ??
+          "";
         
           const ubicacion =
             cliente === "Edificios"
@@ -106,6 +115,7 @@ d.razones ??
           const respuestaResidente =
             d["respuesta-residente"] ?? d.respuesta ?? "";
         
+            
           return {
             id: doc.id,
             cliente,
@@ -132,6 +142,15 @@ d.razones ??
             ["respuesta-residente"]: respuestaResidente,
             edificio,
             unidad,
+            ...(cliente === "TGS"
+            ? {
+                ["proveedor-personal"]: proveedorTgs,
+                proveedor_personal: proveedorTgs,
+                proveedorPersonal: proveedorTgs,
+                proveedor: proveedorTgs,
+                personal: proveedorTgs,
+              }
+            : {}),
           };
         });
         
@@ -245,9 +264,19 @@ d.razones ??
                         fechaFin={filtros.fechaFin}
                       />
                     </div>
-  
-                    {filtros.cliente === "TGS" && <TgsStats eventos={eventosFiltrados} />}
-  
+                    {filtros.cliente === "TGS" && (
+                        <>
+    <div className="seccion-edificio">
+      <TgsKpi eventos={eventosFiltrados} />
+    </div>
+    <div className="seccion-analitica">
+      <TgsProviders eventos={eventosFiltrados} />
+    </div>
+
+    </>
+
+)}
+
                     {filtros.cliente === "Edificios" && (
                       <>
                         {/* EdificioStats (para captura en PDF) */}
