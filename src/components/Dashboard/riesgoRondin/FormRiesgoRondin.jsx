@@ -45,6 +45,73 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
   const [elapsed, setElapsed] = useState(0);
   const tickRef = useRef(null);
   const pausasRef = useRef([]);
+// === Secuencial por cliente (uno a la vez)
+const [activeTandaIdx, setActiveTandaIdx] = useState(0);
+const completedRef = useRef({}); // { [tandaId]: true } para evitar disparos múltiples
+
+const isTandaCompleta = (t) => {
+  if (!t) return false;
+
+  // 1) Todas las cámaras tocadas y con estado no null
+  const camsOk = Array.isArray(t.camaras) && t.camaras.length > 0 &&
+    t.camaras.every(c => c.touched && c.estado !== null);
+
+  // 2) Checklist completo
+  const c = t.checklist || {};
+  const chkOk = [c.grabacionesOK, c.cortes220v, c.equipoOffline].every(v => v === true || v === false);
+
+  // 3) Si grabacionesOK === false, debe tener al menos una cámara marcada en grabacionesFallan
+  const grabReqOk = (c.grabacionesOK !== false) ||
+    (c.grabacionesFallan && Object.values(c.grabacionesFallan).some(Boolean));
+
+  return camsOk && chkOk && grabReqOk;
+};
+
+const nextIncompleteIdx = (fromIdx = -1) => {
+  for (let i = fromIdx + 1; i < tandas.length; i++) {
+    if (!isTandaCompleta(tandas[i])) return i;
+  }
+  return null;
+};
+useEffect(() => {
+  const t = tandas[activeTandaIdx];
+  if (!t) return;
+
+  // Si la tanda activa se completó y aún no lo registramos, avisamos y avanzamos
+  if (isTandaCompleta(t) && !completedRef.current[t.id]) {
+    completedRef.current[t.id] = true;
+
+    const prox = nextIncompleteIdx(activeTandaIdx);
+
+    Swal.fire({
+      title: "Cliente completado",
+      html: `<div style="text-align:left">
+               <p><b>${t.cliente || "Cliente"}</b> finalizado.</p>
+               ${prox !== null
+                 ? "<p>¿Continuar con el siguiente cliente?</p>"
+                 : "<p>¡Completaste todos los clientes de esta tanda!</p>"}
+             </div>`,
+      icon: "success",
+      showCancelButton: prox !== null,
+      confirmButtonText: prox !== null ? "Continuar" : "OK",
+      cancelButtonText: "Cancelar",
+      reverseButtons: true,
+    }).then(({ isConfirmed }) => {
+      if (prox !== null && isConfirmed) {
+        setActiveTandaIdx(prox);
+        // opcional: hacer scroll al siguiente
+        const nextEl = document.getElementById(tandas[prox]?.id);
+        if (nextEl) nextEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+  }
+}, [tandas, activeTandaIdx]); // se reevalúa cuando cambian tandas o el índice activo
+useEffect(() => {
+  // Si eliminan una tanda o cambian el orden, ajustamos el índice activo
+  if (activeTandaIdx >= tandas.length) {
+    setActiveTandaIdx(Math.max(0, tandas.length - 1));
+  }
+}, [tandas.length]);
 
   const scheduleSlots = (slotsMap, getTandaById) => {
     timeoutsRef.current.forEach(t => clearTimeout(t));
@@ -426,7 +493,9 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
         icon: "success",
         confirmButtonText: "OK",
       });
-  
+      completedRef.current = {};
+      setActiveTandaIdx(0);
+      
       // 🧹 ahora sí: todo a 0
       softReset();
     } catch (e) {
@@ -460,12 +529,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       ...t, camaras: t.camaras.map(c => c.id === camId ? { ...c, [key]: value, touched: key==="estado" ? true : c.touched } : c)
     } : t));
 
-    // FormRiesgoRondin.jsx
-// 👇 Esta es la función correcta
-// FormRiesgoRondin.jsx
-// imports ya los tenés, pero asegurate:
 
-// ...
 const onCamState = async (tandaId, camId, next) => {
   // 1) UI inmediata
   setTandas(prev =>
@@ -686,35 +750,68 @@ return (
 
   {/* Tandas */}
   <Stack spacing={2}>
-    {tandas.map((t) => (
-     <TandaCard
-     key={t.id}
-     tanda={t}
-     clientesCat={clientesCat}
-     onSetCliente={setTandaCliente}
-     onAddCam={addCamRow}
-     onRemoveTanda={(id) => (tandas.length === 1 ? null : removeTanda(id))}
-     onCamField={setCamField}
-     onCamRemove={removeCamRow}
-     onCamState={onCamState}
-     setChecklistVal={setChecklistVal}
-     resetFallan={resetFallan}
-     toggleFallan={toggleGrabacionFalla}
-     setResumen={setTandaResumen}
-     historicos={historicosPorCliente[norm(t.cliente || "")]}
-   />
-   
-    ))}
+  {tandas.map((t, idx) => {
+    const isActive = idx === activeTandaIdx;
+    return (
+      <Box
+        key={t.id}
+        id={t.id}
+        sx={{
+          position: "relative",
+          opacity: isActive ? 1 : 0.45,
+          pointerEvents: isActive ? "auto" : "none",
+          transition: "opacity .2s ease",
+        }}
+      >
+        {/* Badge opcional para claridad visual */}
+        {!isActive && (
+          <Box
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 2,
+              px: 1,
+              py: 0.25,
+              bgcolor: "warning.light",
+              color: "warning.contrastText",
+              borderRadius: 1,
+              fontSize: 12,
+            }}
+          >
+            Esperá a completar el anterior
+          </Box>
+        )}
 
-    <Button
-      onClick={addTanda}
-      variant="outlined"
-      disabled={tandas.length >= Math.min(clientesCat.length || 0, MAX_TANDAS)}
-      sx={{ alignSelf: "flex-start" }}
-    >
-      Agregar cliente {tandas.length}/{Math.min(clientesCat.length || 0, MAX_TANDAS)}
-    </Button>
-  </Stack>
+        <TandaCard
+          tanda={t}
+          clientesCat={clientesCat}
+          onSetCliente={setTandaCliente}
+          onAddCam={addCamRow}
+          onRemoveTanda={(id) => (tandas.length === 1 ? null : removeTanda(id))}
+          onCamField={setCamField}
+          onCamRemove={removeCamRow}
+          onCamState={onCamState}
+          setChecklistVal={setChecklistVal}
+          resetFallan={resetFallan}
+          toggleFallan={toggleGrabacionFalla}
+          setResumen={setTandaResumen}
+          historicos={historicosPorCliente[norm(t.cliente || "")]}
+        />
+      </Box>
+    );
+  })}
+
+  <Button
+    onClick={addTanda}
+    variant="outlined"
+    disabled={tandas.length >= Math.min(clientesCat.length || 0, MAX_TANDAS)}
+    sx={{ alignSelf: "flex-start" }}
+  >
+    Agregar cliente {tandas.length}/{Math.min(clientesCat.length || 0, MAX_TANDAS)}
+  </Button>
+
+</Stack>
 
   {/* Observaciones + Footer */}
   <Paper sx={{ p: 2.25 }}>
@@ -745,6 +842,11 @@ return (
       onFinalizar={handleFinalizar}
       onReset={softReset}
     />
+    <Box component="span">
+ 
+     <Box component="br" /> <Box component="br" />
+    </Box>
+    
       <Button size="small" variant="text" sx={{ mt: 1 }} onClick={() => {
         const miss = { camerasNotTouched: [], camerasNullState: [] };
         tandas.forEach(t => t.camaras.forEach(c => {
@@ -767,7 +869,42 @@ return (
         });
       }}>
         Ver pendientes
-      </Button>
+      </Button> <Button
+  size="small"
+  variant="contained"
+  sx={{
+    ml: 1,
+    px: 2.5,
+    py: 0.75,
+    borderRadius: 2,
+    fontSize: 13,
+    fontWeight: "bold",
+    textTransform: "none",
+    bgcolor: "#1976d2",
+    color: "#fff",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+    "&:hover": {
+      bgcolor: "#1565c0",
+      boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
+    },
+    "&:active": {
+      transform: "scale(0.97)",
+    },
+  }}
+  onClick={() => {
+    const prox = nextIncompleteIdx(activeTandaIdx);
+    if (prox === null) {
+      Swal.fire("Sin pendientes", "No quedan clientes pendientes en esta tanda.", "info");
+    } else {
+      setActiveTandaIdx(prox);
+      const nextEl = document.getElementById(tandas[prox]?.id);
+      if (nextEl) nextEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }}
+>
+  Ir al siguiente cliente
+</Button>
+
     </Paper>
   </Container>
 );
