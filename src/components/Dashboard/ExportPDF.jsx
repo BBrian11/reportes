@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import Swal from "sweetalert2";
 import html2canvas from "html2canvas";
 
-/* ===================== Estilos PDF ===================== */
+/* ===== Estilos PDF ===== */
 const styles = StyleSheet.create({
   page: { backgroundColor: "#fff", padding: 20, fontSize: 9, fontFamily: "Helvetica" },
   header: { textAlign: "center", marginBottom: 12, borderBottom: "2px solid #2563eb", paddingBottom: 6 },
@@ -18,22 +18,18 @@ const styles = StyleSheet.create({
   footer: { position: "absolute", bottom: 10, left: 20, right: 20, textAlign: "center", fontSize: 8, color: "#666" }
 });
 
-/* ===================== Helpers ===================== */
+/* ===== Helpers ===== */
 const chunk = (arr, size) => { const out=[]; for (let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size)); return out; };
 const safe = (v) => (v === undefined || v === null ? "" : String(v));
-
 const getClienteLower = (row) =>
   (row?.cliente || (row?.edificio ? "Edificios" : "otros")).toString().toLowerCase();
-
 const getEventoTitulo = (row) => row?.evento ?? row?.["evento-edificio"] ?? "";
 const getUbicacionDisplay = (row) => row?.ubicacion || row?.edificio || "";
-
 const getObservacion = (row) =>
   row?.observacion ??
   row?.["observaciones-edificios"] ??
   row?.[`observaciones-${getClienteLower(row)}`] ??
   "";
-
 const getResolucion = (row) =>
   row?.["resolusion-evento"] ??
   row?.["resolucion-evento"] ??
@@ -41,24 +37,15 @@ const getResolucion = (row) =>
   row?.resolucionEvento ??
   row?.resolusionEvento ??
   "";
-
-const getRespuestaResidente = (row) =>
-  row?.["respuesta-residente"] ?? row?.respuesta ?? "";
-
+const getRespuestaResidente = (row) => row?.["respuesta-residente"] ?? row?.respuesta ?? "";
 const getRazones = (row) =>
-  row?.["razones-pma"] ??
-  row?.["razones_pma"] ??
-  row?.["razonesPma"] ??
-  row?.razones ??
-  "";
-
+  row?.["razones-pma"] ?? row?.["razones_pma"] ?? row?.["razonesPma"] ?? row?.razones ?? "";
 const isEdificioRow = (row) => {
   const cl = (row?.cliente || "").toString().trim().toUpperCase();
   if (cl.includes("EDIFICIO")) return true;
   if (row?.edificio) return true;
   return getClienteLower(row) === "edificios";
 };
-
 const formatDateValue = (row) => {
   const v =
     row?.fechaObj ||
@@ -66,40 +53,30 @@ const formatDateValue = (row) => {
   if (!(v instanceof Date) || isNaN(v)) return "";
   return v.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
 };
+const dateMs = (row) => {
+  const v =
+    row?.fechaObj ||
+    (row?.fecha instanceof Date ? row.fecha : new Date(row?.fecha ?? row?.fechaHoraEnvio));
+  return v instanceof Date && !isNaN(v) ? v.getTime() : 0;
+};
+const sig = (e) => e?.id ?? `${e?.cliente ?? ""}|${getEventoTitulo(e)}|${e?.fecha ?? e?.fechaHoraEnvio ?? ""}`;
 
-/* ====== Captura DOM a imagen (para KPI/gráficos) ====== */
+/* ===== Capturas (opcional: KPI/gráficos del dashboard) ===== */
 async function captureAsImage(selector, opts = {}) {
   const { scale = Math.max(3, (window.devicePixelRatio || 1) * 2), format = "png", quality = 0.92, bg = "#ffffff" } = opts;
   const originalEl = document.querySelector(selector);
   if (!originalEl) return null;
-  originalEl.scrollIntoView({ behavior: "auto", block: "center", inline: "center" });
   await (document.fonts?.ready ?? Promise.resolve());
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-  const snapWith = async (useFO) => {
-    const cs = getComputedStyle(originalEl);
-    const widthPx = cs.width;
-    const canvas = await html2canvas(originalEl, {
-      scale, backgroundColor: bg, useCORS: true, allowTaint: true, foreignObjectRendering: useFO,
-      windowWidth: document.documentElement.scrollWidth,
-      windowHeight: document.documentElement.scrollHeight,
-      onclone: (doc) => {
-        const el = doc.querySelector(selector); if (!el) return;
-        el.style.opacity = "1"; el.style.transform = "none"; el.style.filter = "none";
-        el.style.position = "static"; el.style.overflow = "visible"; el.style.contain = "none";
-        el.style.width = widthPx; el.style.maxWidth = "none"; el.style.background = bg;
-      },
-    });
-    return canvas;
-  };
-  const toData = (canvas) => ({
-    src: (opts.format === "jpeg")
-      ? canvas.toDataURL("image/jpeg", opts.quality ?? 0.92)
-      : canvas.toDataURL("image/png"),
-    w: canvas.width, h: canvas.height
+  const canvas = await html2canvas(originalEl, {
+    scale, backgroundColor: bg, useCORS: true, allowTaint: true, foreignObjectRendering: false,
   });
-  try { const c1 = await snapWith(false); if (c1?.width > 50 && c1?.height > 50) return toData(c1); } catch {}
-  try { const c2 = await snapWith(true);  if (c2?.width > 50 && c2?.height > 50) return toData(c2); } catch {}
-  return null;
+  return canvas
+    ? {
+        src: (format === "jpeg") ? canvas.toDataURL("image/jpeg", quality) : canvas.toDataURL("image/png"),
+        w: canvas.width, h: canvas.height
+      }
+    : null;
 }
 async function captureAll(selectors, opts = {}) {
   const out = [];
@@ -108,31 +85,23 @@ async function captureAll(selectors, opts = {}) {
   }
   return out;
 }
-
-/* ===================== Utils layout ===================== */
 const fit = (img, maxW = 520, maxH = 300) => {
-  const r = img.h / img.w;
-  let w = maxW, h = w * r;
-  if (h > maxH) { h = maxH; w = h / r; }
-  return { w, h };
+  const r = img.h / img.w; let w = maxW, h = w * r; if (h > maxH) { h = maxH; w = h / r; } return { w, h };
 };
 
-/* ===================== Documento PDF ===================== */
+/* ===== Documento PDF (usa EXACTAMENTE el dataset final) ===== */
 const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
   const onlyEdificio = eventos.length > 0 && eventos.every(isEdificioRow);
-
   const totalEventos = eventos.length;
   const eventoFrecuente = eventos.reduce((acc, e) => {
     const k = getEventoTitulo(e) || "Sin Evento"; acc[k] = (acc[k] || 0) + 1; return acc;
   }, {});
   const topEvento = Object.entries(eventoFrecuente).sort((a,b)=>b[1]-a[1])[0] || ["Sin datos", 0];
 
-  // Contexto
   const clientes = Array.from(new Set(eventos.map(e => (e.cliente || "").trim()).filter(Boolean)));
   const ubicaciones = Array.from(new Set(eventos.map(e => (getUbicacionDisplay(e) || "").trim()).filter(Boolean)));
   const listify = (arr, max = 4) => !arr.length ? "—" : (arr.length <= max ? arr.join(", ") : `${arr.slice(0,max).join(", ")} (+${arr.length-max} más)`);
 
-  // 🚀 FILAS: usan los mismos helpers que la tabla
   const baseRow = (e) => ({
     cliente: safe(e.cliente),
     evento: safe(getEventoTitulo(e)),
@@ -148,26 +117,22 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
 
   const rows = eventos.map((e) => onlyEdificio ? { ...baseRow(e), ...extraRow(e) } : baseRow(e));
 
-  const chartsChunks = chunk(capturedImages.charts || [], 2);
   const joinFirstPage = (observaciones?.trim().length || 0) <= 280;
   const fitFirst = (img) => fit(img, 520, joinFirstPage ? 220 : 280);
 
   return (
     <Document>
-      {/* ===== PÁGINA 1 ===== */}
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.title}>Reporte de Monitoreo</Text>
           <Text style={styles.subtitle}>Generado el: {new Date().toLocaleString("es-AR")}</Text>
         </View>
 
-        {/* CONTEXTO */}
         <View style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: 8, marginTop: 6, marginBottom: 8, backgroundColor: "#f9fafb" }}>
           <Text style={{ fontSize: 9 }}><Text style={{ fontWeight: "bold" }}>Cliente(s): </Text>{listify(clientes)}</Text>
           <Text style={{ fontSize: 9 }}><Text style={{ fontWeight: "bold" }}>Edificio(s) / Ubicación(es): </Text>{listify(ubicaciones, 6)}</Text>
         </View>
 
-        {/* KPI Nativos */}
         <View style={{ flexDirection: "row", gap: 6 }}>
           {[
             { label: "Total Eventos", value: totalEventos },
@@ -180,7 +145,6 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
           ))}
         </View>
 
-        {/* Observaciones */}
         {observaciones?.trim() ? (
           <View style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: 8, marginTop: 8, backgroundColor: "#fffbea" }}>
             <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4, color: "#92400e" }}>Observaciones</Text>
@@ -188,7 +152,6 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
           </View>
         ) : null}
 
-        {/* KPI cards */}
         {capturedImages.kpi && (
           <>
             <Text style={styles.sectionTitle}>KPI (Tarjetas visuales)</Text>
@@ -196,28 +159,24 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
           </>
         )}
 
-        {joinFirstPage && (
+        {joinFirstPage && capturedImages.edificio && (
           <>
-            {capturedImages.edificio && (
-              <>
-                <Text style={styles.sectionTitle}>Estadística</Text>
-                {(() => { const s = fitFirst(capturedImages.edificio); return <Image src={capturedImages.edificio.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
-              </>
-            )}
-            {capturedImages.pma && (
-              <>
-                <Text style={styles.sectionTitle}>Analítica Detallada</Text>
-                {(() => { const s = fitFirst(capturedImages.pma); return <Image src={capturedImages.pma.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
-              </>
-            )}
+            <Text style={styles.sectionTitle}>Estadística</Text>
+            {(() => { const s = fitFirst(capturedImages.edificio); return <Image src={capturedImages.edificio.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
+          </>
+        )}
+
+        {joinFirstPage && capturedImages.pma && (
+          <>
+            <Text style={styles.sectionTitle}>Analítica Detallada</Text>
+            {(() => { const s = fitFirst(capturedImages.pma); return <Image src={capturedImages.pma.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
           </>
         )}
 
         <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
       </Page>
 
-      {/* ===== PÁGINA 2 (si hace falta) ===== */}
-      {!joinFirstPage && (
+      {!joinFirstPage && (capturedImages.edificio || capturedImages.pma) && (
         <Page size="A4" style={styles.page}>
           {capturedImages.edificio && (
             <>
@@ -235,7 +194,6 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
         </Page>
       )}
 
-      {/* ===== Gráficos (2 por página) ===== */}
       {(capturedImages.charts || []).length > 0 &&
         chunk(capturedImages.charts, 2).map((chunkImgs, idx) => (
           <Page key={`charts-${idx}`} size="A4" style={styles.page}>
@@ -249,51 +207,95 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
         ))
       }
 
-      {/* ===== TABLAS ===== */}
-      {chunk(rows, 30).map((pageRows, idx) => (
-        <Page key={idx} size="A4" style={styles.page}>
-          <Text style={styles.sectionTitle}>Tabla de eventos (pág. {idx + 1})</Text>
+{chunk(rows, 30).map((pageRows, idx) => (
+  <Page key={idx} size="A4" style={styles.page}>
+    <Text style={styles.sectionTitle}>Tabla de eventos (pág. {idx + 1})</Text>
 
-          <View style={styles.tableHeader}>
-            <Text style={[styles.col, { flex: 0.7 }]}>Cliente</Text>
-            <Text style={[styles.col, { flex: 1.1 }]}>Evento</Text>
-            <Text style={[styles.col, { flex: 1.1 }]}>Ubicación</Text>
-            <Text style={[styles.col, { flex: 0.9 }]}>Fecha</Text>
-            <Text style={[styles.col, { flex: 1.2 }]}>Observación</Text>
-            {onlyEdificio && (
-              <>
-                <Text style={[styles.col, { flex: 1.1 }]}>Razones</Text>
-                <Text style={[styles.col, { flex: 1.1 }]}>Resolución</Text>
-                <Text style={[styles.col, { flex: 1.1 }]}>Respuesta</Text>
-              </>
-            )}
-          </View>
+    {/* 👇 Leyenda SOLO para Edificios y SOLO en la primera página de la tabla */}
+    {onlyEdificio && idx === 0 && (
+      <View
+        style={{
+          backgroundColor: "#f1f5f9",
+          borderRadius: 6,
+          borderWidth: 1,
+          borderColor: "#e5e7eb",
+          padding: 8,
+          marginBottom: 8,
+        }}
+      >
+        <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
+          Leyenda de eventos 
+        </Text>
 
-          {pageRows.map((r, i) => (
-            <View key={i} style={styles.tableRow}>
-              <Text style={[styles.col, { flex: 0.7 }]}>{r.cliente}</Text>
-              <Text style={[styles.col, { flex: 1.1 }]}>{r.evento}</Text>
-              <Text style={[styles.col, { flex: 1.1 }]}>{r.ubicacion}</Text>
-              <Text style={[styles.col, { flex: 0.9 }]}>{r.fecha}</Text>
-              <Text style={[styles.col, { flex: 1.2 }]}>{r.observacion}</Text>
-              {onlyEdificio && (
-                <>
-                  <Text style={[styles.col, { flex: 1.1 }]}>{r.razones}</Text>
-                  <Text style={[styles.col, { flex: 1.1 }]}>{r.resolucion}</Text>
-                  <Text style={[styles.col, { flex: 1.1 }]}>{r.respuesta}</Text>
-                </>
-              )}
-            </View>
-          ))}
+        <Text style={{ fontSize: 9, marginBottom: 2 }}>
+          <Text style={{ fontWeight: "bold" }}>Puertas Mantenidas Abiertas:</Text>{" "}
+          la puerta permaneció abierta más tiempo del permitido.
+        </Text>
 
-          <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
-        </Page>
-      ))}
+        <Text style={{ fontSize: 9, marginBottom: 2 }}>
+          <Text style={{ fontWeight: "bold" }}>Puertas Forzadas:</Text>{" "}
+          apertura sin autorización/lectura válida; el sistema detecta apertura sin evento de acceso.
+        </Text>
+
+        <Text style={{ fontSize: 9, marginBottom: 2 }}>
+          <Text style={{ fontWeight: "bold" }}>Evento - Encargado:</Text>{" "}
+          Evento registrado por el personal del edificio (Puertas Mantenidas Abiertas).
+        </Text>
+
+        <Text style={{ fontSize: 9 }}>
+          <Text style={{ fontWeight: "bold" }}>CCTV fuera de línea:</Text>{" "}
+          cámara o NVR sin comunicación (posible corte de energía/red o falla de equipo).
+        </Text>
+      </View>
+    )}
+
+    {/* Header de la tabla */}
+    <View style={styles.tableHeader}>
+      <Text style={[styles.col, { flex: 0.7 }]}>Cliente</Text>
+      <Text style={[styles.col, { flex: 1.1 }]}>Evento</Text>
+      <Text style={[styles.col, { flex: 1.1 }]}>Ubicación</Text>
+      <Text style={[styles.col, { flex: 0.9 }]}>Fecha</Text>
+      <Text style={[styles.col, { flex: 1.2 }]}>Observación</Text>
+      {onlyEdificio && (
+        <>
+          <Text style={[styles.col, { flex: 1.1 }]}>Razones</Text>
+          <Text style={[styles.col, { flex: 1.1 }]}>Resolución</Text>
+          <Text style={[styles.col, { flex: 1.1 }]}>Respuesta</Text>
+        </>
+      )}
+    </View>
+
+    {/* Filas */}
+    {pageRows.map((r, i) => (
+      <View key={i} style={styles.tableRow}>
+        <Text style={[styles.col, { flex: 0.7 }]}>{r.cliente}</Text>
+        <Text style={[styles.col, { flex: 1.1 }]}>{r.evento}</Text>
+        <Text style={[styles.col, { flex: 1.1 }]}>{r.ubicacion}</Text>
+        <Text style={[styles.col, { flex: 0.9 }]}>{r.fecha}</Text>
+        <Text style={[styles.col, { flex: 1.2 }]}>{r.observacion}</Text>
+        {onlyEdificio && (
+          <>
+            <Text style={[styles.col, { flex: 1.1 }]}>{r.razones}</Text>
+            <Text style={[styles.col, { flex: 1.1 }]}>{r.resolucion}</Text>
+            <Text style={[styles.col, { flex: 1.1 }]}>{r.respuesta}</Text>
+          </>
+        )}
+      </View>
+    ))}
+
+    <Text
+      style={styles.footer}
+      render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+      fixed
+    />
+  </Page>
+))}
+
     </Document>
   );
 };
 
-/* ===================== Excel (mismo dataset) ===================== */
+/* ===== Excel (mismo dataset) ===== */
 const generateExcel = (eventos) => {
   if (!eventos?.length) return Swal.fire("Aviso", "No hay datos para exportar.", "warning");
   const onlyEdificio = eventos.length > 0 && eventos.every(isEdificioRow);
@@ -334,13 +336,26 @@ const generateExcel = (eventos) => {
   XLSX.writeFile(wb, `REPORTE_MONITOREO_${Date.now()}.xlsx`);
 };
 
-/* ===================== Componente exportador ===================== */
-// 👉 Usa EXACTAMENTE el array que recibís: <ExportPDF eventos={eventosFiltrados} />
+/* ===== ExportPDF: usa eventos del padre, con fallback seguro al subconjunto visible ===== */
 export default function ExportPDF({ eventos }) {
   const [capturedImages, setCapturedImages] = useState({ kpi:null, edificio:null, pma:null, charts:[] });
 
-  // Dataset = eventos filtrados que te pasa el padre (sin fallbacks)
-  const dataset = useMemo(() => (Array.isArray(eventos) ? eventos : []), [eventos]);
+  // 1) Array que te pasa el padre
+  const propArray = Array.isArray(eventos) ? eventos : [];
+
+  // 2) Si la tabla dejó una copia global, y es MÁS CHICA, usamos exactamente ese subconjunto
+  const dataset = useMemo(() => {
+    const fromWindow = Array.isArray(window.__FILTERED_EVENTOS__) ? window.__FILTERED_EVENTOS__ : [];
+    if (!fromWindow.length) {
+      return propArray.slice().sort((a,b) => dateMs(b) - dateMs(a));
+    }
+    // Intersección por id/firma
+    const winIds = new Set(fromWindow.map(sig));
+    const filtered = propArray.filter(e => winIds.has(sig(e)));
+    const base = filtered.length ? filtered : fromWindow;
+    // orden igual que la tabla (desc por fecha)
+    return base.slice().sort((a,b) => dateMs(b) - dateMs(a));
+  }, [propArray]);
 
   const askObservaciones = useCallback(async () => {
     const { value, isConfirmed } = await Swal.fire({
@@ -380,7 +395,7 @@ export default function ExportPDF({ eventos }) {
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `REPORTE_MONITOREO_${Date.now()}.pdf`);
 
-      generateExcel(dataset); // Excel también usa exactamente lo filtrado
+      generateExcel(dataset);
     } catch (err) {
       console.error("Export error:", err);
       Swal.fire("Error", String(err?.message || err || "Fallo exportando el PDF/Excel."), "error");
