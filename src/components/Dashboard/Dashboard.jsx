@@ -28,6 +28,9 @@ import "../../styles/dashboard.css";
 
 export default function Dashboard() {
   const [eventos, setEventos] = useState([]);
+
+  const [filteredEventos, setFilteredEventos] = useState([]); // <- DEFINIDO
+
   const [filtros, setFiltros] = useState({
     cliente: "",
     ubicacion: "",

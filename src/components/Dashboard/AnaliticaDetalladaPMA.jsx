@@ -93,7 +93,7 @@ export default function AnaliticaDetalladaPMA({ eventos = [], noWrapper = false 
           <span className="mini-kpi-value">{totalPMA}</span>
         </div>
         <div className="mini-stats">
-          <span className="mini-kpi-label">Propietario con más PMA</span>
+          <span className="mini-kpi-label"></span>
           <span className="mini-kpi-value">
             {topPropietarios[0] ? `${topPropietarios[0][0]} (${topPropietarios[0][1]})` : "—"}
           </span>
@@ -102,7 +102,7 @@ export default function AnaliticaDetalladaPMA({ eventos = [], noWrapper = false 
 
       <div className="analytics-grid">
         <div>
-          <h5 className="ranking-subtitle">Top Propietarios</h5>
+          <h5 className="ranking-subtitle">Propietarios</h5>
           {topPropietarios.length ? (
             <ul className="ranking-list">
               {topPropietarios.map(([nombre, count], i) => (

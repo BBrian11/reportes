@@ -1,95 +1,126 @@
-// src/components/EventsTable.jsx
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useEffect, useRef } from "react";
 import DataTable, { createTheme } from "react-data-table-component";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
-import { FiSearch, FiRotateCcw, FiCalendar } from "react-icons/fi";
 import { doc, updateDoc, deleteDoc, Timestamp } from "firebase/firestore";
-import { db } from "../../services/firebase"; // ajustá la ruta si hace falta
-import "../../styles/eventstable.css";        // opcional
+import { db } from "../../services/firebase";
+import "../../styles/eventstable.css";
 
 const MySwal = withReactContent(Swal);
 
-// ✅ Tema
+// ===== Tema (mejor contraste/legibilidad) =====
 createTheme("g3tTheme", {
-  text: { primary: "#1f2937", secondary: "#6b7280" },
+  text: { primary: "#111827", secondary: "#4b5563" },
   background: { default: "#ffffff" },
   context: { background: "#2563eb", text: "#FFFFFF" },
   divider: { default: "#e5e7eb" },
 });
 
-export default function EventsTable({ eventos }) {
-  const [filterText, setFilterText] = useState("");
-  const [fechaInicio, setFechaInicio] = useState("");
-  const [fechaFin, setFechaFin] = useState("");
+// ===== Helpers =====
+const getClienteLower = (row) =>
+  (row?.cliente || (row?.edificio ? "Edificios" : "otros")).toString().toLowerCase();
 
-  // ======================
-  // Getters robustos
-  // ======================
-  const getClienteLower = (row) =>
-    (row?.cliente || (row?.edificio ? "Edificios" : "otros"))
-      .toString()
-      .toLowerCase();
+const getEventoTitulo = (row) => row?.evento ?? row?.["evento-edificio"] ?? "";
+const getUbicacionDisplay = (row) => row?.ubicacion || row?.edificio || "";
 
-  const getObservacion = (row) =>
-    row?.observacion ??
-    row?.["observaciones-edificios"] ??
-    row?.[`observaciones-${getClienteLower(row)}`] ??
-    "";
+const getObservacion = (row) =>
+  row?.observacion ??
+  row?.["observaciones-edificios"] ??
+  row?.[`observaciones-${getClienteLower(row)}`] ??
+  "";
 
-  const getResolucion = (row) =>
-    row?.["resolusion-evento"] ?? // typo original
-    row?.["resolucion-evento"] ??
-    row?.resolucion ??
-    row?.resolucionEvento ??
-    row?.resolusionEvento ??
-    "";
+const getResolucion = (row) =>
+  row?.["resolusion-evento"] ??
+  row?.["resolucion-evento"] ??
+  row?.resolucion ??
+  row?.resolucionEvento ??
+  row?.resolusionEvento ??
+  "";
 
-  const getRespuestaResidente = (row) =>
-    row?.["respuesta-residente"] ??
-    row?.respuesta ??
-    "";
+const getRespuestaResidente = (row) => row?.["respuesta-residente"] ?? row?.respuesta ?? "";
 
-  const getRazones = (row) =>
-    row?.["razones-pma"] ??
-    row?.["razones_pma"] ??
-    row?.["razonesPma"] ??
-    row?.razones ??
-    "";
+const getRazones = (row) =>
+  row?.["razones-pma"] ?? row?.["razones_pma"] ?? row?.["razonesPma"] ?? row?.razones ?? "";
 
-  const getUbicacionDisplay = (row) =>
-    row?.ubicacion || row?.edificio || "";
+const getProveedorTGS = (row) =>
+  row?.["proveedor-personal"] ??
+  row?.proveedor_personal ??
+  row?.proveedorPersonal ??
+  row?.proveedor ??
+  row?.personal ??
+  "";
 
-  // 👇 Proveedor para TGS (robusto a nombres de campo)
-  const getProveedorTGS = (row) =>
-    row?.["proveedor-personal"] ??
-    row?.proveedor_personal ??
-    row?.proveedorPersonal ??
-    row?.proveedor ??
-    row?.personal ??
-    "";
+const isEdificioRow = (row) => {
+  const cl = (row?.cliente || "").toString().trim().toUpperCase();
+  if (cl.includes("EDIFICIO")) return true;
+  if (row?.edificio) return true;
+  return getClienteLower(row) === "edificios";
+};
 
-  // ¿Es una fila de EDIFICIO(S)?
-  const isEdificioRow = (row) => {
-    const cl = (row?.cliente || "").toString().trim().toUpperCase();
-    if (cl.includes("EDIFICIO")) return true; // "EDIFICIO"/"EDIFICIOS"
-    if (row?.edificio) return true;           // tiene campo 'edificio'
-    return getClienteLower(row) === "edificios";
-  };
+const isTGSRow = (row) => {
+  const tipo = (row?.tipoCliente || "").toString().trim().toUpperCase();
+  if (tipo === "TGS") return true;
+  const cl = (row?.cliente || "").toString().trim().toUpperCase();
+  return cl.includes("TGS");
+};
 
-  // ¿Es una fila TGS?
-  const isTGSRow = (row) => {
-    const tipo = (row?.tipoCliente || "").toString().trim().toUpperCase();
-    if (tipo === "TGS") return true;
-    const cl = (row?.cliente || "").toString().trim().toUpperCase();
-    return cl.includes("TGS");
-  };
+const formatDate = (row) => {
+  const value =
+    row?.fechaObj ||
+    (row?.fecha instanceof Date ? row.fecha : new Date(row?.fecha ?? row?.fechaHoraEnvio));
+  if (!(value instanceof Date) || isNaN(value)) return "—";
+  return value.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+};
 
-  // ======================
-  // Handlers de edición
-  // ======================
+// Ellipsis + tooltip
+const Ellipsis = ({ text }) => (
+  <span className="cell-ellipsis" title={text || ""}>
+    {text || "—"}
+  </span>
+);
 
-  // Observación
+// ===== Panel expandible =====
+const ExpandedRow = ({ data }) => (
+  <div className="expanded-panel">
+    <div className="expanded-grid">
+      <div>
+        <h4>Observación</h4>
+        <p>{getObservacion(data) || "—"}</p>
+      </div>
+
+      {isEdificioRow(data) && (
+        <>
+          <div>
+            <h4>Razones</h4>
+            <p>{getRazones(data) || "—"}</p>
+          </div>
+          <div>
+            <h4>Resolución</h4>
+            <p>{getResolucion(data) || "—"}</p>
+          </div>
+          <div>
+            <h4>Respuesta Residente</h4>
+            <p>{getRespuestaResidente(data) || "—"}</p>
+          </div>
+        </>
+      )}
+
+      {isTGSRow(data) && (
+        <div>
+          <h4>Proveedor</h4>
+          <p>{getProveedorTGS(data) || "—"}</p>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+export default function EventsTable({
+  eventos = [],
+  filtros = { cliente: "", evento: "", ubicacion: "", fechaInicio: "", fechaFin: "" },
+  onFilteredChange,
+}) {
+  // ===== Handlers edición =====
   const handleEditObservation = async (event) => {
     const { value } = await MySwal.fire({
       title: "Editar Observación",
@@ -101,7 +132,6 @@ export default function EventsTable({ eventos }) {
       preConfirm: () => document.getElementById("swal-obs").value ?? "",
     });
     if (value === undefined) return;
-
     try {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
@@ -114,7 +144,6 @@ export default function EventsTable({ eventos }) {
     }
   };
 
-  // Resolución (solo sentido para EDIFICIO)
   const handleEditResolucion = async (event) => {
     const { value } = await MySwal.fire({
       title: "Editar Resolución",
@@ -126,13 +155,12 @@ export default function EventsTable({ eventos }) {
       preConfirm: () => document.getElementById("swal-res").value ?? "",
     });
     if (value === undefined) return;
-
     try {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
       await updateDoc(doc(db, path), {
-        ["resolusion-evento"]: value, // espejo
-        resolucion: value,            // clave normalizada
+        ["resolusion-evento"]: value,
+        resolucion: value,
       });
       MySwal.fire("✅ Guardado", "Resolución actualizada", "success");
     } catch {
@@ -140,7 +168,6 @@ export default function EventsTable({ eventos }) {
     }
   };
 
-  // Respuesta del residente (solo EDIFICIO)
   const handleEditRespuesta = async (event) => {
     const { value } = await MySwal.fire({
       title: "Editar Respuesta del Residente",
@@ -152,13 +179,12 @@ export default function EventsTable({ eventos }) {
       preConfirm: () => document.getElementById("swal-resp").value ?? "",
     });
     if (value === undefined) return;
-
     try {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
       await updateDoc(doc(db, path), {
-        ["respuesta-residente"]: value, // original
-        respuesta: value,               // normalizada
+        ["respuesta-residente"]: value,
+        respuesta: value,
       });
       MySwal.fire("✅ Guardado", "Respuesta actualizada", "success");
     } catch {
@@ -166,22 +192,17 @@ export default function EventsTable({ eventos }) {
     }
   };
 
-  // 🕒 NUEVO: Fecha y hora
-  const toDatetimeLocal = (date) => {
-    const d = date instanceof Date && !isNaN(date) ? date : new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    const MM = pad(d.getMonth() + 1);
-    const dd = pad(d.getDate());
-    const hh = pad(d.getHours());
-    const mm = pad(d.getMinutes());
-    return `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
-  };
-
   const handleEditFechaHora = async (event) => {
-    // fechaObj viene armado en el loader (Dashboard)
-    const initial = toDatetimeLocal(event?.fechaObj || new Date());
-
+    const d =
+      event?.fechaObj ||
+      (event?.fecha instanceof Date ? event.fecha : new Date(event?.fecha ?? event?.fechaHoraEnvio));
+    const pad = (n) => String(n).padStart(2, "0");
+    const initial =
+      d instanceof Date && !isNaN(d)
+        ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+            d.getMinutes()
+          )}`
+        : "";
     const { value } = await MySwal.fire({
       title: "Editar fecha y hora",
       html: `
@@ -197,40 +218,27 @@ export default function EventsTable({ eventos }) {
       focusConfirm: false,
       preConfirm: () => document.getElementById("swal-dt").value || "",
     });
-
     if (!value) return;
-
-    // value viene como "YYYY-MM-DDTHH:mm" en hora local
     const newDate = new Date(value);
     if (Number.isNaN(newDate.getTime())) {
       MySwal.fire("❌ Error", "Fecha/hora inválida.", "error");
       return;
     }
-
     try {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
-
-      await updateDoc(doc(db, path), {
-        // guardamos como Timestamp de Firestore
-        fechaHoraEnvio: Timestamp.fromDate(newDate),
-      });
-
+      await updateDoc(doc(db, path), { fechaHoraEnvio: Timestamp.fromDate(newDate) });
       MySwal.fire("✅ Guardado", "Fecha y hora actualizadas", "success");
-    } catch (e) {
-      console.error(e);
+    } catch {
       MySwal.fire("❌ Error", "No se pudo actualizar la fecha y hora", "error");
     }
   };
 
-  // Ubicación
   const handleEditUbicacion = async (event) => {
     const clienteLower = getClienteLower(event);
-
     if (clienteLower === "edificios") {
       const edificioActual = event.edificio || "";
       const unidadActual = event.unidad || "";
-
       const { value: formVals } = await MySwal.fire({
         title: "Editar Ubicación (Edificios)",
         html: `
@@ -252,13 +260,9 @@ export default function EventsTable({ eventos }) {
         }),
       });
       if (!formVals) return;
-
       try {
         const path = `novedades/${clienteLower}/eventos/${event.id}`;
-        await updateDoc(doc(db, path), {
-          edificio: formVals.edificio,
-          unidad: formVals.unidad || null,
-        });
+        await updateDoc(doc(db, path), { edificio: formVals.edificio, unidad: formVals.unidad || null });
         MySwal.fire("✅ Guardado", "Ubicación actualizada", "success");
       } catch {
         MySwal.fire("❌ Error", "No se pudo actualizar la ubicación", "error");
@@ -275,7 +279,6 @@ export default function EventsTable({ eventos }) {
         inputAttributes: { spellcheck: "false" },
       });
       if (value === undefined) return;
-
       try {
         const path = `novedades/${clienteLower}/eventos/${event.id}`;
         await updateDoc(doc(db, path), { ubicacion: value });
@@ -286,11 +289,10 @@ export default function EventsTable({ eventos }) {
     }
   };
 
-  // Eliminar
   const handleDeleteEvent = async (event) => {
     const confirm = await MySwal.fire({
       title: "¿Eliminar este evento?",
-      text: `Se eliminará el evento: "${event.evento}" en "${event.ubicacion || event.edificio || ""}"`,
+      text: `Se eliminará el evento: "${getEventoTitulo(event)}" en "${event.ubicacion || event.edificio || ""}"`,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#d33",
@@ -299,7 +301,6 @@ export default function EventsTable({ eventos }) {
       cancelButtonText: "Cancelar",
     });
     if (!confirm.isConfirmed) return;
-
     try {
       const path = `novedades/${getClienteLower(event)}/eventos/${event.id}`;
       await deleteDoc(doc(db, path));
@@ -309,225 +310,186 @@ export default function EventsTable({ eventos }) {
     }
   };
 
-  // ======================
-  // Filtro + orden por fecha (desc)
-  // ======================
+  // ===== Filtrado/orden (usa SOLO props.filtros) =====
   const filteredData = useMemo(() => {
     const base = (eventos || [])
       .slice()
       .sort((a, b) => {
         const da = a?.fechaObj?.getTime?.() || 0;
         const db = b?.fechaObj?.getTime?.() || 0;
-        return db - da; // más nuevos primero
+        return db - da;
       });
 
+    const desde = filtros.fechaInicio ? new Date(`${filtros.fechaInicio}T00:00:00`) : null;
+    const hasta = filtros.fechaFin ? new Date(`${filtros.fechaFin}T23:59:59`) : null;
+
     return base.filter((item) => {
-      const texto = (filterText || "").toLowerCase();
-      const textMatch =
-        (item?.cliente || "").toLowerCase().includes(texto) ||
-        (item?.evento || "").toLowerCase().includes(texto) ||
-        (getUbicacionDisplay(item) || "").toLowerCase().includes(texto) ||
-        (getObservacion(item) || "").toLowerCase().includes(texto) ||
-        (getResolucion(item) || "").toLowerCase().includes(texto) ||
-        (getRespuestaResidente(item) || "").toLowerCase().includes(texto) ||
-        (getRazones(item) || "").toLowerCase().includes(texto) ||
-        (getProveedorTGS(item) || "").toLowerCase().includes(texto); // 👈 busca por proveedor también
+      const clienteOk   = !filtros.cliente   || item?.cliente === filtros.cliente;
+      const eventoOk    = !filtros.evento    || getEventoTitulo(item) === filtros.evento;
+      const ubicacionOk = !filtros.ubicacion || getUbicacionDisplay(item) === filtros.ubicacion;
 
       const fechaEvento =
         item?.fechaObj ||
         (item?.fecha instanceof Date ? item.fecha : new Date(item?.fecha ?? item?.fechaHoraEnvio));
-      const desde = fechaInicio ? new Date(`${fechaInicio}T00:00:00`) : null;
-      const hasta = fechaFin ? new Date(`${fechaFin}T23:59:59`) : null;
-
-      return (
-        textMatch &&
+      const fechaOk =
         (!desde || (fechaEvento && fechaEvento >= desde)) &&
-        (!hasta || (fechaEvento && fechaEvento <= hasta))
-      );
+        (!hasta || (fechaEvento && fechaEvento <= hasta));
+
+      return clienteOk && eventoOk && ubicacionOk && fechaOk;
     });
-  }, [eventos, filterText, fechaInicio, fechaFin]);
+  }, [eventos, filtros]);
 
-  // ======================
-  // Columnas dinámicas
-  // ======================
+  // ===== Notificar al padre SOLO si cambia de verdad (anti-loop) =====
+  const lastSigRef = useRef("");
+  useEffect(() => {
+    // Firma barata: largo + ids o combinación estable
+    const sig = `${filteredData.length}:${filteredData
+      .map((e) => e.id ?? `${e.cliente}|${getEventoTitulo(e)}|${e.fecha ?? e.fechaHoraEnvio ?? ""}`)
+      .join("|")}`;
 
-  // ¿La vista actual contiene SOLO edificios?
+    if (sig !== lastSigRef.current) {
+      lastSigRef.current = sig;
+      onFilteredChange?.(filteredData);
+      window.__FILTERED_EVENTOS__ = filteredData; // por si el export lo usa de backup
+    }
+  }, [filteredData, onFilteredChange]);
+
+  // ===== Detectores de tipo (RESTABLECIDO) =====
   const onlyEdificio = useMemo(
     () => filteredData.length > 0 && filteredData.every(isEdificioRow),
     [filteredData]
   );
-
-  // ¿La vista actual contiene SOLO TGS?
   const onlyTGS = useMemo(
     () => filteredData.length > 0 && filteredData.every(isTGSRow),
     [filteredData]
   );
 
-  // Base (común)
-  const baseColumns = useMemo(() => ([
-    { name: "Cliente", selector: (row) => row.cliente, sortable: true },
-    { name: "Evento", selector: (row) => row.evento || row["evento-edificio"], sortable: true },
-    { name: "Ubicación", selector: (row) => row.ubicacion || row.edificio },
-    { name: "Fecha", selector: (row) => row.fecha || row.fechaHoraEnvio, sortable: true },
-    { name: "Observación", selector: (row) => getObservacion(row) || "-", wrap: true },
-  ]), []);
+  // ===== Columnas (con tamaños/ellipsis/tooltip) =====
+  const baseColumns = useMemo(
+    () => [
+      {
+        name: "Cliente",
+        selector: (row) => row.cliente,
+        sortable: true,
+        minWidth: "160px",
+        cell: (row) => <span className="dt-cell-strong" title={row.cliente}>{row.cliente || "—"}</span>,
+      },
+      {
+        name: "Evento",
+        selector: (row) => getEventoTitulo(row),
+        sortable: true,
+        grow: 2,
+        wrap: true,
+        cell: (row) => (
+          <span className="dt-cell-evento" title={getEventoTitulo(row)}>
+            {getEventoTitulo(row)}
+          </span>
+        ),
+      },
+      {
+        name: "Ubicación",
+        selector: (row) => row.ubicacion || row.edificio,
+        minWidth: "180px",
+        cell: (row) => <Ellipsis text={getUbicacionDisplay(row)} />,
+      },
+      {
+        name: "Fecha",
+        selector: (row) => row.fecha || row.fechaHoraEnvio,
+        sortable: true,
+        minWidth: "170px",
+        right: true,
+        cell: (row) => <span className="dt-cell-mono">{formatDate(row)}</span>,
+      },
+      {
+        name: "Observación",
+        selector: (row) => getObservacion(row),
+        grow: 2,
+        minWidth: "240px",
+        cell: (row) => <Ellipsis text={getObservacion(row)} />,
+      },
+    ],
+    []
+  );
 
-  // Extras (solo EDIFICIO)
-  const edificioOnlyColumns = useMemo(() => ([
-    { name: "Razones", selector: (row) => getRazones(row) || "-", wrap: true },
-    { name: "Resolución", selector: (row) => getResolucion(row) || "-", wrap: true },
-    { name: "Respuesta Residente", selector: (row) => getRespuestaResidente(row) || "-", wrap: true },
-  ]), []);
+  const edificioOnlyColumns = useMemo(
+    () => [
+      { name: "Razones", selector: (row) => getRazones(row) || "-", wrap: true, minWidth: "220px", cell: (row) => <Ellipsis text={getRazones(row)} /> },
+      { name: "Resolución", selector: (row) => getResolucion(row) || "-", wrap: true, minWidth: "220px", cell: (row) => <Ellipsis text={getResolucion(row)} /> },
+      { name: "Respuesta Residente", selector: (row) => getRespuestaResidente(row) || "-", wrap: true, minWidth: "220px", cell: (row) => <Ellipsis text={getRespuestaResidente(row)} /> },
+    ],
+    []
+  );
 
-  // Extra (solo TGS)
-  const tgsOnlyColumns = useMemo(() => ([
-    { name: "Proveedor", selector: (row) => getProveedorTGS(row) || "-", wrap: true },
-  ]), []);
+  const tgsOnlyColumns = useMemo(
+    () => [
+      { name: "Proveedor", selector: (row) => getProveedorTGS(row) || "-", wrap: true, minWidth: "180px", cell: (row) => <Ellipsis text={getProveedorTGS(row)} /> },
+    ],
+    []
+  );
 
   const columns = useMemo(() => {
     const cols = [...baseColumns];
-
-    if (onlyEdificio) {
-      cols.push(...edificioOnlyColumns);
-    } else if (onlyTGS) {
-      cols.push(...tgsOnlyColumns);
-    }
-
-    // Acciones al final (Resolv/Resp solo si la fila es de edificio)
+    if (onlyEdificio) cols.push(...edificioOnlyColumns);
+    else if (onlyTGS) cols.push(...tgsOnlyColumns);
     cols.push({
       name: "Acciones",
+      minWidth: "230px",
       cell: (row) => (
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => handleEditObservation(row)}
-            className="bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 transition"
-          >
-            Obs
-          </button>
-
-          {/* 🕒 NUEVO botón de fecha/hora */}
-          <button
-            onClick={() => handleEditFechaHora(row)}
-            className="bg-violet-600 text-white px-3 py-1 rounded-lg hover:bg-violet-700 transition"
-            title="Editar fecha y hora"
-          >
-            Fecha
-          </button>
-
+        <div className="dt-actions">
+          <button onClick={() => handleEditObservation(row)} className="btn -indigo">Obs</button>
+          <button onClick={() => handleEditFechaHora(row)} className="btn -violet" title="Editar fecha y hora">Fecha</button>
           {isEdificioRow(row) && (
             <>
-              <button
-                onClick={() => handleEditResolucion(row)}
-                className="bg-emerald-600 text-white px-3 py-1 rounded-lg hover:bg-emerald-700 transition"
-              >
-                Resolv
-              </button>
-              <button
-                onClick={() => handleEditRespuesta(row)}
-                className="bg-sky-600 text-white px-3 py-1 rounded-lg hover:bg-sky-700 transition"
-              >
-                Resp
-              </button>
+              <button onClick={() => handleEditResolucion(row)} className="btn -emerald">Resolv</button>
+              <button onClick={() => handleEditRespuesta(row)} className="btn -sky">Resp</button>
             </>
           )}
-
-          <button
-            onClick={() => handleEditUbicacion(row)}
-            className="bg-amber-600 text-white px-3 py-1 rounded-lg hover:bg-amber-700 transition"
-          >
-            Ubic
-          </button>
-          <button
-            onClick={() => handleDeleteEvent(row)}
-            className="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition"
-          >
-            🗑
-          </button>
+          <button onClick={() => handleEditUbicacion(row)} className="btn -amber">Ubic</button>
+          <button onClick={() => handleDeleteEvent(row)} className="btn -red">🗑</button>
         </div>
       ),
       ignoreRowClick: true,
     });
-
     return cols;
   }, [baseColumns, edificioOnlyColumns, tgsOnlyColumns, onlyEdificio, onlyTGS]);
 
-  // ======================
-  // Estilos tabla
-  // ======================
+  // ===== Estilos tabla =====
   const customStyles = {
+    table: {
+      style: { border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden" },
+    },
+    headRow: { style: { minHeight: "48px", backgroundColor: "#f8fafc" } },
     headCells: {
       style: {
-        fontWeight: "700",
-        fontSize: "14px",
-        backgroundColor: "#f9fafb",
-        color: "#111827",
-        borderBottom: "1px solid #e5e7eb",
+        fontWeight: 800, fontSize: "13.5px", letterSpacing: ".02em", textTransform: "uppercase",
+        color: "#0f172a", paddingTop: "10px", paddingBottom: "10px", borderBottom: "1px solid #e5e7eb",
       },
     },
-    rows: {
-      style: {
-        "&:hover": { backgroundColor: "#f3f4f6", transition: "0.2s" },
-      },
-    },
+    cells: { style: { fontSize: "13.5px", color: "#111827", lineHeight: 1.35, paddingTop: "10px", paddingBottom: "10px" } },
+    rows: { style: { minHeight: "52px", "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" } } },
+    pagination: { style: { borderTop: "1px solid #e5e7eb" } },
   };
 
-  // ======================
-  // Render
-  // ======================
   return (
-    <div className="bg-white shadow-lg rounded-2xl p-6 mb-6 border border-gray-200">
-      <h2 className="text-lg font-semibold text-gray-700 mb-4">Filtros de búsqueda</h2>
-
-      <div className="filters-container">
-        <div className="icon-wrapper">
-          <FiSearch />
-          <input
-            type="text"
-            placeholder="Buscar cliente, evento, observación, resolución, respuesta, razones, proveedor..."
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-          />
-        </div>
-
-        <div className="icon-wrapper">
-          <FiCalendar />
-          <input
-            type="date"
-            value={fechaInicio}
-            onChange={(e) => setFechaInicio(e.target.value)}
-          />
-        </div>
-
-        <div className="icon-wrapper">
-          <FiCalendar />
-          <input
-            type="date"
-            value={fechaFin}
-            onChange={(e) => setFechaFin(e.target.value)}
-          />
-        </div>
-
-        <div className="reset-wrapper">
-          <button onClick={() => { setFilterText(""); setFechaInicio(""); setFechaFin(""); }}>
-            <FiRotateCcw /> Reset
-          </button>
-        </div>
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={filteredData}
-        pagination
-        highlightOnHover
-        responsive
-        striped
-        theme="g3tTheme"
-        customStyles={customStyles}
-        paginationPerPage={50}
-        paginationRowsPerPageOptions={[10, 20, 50, 100, 150]}
-        fixedHeader
-        fixedHeaderScrollHeight="600px"
-      />
-    </div>
+    <DataTable
+      columns={columns}
+      data={filteredData}
+      theme="g3tTheme"
+      customStyles={customStyles}
+      striped
+      highlightOnHover
+      responsive
+      pagination
+      paginationPerPage={50}
+      paginationRowsPerPageOptions={[10, 20, 50, 100, 150]}
+      fixedHeader
+      fixedHeaderScrollHeight="600px"
+      persistTableHead
+      noDataComponent={<div style={{ padding: 16 }}>Sin eventos para los filtros seleccionados.</div>}
+      expandableRows
+      expandableRowsComponent={ExpandedRow}
+      expandOnRowClicked
+      expandableRowsHideExpander
+    />
   );
 }

@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import Swal from "sweetalert2";
 import html2canvas from "html2canvas";
 
-// ===== Estilos PDF =====
+/* ===================== Estilos PDF ===================== */
 const styles = StyleSheet.create({
   page: { backgroundColor: "#fff", padding: 20, fontSize: 9, fontFamily: "Helvetica" },
   header: { textAlign: "center", marginBottom: 12, borderBottom: "2px solid #2563eb", paddingBottom: 6 },
@@ -18,12 +18,15 @@ const styles = StyleSheet.create({
   footer: { position: "absolute", bottom: 10, left: 20, right: 20, textAlign: "center", fontSize: 8, color: "#666" }
 });
 
-// ===== Helpers =====
+/* ===================== Helpers ===================== */
 const chunk = (arr, size) => { const out=[]; for (let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size)); return out; };
 const safe = (v) => (v === undefined || v === null ? "" : String(v));
 
 const getClienteLower = (row) =>
   (row?.cliente || (row?.edificio ? "Edificios" : "otros")).toString().toLowerCase();
+
+const getEventoTitulo = (row) => row?.evento ?? row?.["evento-edificio"] ?? "";
+const getUbicacionDisplay = (row) => row?.ubicacion || row?.edificio || "";
 
 const getObservacion = (row) =>
   row?.observacion ??
@@ -40,9 +43,7 @@ const getResolucion = (row) =>
   "";
 
 const getRespuestaResidente = (row) =>
-  row?.["respuesta-residente"] ??
-  row?.respuesta ??
-  "";
+  row?.["respuesta-residente"] ?? row?.respuesta ?? "";
 
 const getRazones = (row) =>
   row?.["razones-pma"] ??
@@ -58,22 +59,22 @@ const isEdificioRow = (row) => {
   return getClienteLower(row) === "edificios";
 };
 
-// === Captura DOM a imagen base64 con alta resolución ===
-async function captureAsImage(selector, opts = {}) {
-  const {
-    scale = Math.max(3, (window.devicePixelRatio || 1) * 2),
-    format = "png",
-    quality = 0.92,
-    bg = "#ffffff",
-  } = opts;
+const formatDateValue = (row) => {
+  const v =
+    row?.fechaObj ||
+    (row?.fecha instanceof Date ? row.fecha : new Date(row?.fecha ?? row?.fechaHoraEnvio));
+  if (!(v instanceof Date) || isNaN(v)) return "";
+  return v.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+};
 
+/* ====== Captura DOM a imagen (para KPI/gráficos) ====== */
+async function captureAsImage(selector, opts = {}) {
+  const { scale = Math.max(3, (window.devicePixelRatio || 1) * 2), format = "png", quality = 0.92, bg = "#ffffff" } = opts;
   const originalEl = document.querySelector(selector);
   if (!originalEl) return null;
-
   originalEl.scrollIntoView({ behavior: "auto", block: "center", inline: "center" });
   await (document.fonts?.ready ?? Promise.resolve());
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-
   const snapWith = async (useFO) => {
     const cs = getComputedStyle(originalEl);
     const widthPx = cs.width;
@@ -82,8 +83,7 @@ async function captureAsImage(selector, opts = {}) {
       windowWidth: document.documentElement.scrollWidth,
       windowHeight: document.documentElement.scrollHeight,
       onclone: (doc) => {
-        const el = doc.querySelector(selector);
-        if (!el) return;
+        const el = doc.querySelector(selector); if (!el) return;
         el.style.opacity = "1"; el.style.transform = "none"; el.style.filter = "none";
         el.style.position = "static"; el.style.overflow = "visible"; el.style.contain = "none";
         el.style.width = widthPx; el.style.maxWidth = "none"; el.style.background = bg;
@@ -91,42 +91,25 @@ async function captureAsImage(selector, opts = {}) {
     });
     return canvas;
   };
-
   const toData = (canvas) => ({
     src: (opts.format === "jpeg")
       ? canvas.toDataURL("image/jpeg", opts.quality ?? 0.92)
       : canvas.toDataURL("image/png"),
-    w: canvas.width,
-    h: canvas.height
+    w: canvas.width, h: canvas.height
   });
-
   try { const c1 = await snapWith(false); if (c1?.width > 50 && c1?.height > 50) return toData(c1); } catch {}
   try { const c2 = await snapWith(true);  if (c2?.width > 50 && c2?.height > 50) return toData(c2); } catch {}
-
-  // Fallback
-  const portal = document.createElement("div");
-  portal.style.cssText = "position:fixed;left:-10000px;top:0;background:#fff;display:block;z-index:-1;";
-  const clone = originalEl.cloneNode(true);
-  clone.style.width = getComputedStyle(originalEl).width;
-  clone.style.transform = "none"; clone.style.opacity = "1"; clone.style.filter = "none"; clone.style.overflow = "visible";
-  portal.appendChild(clone); document.body.appendChild(portal);
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-  try {
-    const canvas = await html2canvas(clone, { scale, backgroundColor: bg, useCORS: true, allowTaint: true, foreignObjectRendering: false });
-    return canvas ? toData(canvas) : null;
-  } finally { document.body.removeChild(portal); }
+  return null;
 }
-
 async function captureAll(selectors, opts = {}) {
   const out = [];
   for (const sel of selectors) {
-    try { const img = await captureAsImage(sel, opts); if (img) out.push(img); }
-    catch (e) { console.error("captureAll error en", sel, e); }
+    try { const img = await captureAsImage(sel, opts); if (img) out.push(img); } catch {}
   }
   return out;
 }
 
-// ===== Utils de layout =====
+/* ===================== Utils layout ===================== */
 const fit = (img, maxW = 520, maxH = 300) => {
   const r = img.h / img.w;
   let w = maxW, h = w * r;
@@ -134,27 +117,27 @@ const fit = (img, maxW = 520, maxH = 300) => {
   return { w, h };
 };
 
-// ===== Documento PDF =====
+/* ===================== Documento PDF ===================== */
 const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
   const onlyEdificio = eventos.length > 0 && eventos.every(isEdificioRow);
 
   const totalEventos = eventos.length;
   const eventoFrecuente = eventos.reduce((acc, e) => {
-    const k = e.evento || "Sin Evento"; acc[k] = (acc[k] || 0) + 1; return acc;
+    const k = getEventoTitulo(e) || "Sin Evento"; acc[k] = (acc[k] || 0) + 1; return acc;
   }, {});
   const topEvento = Object.entries(eventoFrecuente).sort((a,b)=>b[1]-a[1])[0] || ["Sin datos", 0];
 
   // Contexto
   const clientes = Array.from(new Set(eventos.map(e => (e.cliente || "").trim()).filter(Boolean)));
-  const ubicaciones = Array.from(new Set(eventos.map(e => (e.ubicacion || e.edificio || "").trim()).filter(Boolean)));
+  const ubicaciones = Array.from(new Set(eventos.map(e => (getUbicacionDisplay(e) || "").trim()).filter(Boolean)));
   const listify = (arr, max = 4) => !arr.length ? "—" : (arr.length <= max ? arr.join(", ") : `${arr.slice(0,max).join(", ")} (+${arr.length-max} más)`);
 
-  // Tabla (dinámica)
+  // 🚀 FILAS: usan los mismos helpers que la tabla
   const baseRow = (e) => ({
     cliente: safe(e.cliente),
-    evento: safe(e.evento),
-    ubicacion: safe(e.ubicacion || e.edificio),
-    fecha: safe(e.fecha || e.fechaHoraEnvio || ""),
+    evento: safe(getEventoTitulo(e)),
+    ubicacion: safe(getUbicacionDisplay(e)),
+    fecha: safe(formatDateValue(e)),
     observacion: safe(getObservacion(e)),
   });
   const extraRow = (e) => ({
@@ -164,11 +147,9 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
   });
 
   const rows = eventos.map((e) => onlyEdificio ? { ...baseRow(e), ...extraRow(e) } : baseRow(e));
-  const tablePages = chunk(rows, 30);
 
   const chartsChunks = chunk(capturedImages.charts || [], 2);
   const joinFirstPage = (observaciones?.trim().length || 0) <= 280;
-
   const fitFirst = (img) => fit(img, 520, joinFirstPage ? 220 : 280);
 
   return (
@@ -182,7 +163,6 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
 
         {/* CONTEXTO */}
         <View style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: 8, marginTop: 6, marginBottom: 8, backgroundColor: "#f9fafb" }}>
-          <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4, color: "#111827" }}>Contexto</Text>
           <Text style={{ fontSize: 9 }}><Text style={{ fontWeight: "bold" }}>Cliente(s): </Text>{listify(clientes)}</Text>
           <Text style={{ fontSize: 9 }}><Text style={{ fontWeight: "bold" }}>Edificio(s) / Ubicación(es): </Text>{listify(ubicaciones, 6)}</Text>
         </View>
@@ -192,7 +172,6 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
           {[
             { label: "Total Eventos", value: totalEventos },
             { label: "Evento más frecuente", value: safe(topEvento[0]) },
-            { label: "Cantidad de PMA", value: safe(topEvento[1]) },
           ].map((k, i) => (
             <View key={i} style={{ flexGrow: 1, border: "1px solid #ddd", borderRadius: 6, padding: 8, textAlign: "center" }}>
               <Text style={{ fontSize: 9, marginBottom: 2 }}>{k.label}</Text>
@@ -217,18 +196,17 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
           </>
         )}
 
-        {/* Si hay espacio, subimos Edificios + PMA a esta página */}
         {joinFirstPage && (
           <>
             {capturedImages.edificio && (
               <>
-                <Text style={styles.sectionTitle}>Estadística Edificios</Text>
+                <Text style={styles.sectionTitle}>Estadística</Text>
                 {(() => { const s = fitFirst(capturedImages.edificio); return <Image src={capturedImages.edificio.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
               </>
             )}
             {capturedImages.pma && (
               <>
-                <Text style={styles.sectionTitle}>Analítica Detallada (PMA)</Text>
+                <Text style={styles.sectionTitle}>Analítica Detallada</Text>
                 {(() => { const s = fitFirst(capturedImages.pma); return <Image src={capturedImages.pma.src} style={{ width: s.w, height: s.h, alignSelf: "center", marginBottom: 8 }} />; })()}
               </>
             )}
@@ -257,7 +235,7 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
         </Page>
       )}
 
-      {/* Gráficos (2 por página) */}
+      {/* ===== Gráficos (2 por página) ===== */}
       {(capturedImages.charts || []).length > 0 &&
         chunk(capturedImages.charts, 2).map((chunkImgs, idx) => (
           <Page key={`charts-${idx}`} size="A4" style={styles.page}>
@@ -271,12 +249,11 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
         ))
       }
 
-      {/* TABLAS (dinámicas) */}
+      {/* ===== TABLAS ===== */}
       {chunk(rows, 30).map((pageRows, idx) => (
         <Page key={idx} size="A4" style={styles.page}>
           <Text style={styles.sectionTitle}>Tabla de eventos (pág. {idx + 1})</Text>
 
-          {/* Header dinámico */}
           <View style={styles.tableHeader}>
             <Text style={[styles.col, { flex: 0.7 }]}>Cliente</Text>
             <Text style={[styles.col, { flex: 1.1 }]}>Evento</Text>
@@ -292,7 +269,6 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
             )}
           </View>
 
-          {/* Rows */}
           {pageRows.map((r, i) => (
             <View key={i} style={styles.tableRow}>
               <Text style={[styles.col, { flex: 0.7 }]}>{r.cliente}</Text>
@@ -317,10 +293,9 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
   );
 };
 
-// ===== Excel (dinámico igual que PDF) =====
+/* ===================== Excel (mismo dataset) ===================== */
 const generateExcel = (eventos) => {
   if (!eventos?.length) return Swal.fire("Aviso", "No hay datos para exportar.", "warning");
-
   const onlyEdificio = eventos.length > 0 && eventos.every(isEdificioRow);
 
   const headerBase = ["Cliente","Evento","Ubicación","Fecha","Observación"];
@@ -329,12 +304,11 @@ const generateExcel = (eventos) => {
 
   const rowBase = (e) => ([
     e.cliente || "",
-    e.evento || "",
-    e.ubicacion || e.edificio || "",
-    e.fecha || e.fechaHoraEnvio || "",
+    getEventoTitulo(e) || "",
+    getUbicacionDisplay(e) || "",
+    formatDateValue(e) || "",
     getObservacion(e) || "",
   ]);
-
   const rowExtra = (e) => ([
     getRazones(e) || "",
     getResolucion(e) || "",
@@ -360,17 +334,13 @@ const generateExcel = (eventos) => {
   XLSX.writeFile(wb, `REPORTE_MONITOREO_${Date.now()}.xlsx`);
 };
 
-// ===== Componente exportador =====
-export default function ExportPDFExcel({ eventos, filteredEventos, selectedEventos }) {
+/* ===================== Componente exportador ===================== */
+// 👉 Usa EXACTAMENTE el array que recibís: <ExportPDF eventos={eventosFiltrados} />
+export default function ExportPDF({ eventos }) {
   const [capturedImages, setCapturedImages] = useState({ kpi:null, edificio:null, pma:null, charts:[] });
 
-  // 👇 Dataset definitivo: seleccionados -> filtrados -> global -> todos
-  const dataset = useMemo(() => {
-    if (Array.isArray(selectedEventos) && selectedEventos.length) return selectedEventos;
-    if (Array.isArray(filteredEventos) && filteredEventos.length) return filteredEventos;
-    if (Array.isArray(window.__FILTERED_EVENTOS__) && window.__FILTERED_EVENTOS__.length) return window.__FILTERED_EVENTOS__;
-    return Array.isArray(eventos) ? eventos : [];
-  }, [eventos, filteredEventos, selectedEventos]);
+  // Dataset = eventos filtrados que te pasa el padre (sin fallbacks)
+  const dataset = useMemo(() => (Array.isArray(eventos) ? eventos : []), [eventos]);
 
   const askObservaciones = useCallback(async () => {
     const { value, isConfirmed } = await Swal.fire({
@@ -391,10 +361,7 @@ export default function ExportPDFExcel({ eventos, filteredEventos, selectedEvent
     const kpi = await captureAsImage("#kpi-cards", { scale: 3 });
     const edificio = await captureAsImage("#edificio-stats-capture", { scale: 3 });
     const pma = await captureAsImage("#analitica-pma-capture", { scale: 3 });
-    const charts = await captureAll(
-      ["#charts-capture", "#mini-charts-capture", "#line-analytics-capture"],
-      { scale: 4, format: "jpeg", quality: 0.9 }
-    );
+    const charts = await captureAll(["#charts-capture", "#mini-charts-capture", "#line-analytics-capture"], { scale: 4, format: "jpeg", quality: 0.9 });
     const imgs = { kpi, edificio, pma, charts };
     setCapturedImages(imgs);
     return imgs;
@@ -406,7 +373,6 @@ export default function ExportPDFExcel({ eventos, filteredEventos, selectedEvent
         await Swal.fire("Aviso", "No hay datos para exportar.", "warning");
         return;
       }
-
       const observaciones = await askObservaciones();
       const imgs = await doCapture();
 
@@ -414,7 +380,7 @@ export default function ExportPDFExcel({ eventos, filteredEventos, selectedEvent
       const blob = await pdf(doc).toBlob();
       saveAs(blob, `REPORTE_MONITOREO_${Date.now()}.pdf`);
 
-      generateExcel(dataset);
+      generateExcel(dataset); // Excel también usa exactamente lo filtrado
     } catch (err) {
       console.error("Export error:", err);
       Swal.fire("Error", String(err?.message || err || "Fallo exportando el PDF/Excel."), "error");
