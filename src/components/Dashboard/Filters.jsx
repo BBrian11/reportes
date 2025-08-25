@@ -1,27 +1,15 @@
-// src/components/Filters.jsx
 import React from "react";
 import "../../styles/filters.css";
 
-// 👇 toma el nombre del evento, sin cambiar tu UI
-const getEventoTitulo = (row) => row?.evento ?? row?.["evento-edificio"] ?? "";
-
 export default function Filters({ filtros, setFiltros, eventos }) {
-  // Filtrar dinámicamente por cliente (igual que antes)
+  // Filtrar dinámicamente
   const eventosPorCliente = filtros.cliente
     ? eventos.filter((e) => e.cliente === filtros.cliente)
     : eventos;
 
-  const clientes = [...new Set(eventos.map((e) => e.cliente).filter(Boolean))];
-
-  // 👇 eventos desde evento || evento-edificio
-  const eventosUnicos = [
-    ...new Set(eventosPorCliente.map(getEventoTitulo).filter(Boolean)),
-  ];
-
-  // 👇 ubicación desde ubicacion || edificio
-  const ubicaciones = [
-    ...new Set(eventosPorCliente.map((e) => e.ubicacion || e.edificio).filter(Boolean)),
-  ];
+  const clientes = [...new Set(eventos.map((e) => e.cliente))];
+  const eventosUnicos = [...new Set(eventosPorCliente.map((e) => e.evento))];
+  const ubicaciones = [...new Set(eventosPorCliente.map((e) => e.ubicacion))];
 
   return (
     <div className="filters-box">
@@ -37,28 +25,32 @@ export default function Filters({ filtros, setFiltros, eventos }) {
         >
           <option value="">Todos</option>
           {clientes.map((c, idx) => (
-            <option key={idx} value={c}>{c}</option>
+            <option key={idx} value={c}>
+              {c}
+            </option>
           ))}
         </select>
       </div>
 
-      {/* Evento (igual UI; lista más robusta) */}
+      {/* Evento */}
       <div className="filter-item">
         <label className="filter-label">Evento</label>
         <select
           className="filter-select"
           value={filtros.evento}
           onChange={(e) => setFiltros({ ...filtros, evento: e.target.value })}
-          disabled={!filtros.cliente}  // si querés que funcione global, quitá este disabled
+          disabled={!filtros.cliente}
         >
           <option value="">Todos</option>
           {eventosUnicos.map((ev, idx) => (
-            <option key={idx} value={ev}>{ev}</option>
+            <option key={idx} value={ev}>
+              {ev}
+            </option>
           ))}
         </select>
       </div>
 
-      {/* Ubicación (ya lo tenías) */}
+      {/* Ubicación */}
       <div className="filter-item">
         <label className="filter-label">Ubicación</label>
         <select
@@ -69,12 +61,14 @@ export default function Filters({ filtros, setFiltros, eventos }) {
         >
           <option value="">Todas</option>
           {ubicaciones.map((u, idx) => (
-            <option key={idx} value={u}>{u}</option>
+            <option key={idx} value={u}>
+              {u}
+            </option>
           ))}
         </select>
       </div>
 
-      {/* Fechas (sin cambios) */}
+      {/* Fechas */}
       <div className="filter-item">
         <label className="filter-label">Desde</label>
         <input
