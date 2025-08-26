@@ -396,3 +396,21 @@
 /* Fecha en monospace y sin wrap */
 .dt-cell-mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 .dt-nowrap { white-space: nowrap; }
+/* Multilínea legible y sin invasiones */
+.cell-multiline{
+  display:block;
+  min-width:0;
+  white-space:normal;
+  word-break:break-word;
+  overflow-wrap:anywhere;
+}
+
+/* Fecha compacta */
+.dt-nowrap{ white-space:nowrap; }
+
+/* Evitar que columnas flex se estiren raro */
+.rdt_TableCell{ min-width:0; }
+
+/* Acciones compactas y que puedan bajar de línea si no entra */
+.dt-actions{ display:flex; flex-wrap:wrap; gap:6px; }
+.dt-actions .btn{ flex:0 0 auto; white-space:nowrap; padding:4px 8px; font-size:12px; line-height:1; }

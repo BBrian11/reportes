@@ -73,11 +73,11 @@ const formatDate = (row) => {
 };
 
 // Ellipsis + tooltip
-const Ellipsis = ({ text }) => (
-  <span className="cell-ellipsis" title={text || ""}>
-    {text || "—"}
-  </span>
+// ⚠️ QUITA Ellipsis de uso en columnas textuales
+const Multi = ({ text }) => (
+  <span className="cell-multiline">{text || "—"}</span>
 );
+
 
 // ===== Panel expandible =====
 const ExpandedRow = ({ data }) => (
@@ -364,67 +364,66 @@ export default function EventsTable({
     [filteredData]
   );
 
-  // ===== Columnas (con tamaños/ellipsis/tooltip) =====
-const baseColumns = useMemo(() => [
-  { 
-    name: "Cliente",
-    selector: (row) => row.cliente,
-    sortable: true,
-    minWidth: "140px",
-    cell: (row) => <Ellipsis text={row.cliente || "—"} />,
-    // clave:
-    style: { minWidth: 0 },
-  },
-  {
-    name: "Evento",
-    selector: (row) => getEventoTitulo(row),
-    sortable: true,
-    grow: 2,
-    // evita wraps raros del componente:
-    cell: (row) => <Ellipsis text={getEventoTitulo(row)} />,
-    style: { minWidth: 0 },
-  },
-  {
-    name: "Ubicación",
-    selector: (row) => row.ubicacion || row.edificio,
-    minWidth: "160px",
-    cell: (row) => <Ellipsis text={getUbicacionDisplay(row)} />,
-    style: { minWidth: 0 },
-  },
-  {
-    name: "Fecha",
-    selector: (row) => row.fecha || row.fechaHoraEnvio,
-    sortable: true,
-    minWidth: "160px",
-    right: true,
-    cell: (row) => <span className="dt-cell-mono">{formatDate(row)}</span>,
-  },
-  {
-    name: "Observación",
-    selector: (row) => getObservacion(row),
-    grow: 2,
-    minWidth: "220px",
-    cell: (row) => <Ellipsis text={getObservacion(row)} />,
-    style: { minWidth: 0 },
-  },
-], []);
-
-
-  const edificioOnlyColumns = useMemo(
-    () => [
-      { name: "Razones", selector: (row) => getRazones(row) || "-", wrap: true, minWidth: "220px", cell: (row) => <Ellipsis text={getRazones(row)} /> },
-      { name: "Resolución", selector: (row) => getResolucion(row) || "-", wrap: true, minWidth: "220px", cell: (row) => <Ellipsis text={getResolucion(row)} /> },
-      { name: "Respuesta Residente", selector: (row) => getRespuestaResidente(row) || "-", wrap: true, minWidth: "220px", cell: (row) => <Ellipsis text={getRespuestaResidente(row)} /> },
-    ],
-    []
-  );
-
-  const tgsOnlyColumns = useMemo(
-    () => [
-      { name: "Proveedor", selector: (row) => getProveedorTGS(row) || "-", wrap: true, minWidth: "180px", cell: (row) => <Ellipsis text={getProveedorTGS(row)} /> },
-    ],
-    []
-  );
+  const baseColumns = useMemo(() => [
+    {
+      name: "Cliente",
+      selector: (row) => row.cliente,
+      sortable: true,
+      minWidth: "120px",
+      wrap: true,
+      cell: (row) => <Multi text={row.cliente} />,
+      style: { minWidth: 0 },
+    },
+    {
+      name: "Evento",
+      selector: (row) => getEventoTitulo(row),
+      sortable: true,
+      grow: 2,
+      minWidth: "220px",
+      wrap: true,
+      cell: (row) => <Multi text={getEventoTitulo(row)} />,
+      style: { minWidth: 0 },
+    },
+    {
+      name: "Ubicación",
+      selector: (row) => row.ubicacion || row.edificio,
+      minWidth: "160px",
+      wrap: true,
+      cell: (row) => <Multi text={getUbicacionDisplay(row)} />,
+      // clave para que NO invada Fecha
+      style: { minWidth: 0, whiteSpace: "normal" },
+    },
+    {
+      name: "Fecha",
+      selector: (row) => row.fecha || row.fechaHoraEnvio,
+      sortable: true,
+      minWidth: "150px",
+      right: true,
+      // Fecha siempre en una sola línea
+      cell: (row) => <span className="dt-cell-mono dt-nowrap">{formatDate(row)}</span>,
+      style: { minWidth: 0, whiteSpace: "nowrap" },
+    },
+    {
+      name: "Observación",
+      selector: (row) => getObservacion(row),
+      grow: 2,
+      minWidth: "240px",
+      wrap: true,
+      cell: (row) => <Multi text={getObservacion(row)} />,
+      style: { minWidth: 0 },
+    },
+  ], []);
+  
+  const edificioOnlyColumns = useMemo(() => [
+    { name: "Razones", selector: (r) => getRazones(r) || "-",    minWidth: "220px", wrap: true, cell: (r) => <Multi text={getRazones(r)} />,    style:{ minWidth:0 } },
+    { name: "Resolución", selector: (r) => getResolucion(r) || "-", minWidth: "220px", wrap: true, cell: (r) => <Multi text={getResolucion(r)} />, style:{ minWidth:0 } },
+    { name: "Respuesta Residente", selector: (r) => getRespuestaResidente(r) || "-", minWidth: "220px", wrap: true, cell: (r) => <Multi text={getRespuestaResidente(r)} />, style:{ minWidth:0 } },
+  ], []);
+  
+  const tgsOnlyColumns = useMemo(() => [
+    { name: "Proveedor", selector: (r) => getProveedorTGS(r) || "-", minWidth: "180px", wrap: true, cell: (r) => <Multi text={getProveedorTGS(r)} />, style:{ minWidth:0 } },
+  ], []);
+  
 
   const columns = useMemo(() => {
     const cols = [...baseColumns];
@@ -455,46 +454,53 @@ const baseColumns = useMemo(() => [
   // ===== Estilos tabla =====
   const customStyles = {
     table: { style: { border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden" } },
-    headRow: { style: { minHeight: "48px", backgroundColor: "#f8fafc" } },
-    headCells: { style: { fontWeight: 800, fontSize: "13.5px", letterSpacing: ".02em", textTransform: "uppercase", color: "#0f172a", paddingTop: "10px", paddingBottom: "10px", borderBottom: "1px solid #e5e7eb" } },
+    headRow: { style: { minHeight: "44px", backgroundColor: "#f8fafc" } },
+    headCells: { style: { fontWeight: 800, fontSize: "13.5px", letterSpacing: ".02em", textTransform: "uppercase", color: "#0f172a", paddingTop: "8px", paddingBottom: "8px", borderBottom: "1px solid #e5e7eb" } },
     cells: {
       style: {
-        // 🔧 claves para que NO se superponga nada
-        minWidth: 0,                 // <— esto permite que el flex hijo se encoja
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
+        minWidth: 0,
+        whiteSpace: "normal",     // ← permite multiple líneas
+        overflow: "visible",
+        alignItems: "flex-start", // texto pega arriba
         fontSize: "13.5px",
         color: "#111827",
         lineHeight: 1.35,
-        paddingTop: "10px",
-        paddingBottom: "10px",
+        paddingTop: "6px",
+        paddingBottom: "6px",
       },
     },
-    rows: { style: { minHeight: "52px", "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" } } },
+    rows: {
+      style: {
+        minHeight: "auto",        // ← alto según contenido
+        "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" },
+      },
+    },
     pagination: { style: { borderTop: "1px solid #e5e7eb" } },
   };
   
+  
   return (
     <DataTable
-      columns={columns}
-      data={filteredData}
-      theme="g3tTheme"
-      customStyles={customStyles}
-      striped
-      highlightOnHover
-      responsive
-      pagination
-      paginationPerPage={50}
-      paginationRowsPerPageOptions={[10, 20, 50, 100, 150]}
-      fixedHeader
-      fixedHeaderScrollHeight="600px"
-      persistTableHead
-      noDataComponent={<div style={{ padding: 16 }}>Sin eventos para los filtros seleccionados.</div>}
-      expandableRows
-      expandableRowsComponent={ExpandedRow}
-      expandOnRowClicked
-      expandableRowsHideExpander
-    />
+  columns={columns}
+  data={filteredData}
+  theme="g3tTheme"
+  customStyles={customStyles}
+  dense                  // ← más compacto
+  striped
+  highlightOnHover
+  responsive
+  pagination
+  paginationPerPage={50}
+  paginationRowsPerPageOptions={[10, 20, 50, 100, 150]}
+  fixedHeader
+  fixedHeaderScrollHeight="600px"
+  persistTableHead
+  noDataComponent={<div style={{ padding: 16 }}>Sin eventos para los filtros seleccionados.</div>}
+  expandableRows
+  expandableRowsComponent={ExpandedRow}
+  expandOnRowClicked
+  expandableRowsHideExpander
+/>
+
   );
 }
