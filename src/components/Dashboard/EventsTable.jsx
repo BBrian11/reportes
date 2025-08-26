@@ -370,9 +370,9 @@ export default function EventsTable({
       selector: (row) => row.cliente,
       sortable: true,
       minWidth: "120px",
-      wrap: true,
-      cell: (row) => <Multi text={row.cliente} />,
-      style: { minWidth: 0 },
+      wrap: true,                               // ← habilita multilínea en RDT
+      style: { minWidth: 0 },                   // ← permite encogerse
+      cell: (row) => <span style={cellTextStyle}>{row.cliente || "—"}</span>,
     },
     {
       name: "Evento",
@@ -381,17 +381,16 @@ export default function EventsTable({
       grow: 2,
       minWidth: "220px",
       wrap: true,
-      cell: (row) => <Multi text={getEventoTitulo(row)} />,
       style: { minWidth: 0 },
+      cell: (row) => <span style={cellTextStyle}>{getEventoTitulo(row) || "—"}</span>,
     },
     {
       name: "Ubicación",
       selector: (row) => row.ubicacion || row.edificio,
       minWidth: "160px",
       wrap: true,
-      cell: (row) => <Multi text={getUbicacionDisplay(row)} />,
-      // clave para que NO invada Fecha
-      style: { minWidth: 0, whiteSpace: "normal" },
+      style: { minWidth: 0, whiteSpace: "normal" }, // ← NO invade a Fecha
+      cell: (row) => <span style={cellTextStyle}>{getUbicacionDisplay(row) || "—"}</span>,
     },
     {
       name: "Fecha",
@@ -399,9 +398,8 @@ export default function EventsTable({
       sortable: true,
       minWidth: "150px",
       right: true,
-      // Fecha siempre en una sola línea
-      cell: (row) => <span className="dt-cell-mono dt-nowrap">{formatDate(row)}</span>,
-      style: { minWidth: 0, whiteSpace: "nowrap" },
+      style: { minWidth: 0, whiteSpace: "nowrap" }, // ← fija en 1 línea
+      cell: (row) => <span style={cellNowrapMono}>{formatDate(row)}</span>,
     },
     {
       name: "Observación",
@@ -409,98 +407,131 @@ export default function EventsTable({
       grow: 2,
       minWidth: "240px",
       wrap: true,
-      cell: (row) => <Multi text={getObservacion(row)} />,
       style: { minWidth: 0 },
+      cell: (row) => <span style={cellTextStyle}>{getObservacion(row) || "—"}</span>,
     },
   ], []);
   
+  
   const edificioOnlyColumns = useMemo(() => [
-    { name: "Razones", selector: (r) => getRazones(r) || "-",    minWidth: "220px", wrap: true, cell: (r) => <Multi text={getRazones(r)} />,    style:{ minWidth:0 } },
-    { name: "Resolución", selector: (r) => getResolucion(r) || "-", minWidth: "220px", wrap: true, cell: (r) => <Multi text={getResolucion(r)} />, style:{ minWidth:0 } },
-    { name: "Respuesta Residente", selector: (r) => getRespuestaResidente(r) || "-", minWidth: "220px", wrap: true, cell: (r) => <Multi text={getRespuestaResidente(r)} />, style:{ minWidth:0 } },
+    { name: "Razones", selector: (r) => getRazones(r) || "-",    minWidth: "220px", wrap: true, style:{ minWidth:0 }, cell: (r) => <span style={cellTextStyle}>{getRazones(r) || "—"}</span> },
+    { name: "Resolución", selector: (r) => getResolucion(r) || "-", minWidth: "220px", wrap: true, style:{ minWidth:0 }, cell: (r) => <span style={cellTextStyle}>{getResolucion(r) || "—"}</span> },
+    { name: "Respuesta Residente", selector: (r) => getRespuestaResidente(r) || "-", minWidth: "220px", wrap: true, style:{ minWidth:0 }, cell: (r) => <span style={cellTextStyle}>{getRespuestaResidente(r) || "—"}</span> },
   ], []);
   
   const tgsOnlyColumns = useMemo(() => [
-    { name: "Proveedor", selector: (r) => getProveedorTGS(r) || "-", minWidth: "180px", wrap: true, cell: (r) => <Multi text={getProveedorTGS(r)} />, style:{ minWidth:0 } },
+    { name: "Proveedor", selector: (r) => getProveedorTGS(r) || "-", minWidth: "180px", wrap: true, style:{ minWidth:0 }, cell: (r) => <span style={cellTextStyle}>{getProveedorTGS(r) || "—"}</span> },
   ], []);
   
-
   const columns = useMemo(() => {
     const cols = [...baseColumns];
     if (onlyEdificio) cols.push(...edificioOnlyColumns);
     else if (onlyTGS) cols.push(...tgsOnlyColumns);
+  
     cols.push({
       name: "Acciones",
-      minWidth: "230px",
+      minWidth: "200px",
+      style: { flex: "0 0 auto" }, // ← evita que se expanda/encoja mal
+      ignoreRowClick: true,
       cell: (row) => (
-        <div className="dt-actions">
-          <button onClick={() => handleEditObservation(row)} className="btn -indigo">Obs</button>
-          <button onClick={() => handleEditFechaHora(row)} className="btn -violet" title="Editar fecha y hora">Fecha</button>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+          <button onClick={() => handleEditObservation(row)} style={{ padding:"4px 8px" }} className="btn -indigo">Obs</button>
+          <button onClick={() => handleEditFechaHora(row)}   style={{ padding:"4px 8px" }} className="btn -violet">Fecha</button>
           {isEdificioRow(row) && (
             <>
-              <button onClick={() => handleEditResolucion(row)} className="btn -emerald">Resolv</button>
-              <button onClick={() => handleEditRespuesta(row)} className="btn -sky">Resp</button>
+              <button onClick={() => handleEditResolucion(row)} style={{ padding:"4px 8px" }} className="btn -emerald">Resolv</button>
+              <button onClick={() => handleEditRespuesta(row)}  style={{ padding:"4px 8px" }} className="btn -sky">Resp</button>
             </>
           )}
-          <button onClick={() => handleEditUbicacion(row)} className="btn -amber">Ubic</button>
-          <button onClick={() => handleDeleteEvent(row)} className="btn -red">🗑</button>
+          <button onClick={() => handleEditUbicacion(row)} style={{ padding:"4px 8px" }} className="btn -amber">Ubic</button>
+          <button onClick={() => handleDeleteEvent(row)}  style={{ padding:"4px 8px" }} className="btn -red">🗑</button>
         </div>
       ),
-      ignoreRowClick: true,
     });
     return cols;
   }, [baseColumns, edificioOnlyColumns, tgsOnlyColumns, onlyEdificio, onlyTGS]);
-
-  // ===== Estilos tabla =====
-  const customStyles = {
-    table: { style: { border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden" } },
-    headRow: { style: { minHeight: "44px", backgroundColor: "#f8fafc" } },
-    headCells: { style: { fontWeight: 800, fontSize: "13.5px", letterSpacing: ".02em", textTransform: "uppercase", color: "#0f172a", paddingTop: "8px", paddingBottom: "8px", borderBottom: "1px solid #e5e7eb" } },
-    cells: {
-      style: {
-        minWidth: 0,
-        whiteSpace: "normal",     // ← permite multiple líneas
-        overflow: "visible",
-        alignItems: "flex-start", // texto pega arriba
-        fontSize: "13.5px",
-        color: "#111827",
-        lineHeight: 1.35,
-        paddingTop: "6px",
-        paddingBottom: "6px",
-      },
-    },
-    rows: {
-      style: {
-        minHeight: "auto",        // ← alto según contenido
-        "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" },
-      },
-    },
-    pagination: { style: { borderTop: "1px solid #e5e7eb" } },
-  };
   
+// 🔹 Texto multilínea legible (alto auto)
+const cellTextStyle = {
+  display: "block",
+  minWidth: 0,
+  whiteSpace: "normal",
+  overflow: "visible",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
+  lineHeight: 1.35,
+};
+
+// 🔹 Texto en una sola línea (Fecha)
+const cellNowrapMono = {
+  whiteSpace: "nowrap",
+  fontVariantNumeric: "tabular-nums",
+  fontFamily:
+    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  lineHeight: 1.2,
+};
+
+const customStyles = {
+  table: { style: { border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" } },
+  headRow: { style: { minHeight: 44, backgroundColor: "#f8fafc" } },
+  headCells: {
+    style: {
+      fontWeight: 800,
+      fontSize: 13.5,
+      letterSpacing: ".02em",
+      textTransform: "uppercase",
+      color: "#0f172a",
+      paddingTop: 8,
+      paddingBottom: 8,
+      borderBottom: "1px solid #e5e7eb",
+    },
+  },
+  cells: {
+    style: {
+      minWidth: 0,            // ← permite encogerse (clave)
+      whiteSpace: "normal",   // ← multilínea
+      overflow: "visible",
+      alignItems: "flex-start",
+      fontSize: 13.5,
+      color: "#111827",
+      lineHeight: 1.35,
+      paddingTop: 6,
+      paddingBottom: 6,
+    },
+  },
+  rows: {
+    style: {
+      minHeight: "unset",     // ← alto según contenido
+      "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" },
+    },
+  },
+  pagination: { style: { borderTop: "1px solid #e5e7eb" } },
+};
+
   
   return (
     <DataTable
-  columns={columns}
-  data={filteredData}
-  theme="g3tTheme"
-  customStyles={customStyles}
-  dense                  // ← más compacto
-  striped
-  highlightOnHover
-  responsive
-  pagination
-  paginationPerPage={50}
-  paginationRowsPerPageOptions={[10, 20, 50, 100, 150]}
-  fixedHeader
-  fixedHeaderScrollHeight="600px"
-  persistTableHead
-  noDataComponent={<div style={{ padding: 16 }}>Sin eventos para los filtros seleccionados.</div>}
-  expandableRows
-  expandableRowsComponent={ExpandedRow}
-  expandOnRowClicked
-  expandableRowsHideExpander
-/>
+    columns={columns}
+    data={filteredData}
+    theme="g3tTheme"
+    customStyles={customStyles}
+    dense
+    striped
+    highlightOnHover
+    responsive
+    pagination
+    paginationPerPage={50}
+    paginationRowsPerPageOptions={[10, 20, 50, 100, 150]}
+    fixedHeader
+    fixedHeaderScrollHeight="600px"
+    persistTableHead
+    noDataComponent={<div style={{ padding: 16 }}>Sin eventos para los filtros seleccionados.</div>}
+    expandableRows
+    expandableRowsComponent={ExpandedRow}
+    expandOnRowClicked
+    expandableRowsHideExpander
+  />
+  
 
   );
 }
