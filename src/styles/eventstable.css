@@ -344,3 +344,62 @@
 .reset-wrapper button:active {
   transform: scale(0.98);
 }
+/* Permite que el contenido de la celda haga ellipsis correctamente */
+.cell-ellipsis {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Cuando haya textos sin espacios largos, que puedan partirse */
+.rdt_TableCell, .rdt_TableCell * {
+  word-break: break-word;
+}
+
+/* Acciones compactas y sin shrink */
+.dt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dt-actions .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* Tipografía mono para la fecha (no imprescindible) */
+.dt-cell-mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+/* Texto multilínea legible en celdas */
+/* Multilínea normal (Ubicación, Observación, etc.) */
+.cell-multiline {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Fecha siempre compacta, no se rompe */
+.dt-nowrap {
+  white-space: nowrap;
+}
+
+
+/* Asegura que todas las celdas puedan encogerse en flex */
+.rdt_TableCell { min-width: 0; }
+
+/* Acciones permiten salto si no entra en ancho */
+.dt-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.dt-actions .btn { flex: 0 0 auto; white-space: nowrap; padding: 4px 8px; font-size: 12px; line-height: 1; }
+
+/* Fecha en monospace y sin wrap */
+.dt-cell-mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.dt-nowrap { white-space: nowrap; }
