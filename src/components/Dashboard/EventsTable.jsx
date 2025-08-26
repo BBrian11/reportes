@@ -365,50 +365,50 @@ export default function EventsTable({
   );
 
   // ===== Columnas (con tamaños/ellipsis/tooltip) =====
-  const baseColumns = useMemo(() => [
-    { 
-      name: "Cliente",
-      selector: (row) => row.cliente,
-      sortable: true,
-      minWidth: "140px",
-      cell: (row) => <Ellipsis text={row.cliente || "—"} />,
-      // clave:
-      style: { minWidth: 0 },
-    },
-    {
-      name: "Evento",
-      selector: (row) => getEventoTitulo(row),
-      sortable: true,
-      grow: 2,
-      // evita wraps raros del componente:
-      cell: (row) => <Ellipsis text={getEventoTitulo(row)} />,
-      style: { minWidth: 0 },
-    },
-    {
-      name: "Ubicación",
-      selector: (row) => row.ubicacion || row.edificio,
-      minWidth: "160px",
-      cell: (row) => <Ellipsis text={getUbicacionDisplay(row)} />,
-      style: { minWidth: 0 },
-    },
-    {
-      name: "Fecha",
-      selector: (row) => row.fecha || row.fechaHoraEnvio,
-      sortable: true,
-      minWidth: "160px",
-      right: true,
-      cell: (row) => <span className="dt-cell-mono">{formatDate(row)}</span>,
-    },
-    {
-      name: "Observación",
-      selector: (row) => getObservacion(row),
-      grow: 2,
-      minWidth: "220px",
-      cell: (row) => <Ellipsis text={getObservacion(row)} />,
-      style: { minWidth: 0 },
-    },
-  ], []);
-  
+const baseColumns = useMemo(() => [
+  { 
+    name: "Cliente",
+    selector: (row) => row.cliente,
+    sortable: true,
+    minWidth: "140px",
+    cell: (row) => <Ellipsis text={row.cliente || "—"} />,
+    // clave:
+    style: { minWidth: 0 },
+  },
+  {
+    name: "Evento",
+    selector: (row) => getEventoTitulo(row),
+    sortable: true,
+    grow: 2,
+    // evita wraps raros del componente:
+    cell: (row) => <Ellipsis text={getEventoTitulo(row)} />,
+    style: { minWidth: 0 },
+  },
+  {
+    name: "Ubicación",
+    selector: (row) => row.ubicacion || row.edificio,
+    minWidth: "160px",
+    cell: (row) => <Ellipsis text={getUbicacionDisplay(row)} />,
+    style: { minWidth: 0 },
+  },
+  {
+    name: "Fecha",
+    selector: (row) => row.fecha || row.fechaHoraEnvio,
+    sortable: true,
+    minWidth: "160px",
+    right: true,
+    cell: (row) => <span className="dt-cell-mono">{formatDate(row)}</span>,
+  },
+  {
+    name: "Observación",
+    selector: (row) => getObservacion(row),
+    grow: 2,
+    minWidth: "220px",
+    cell: (row) => <Ellipsis text={getObservacion(row)} />,
+    style: { minWidth: 0 },
+  },
+], []);
+
 
   const edificioOnlyColumns = useMemo(
     () => [
