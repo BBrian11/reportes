@@ -455,21 +455,27 @@ export default function EventsTable({
 
   // ===== Estilos tabla =====
   const customStyles = {
-    table: {
-      style: { border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden" },
-    },
+    table: { style: { border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden" } },
     headRow: { style: { minHeight: "48px", backgroundColor: "#f8fafc" } },
-    headCells: {
+    headCells: { style: { fontWeight: 800, fontSize: "13.5px", letterSpacing: ".02em", textTransform: "uppercase", color: "#0f172a", paddingTop: "10px", paddingBottom: "10px", borderBottom: "1px solid #e5e7eb" } },
+    cells: {
       style: {
-        fontWeight: 800, fontSize: "13.5px", letterSpacing: ".02em", textTransform: "uppercase",
-        color: "#0f172a", paddingTop: "10px", paddingBottom: "10px", borderBottom: "1px solid #e5e7eb",
+        // 🔧 claves para que NO se superponga nada
+        minWidth: 0,                 // <— esto permite que el flex hijo se encoja
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        fontSize: "13.5px",
+        color: "#111827",
+        lineHeight: 1.35,
+        paddingTop: "10px",
+        paddingBottom: "10px",
       },
     },
-    cells: { style: { fontSize: "13.5px", color: "#111827", lineHeight: 1.35, paddingTop: "10px", paddingBottom: "10px" } },
     rows: { style: { minHeight: "52px", "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" } } },
     pagination: { style: { borderTop: "1px solid #e5e7eb" } },
   };
-
+  
   return (
     <DataTable
       columns={columns}
