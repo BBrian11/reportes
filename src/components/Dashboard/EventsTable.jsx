@@ -363,117 +363,84 @@ export default function EventsTable({
     () => filteredData.length > 0 && filteredData.every(isTGSRow),
     [filteredData]
   );
+// 🔹 columnas extra solo para edificio
+const edificioOnlyColumns = useMemo(() => [
+  {
+    name: "Razones",
+    selector: (r) => getRazones(r) || "—",
+    minWidth: "220px",
+    wrap: true,
+    style: { minWidth: 0 },
+    cell: (r) => <span style={cellTextStyle}>{getRazones(r) || "—"}</span>,
+  },
+  {
+    name: "Resolución",
+    selector: (r) => getResolucion(r) || "—",
+    minWidth: "220px",
+    wrap: true,
+    style: { minWidth: 0 },
+    cell: (r) => <span style={cellTextStyle}>{getResolucion(r) || "—"}</span>,
+  },
+  {
+    name: "Respuesta Residente",
+    selector: (r) => getRespuestaResidente(r) || "—",
+    minWidth: "220px",
+    wrap: true,
+    style: { minWidth: 0 },
+    cell: (r) => <span style={cellTextStyle}>{getRespuestaResidente(r) || "—"}</span>,
+  },
+], []);
 
-  const baseColumns = useMemo(() => [
-    {
-      name: "Cliente",
-      selector: (row) => row.cliente,
-      sortable: true,
-      minWidth: "120px",
-      wrap: true,                               // ← habilita multilínea en RDT
-      style: { minWidth: 0 },                   // ← permite encogerse
-      cell: (row) => <span style={cellTextStyle}>{row.cliente || "—"}</span>,
-    },
-    {
-      name: "Evento",
-      selector: (row) => getEventoTitulo(row),
-      sortable: true,
-      grow: 2,
-      minWidth: "220px",
-      wrap: true,
-      style: { minWidth: 0 },
-      cell: (row) => <span style={cellTextStyle}>{getEventoTitulo(row) || "—"}</span>,
-    },
-    {
-      name: "Ubicación",
-      selector: (row) => row.ubicacion || row.edificio,
-      minWidth: "160px",
-      wrap: true,
-      style: { minWidth: 0, whiteSpace: "normal" }, // ← NO invade a Fecha
-      cell: (row) => <span style={cellTextStyle}>{getUbicacionDisplay(row) || "—"}</span>,
-    },
-    {
-      name: "Fecha",
-      selector: (row) => row.fecha || row.fechaHoraEnvio,
-      sortable: true,
-      minWidth: "150px",
-      right: true,
-      style: { minWidth: 0, whiteSpace: "nowrap" }, // ← fija en 1 línea
-      cell: (row) => <span style={cellNowrapMono}>{formatDate(row)}</span>,
-    },
-    {
-      name: "Observación",
-      selector: (row) => getObservacion(row),
-      grow: 2,
-      minWidth: "240px",
-      wrap: true,
-      style: { minWidth: 0 },
-      cell: (row) => <span style={cellTextStyle}>{getObservacion(row) || "—"}</span>,
-    },
-  ], []);
-  
-  
-  const edificioOnlyColumns = useMemo(() => [
-    { name: "Razones", selector: (r) => getRazones(r) || "-",    minWidth: "220px", wrap: true, style:{ minWidth:0 }, cell: (r) => <span style={cellTextStyle}>{getRazones(r) || "—"}</span> },
-    { name: "Resolución", selector: (r) => getResolucion(r) || "-", minWidth: "220px", wrap: true, style:{ minWidth:0 }, cell: (r) => <span style={cellTextStyle}>{getResolucion(r) || "—"}</span> },
-    { name: "Respuesta Residente", selector: (r) => getRespuestaResidente(r) || "-", minWidth: "220px", wrap: true, style:{ minWidth:0 }, cell: (r) => <span style={cellTextStyle}>{getRespuestaResidente(r) || "—"}</span> },
-  ], []);
-  
-  const tgsOnlyColumns = useMemo(() => [
-    { name: "Proveedor", selector: (r) => getProveedorTGS(r) || "-", minWidth: "180px", wrap: true, style:{ minWidth:0 }, cell: (r) => <span style={cellTextStyle}>{getProveedorTGS(r) || "—"}</span> },
-  ], []);
-  
-  const columns = useMemo(() => {
-    const cols = [...baseColumns];
-    if (onlyEdificio) cols.push(...edificioOnlyColumns);
-    else if (onlyTGS) cols.push(...tgsOnlyColumns);
-  
-    cols.push({
-      name: "Acciones",
-      minWidth: "200px",
-      style: { flex: "0 0 auto" }, // ← evita que se expanda/encoja mal
-      ignoreRowClick: true,
-      cell: (row) => (
-        <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-          <button onClick={() => handleEditObservation(row)} style={{ padding:"4px 8px" }} className="btn -indigo">Obs</button>
-          <button onClick={() => handleEditFechaHora(row)}   style={{ padding:"4px 8px" }} className="btn -violet">Fecha</button>
-          {isEdificioRow(row) && (
-            <>
-              <button onClick={() => handleEditResolucion(row)} style={{ padding:"4px 8px" }} className="btn -emerald">Resolv</button>
-              <button onClick={() => handleEditRespuesta(row)}  style={{ padding:"4px 8px" }} className="btn -sky">Resp</button>
-            </>
-          )}
-          <button onClick={() => handleEditUbicacion(row)} style={{ padding:"4px 8px" }} className="btn -amber">Ubic</button>
-          <button onClick={() => handleDeleteEvent(row)}  style={{ padding:"4px 8px" }} className="btn -red">🗑</button>
-        </div>
-      ),
-    });
-    return cols;
-  }, [baseColumns, edificioOnlyColumns, tgsOnlyColumns, onlyEdificio, onlyTGS]);
-  
-// 🔹 Texto multilínea legible (alto auto)
+// 🔹 columnas extra solo para TGS
+const tgsOnlyColumns = useMemo(() => [
+  {
+    name: "Proveedor",
+    selector: (r) => getProveedorTGS(r) || "—",
+    minWidth: "180px",
+    wrap: true,
+    style: { minWidth: 0 },
+    cell: (r) => <span style={cellTextStyle}>{getProveedorTGS(r) || "—"}</span>,
+  },
+], []);
+
+// 🔧 estilos para spans de celda
 const cellTextStyle = {
   display: "block",
   minWidth: 0,
   whiteSpace: "normal",
-  overflow: "visible",
   wordBreak: "break-word",
   overflowWrap: "anywhere",
+  overflow: "hidden",           // ← antes estaba 'visible'
   lineHeight: 1.35,
 };
 
-// 🔹 Texto en una sola línea (Fecha)
 const cellNowrapMono = {
   whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
   fontFamily:
     'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   lineHeight: 1.2,
+  overflow: "hidden",           // ← evita bleed
+  textOverflow: "ellipsis",
 };
 
+// 🔧 estilos del DataTable
 const customStyles = {
-  table: { style: { border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" } },
-  headRow: { style: { minHeight: 44, backgroundColor: "#f8fafc" } },
+  tableWrapper: {                // ← agrega wrapper con scroll
+    style: { display: "block", width: "100%", overflowX: "auto" },
+  },
+  table: {
+    style: {
+      border: "1px solid #e5e7eb",
+      borderRadius: 12,
+      overflow: "hidden",
+      tableLayout: "fixed",      // ← clave para que no “rompa”
+      backgroundColor: "#ffffff"
+    },
+  },
+  headRow: {
+    style: { minHeight: 44, backgroundColor: "#f8fafc", position: "sticky", top: 0, zIndex: 2 },
+  },
   headCells: {
     style: {
       fontWeight: 800,
@@ -484,54 +451,136 @@ const customStyles = {
       paddingTop: 8,
       paddingBottom: 8,
       borderBottom: "1px solid #e5e7eb",
+      backgroundColor: "#f8fafc", // ← evita transparencia
+    },
+  },
+  rows: {
+    style: {
+      minHeight: "auto",
+      backgroundColor: "#ffffff", // ← asegura fondo sólido
+      "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" },
     },
   },
   cells: {
     style: {
-      minWidth: 0,            // ← permite encogerse (clave)
-      whiteSpace: "normal",   // ← multilínea
-      overflow: "visible",
+      minWidth: 0,
+      whiteSpace: "normal",
+      overflow: "hidden",         // ← NO visible
+      textOverflow: "ellipsis",
       alignItems: "flex-start",
       fontSize: 13.5,
       color: "#111827",
       lineHeight: 1.35,
       paddingTop: 6,
       paddingBottom: 6,
-    },
-  },
-  rows: {
-    style: {
-      minHeight: "unset",     // ← alto según contenido
-      "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" },
+      backgroundColor: "#ffffff",
     },
   },
   pagination: { style: { borderTop: "1px solid #e5e7eb" } },
 };
 
-  
-  return (
-    <DataTable
-    columns={columns}
-    data={filteredData}
-    theme="g3tTheme"
-    customStyles={customStyles}
-    dense
-    striped
-    highlightOnHover
-    responsive
-    pagination
-    paginationPerPage={50}
-    paginationRowsPerPageOptions={[10, 20, 50, 100, 150]}
-    fixedHeader
-    fixedHeaderScrollHeight="600px"
-    persistTableHead
-    noDataComponent={<div style={{ padding: 16 }}>Sin eventos para los filtros seleccionados.</div>}
-    expandableRows
-    expandableRowsComponent={ExpandedRow}
-    expandOnRowClicked
-    expandableRowsHideExpander
-  />
-  
+// 🔧 columnas: ajustes finos
+const baseColumns = useMemo(() => [
+  {
+    name: "Cliente",
+    selector: (row) => row.cliente,
+    sortable: true,
+    minWidth: "140px",
+    grow: 1,
+    wrap: true,
+    cell: (row) => <span style={cellTextStyle}>{row.cliente || "—"}</span>,
+  },
+  {
+    name: "Evento",
+    selector: (row) => getEventoTitulo(row),
+    sortable: true,
+    minWidth: "220px",
+    grow: 2,
+    wrap: true,
+    cell: (row) => <span style={cellTextStyle}>{getEventoTitulo(row) || "—"}</span>,
+  },
+  {
+    name: "Ubicación",
+    selector: (row) => row.ubicacion || row.edificio,
+    minWidth: "180px",
+    grow: 1,
+    wrap: true,
+    cell: (row) => <span style={cellTextStyle}>{getUbicacionDisplay(row) || "—"}</span>,
+  },
+  {
+    name: "Fecha",
+    selector: (row) => row.fecha || row.fechaHoraEnvio,
+    sortable: true,
+    minWidth: "150px",
+    right: true,
+    cell: (row) => <span style={cellNowrapMono}>{formatDate(row)}</span>,
+  },
+  {
+    name: "Observación",
+    selector: (row) => getObservacion(row),
+    grow: 2,
+    minWidth: "260px",
+    wrap: true,
+    cell: (row) => <span style={cellTextStyle}>{getObservacion(row) || "—"}</span>,
+  },
+], []);
 
-  );
+// … tus columnas condicionales igual
+
+const columns = useMemo(() => {
+  const cols = [...baseColumns];
+  if (onlyEdificio) cols.push(...edificioOnlyColumns);
+  else if (onlyTGS) cols.push(...tgsOnlyColumns);
+
+  cols.push({
+    name: "Acciones",
+    minWidth: "220px",             // ← fija base
+    maxWidth: "260px",
+    grow: 0,                       // ← no se estira
+    center: false,
+    cell: (row) => (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <button onClick={() => handleEditObservation(row)} className="btn -indigo" style={{ padding: "4px 8px" }}>Obs</button>
+        <button onClick={() => handleEditFechaHora(row)} className="btn -violet" style={{ padding: "4px 8px" }}>Fecha</button>
+        {isEdificioRow(row) && (
+          <>
+            <button onClick={() => handleEditResolucion(row)} className="btn -emerald" style={{ padding: "4px 8px" }}>Resolv</button>
+            <button onClick={() => handleEditRespuesta(row)} className="btn -sky" style={{ padding: "4px 8px" }}>Resp</button>
+          </>
+        )}
+        <button onClick={() => handleEditUbicacion(row)} className="btn -amber" style={{ padding: "4px 8px" }}>Ubic</button>
+        <button onClick={() => handleDeleteEvent(row)} className="btn -red" style={{ padding: "4px 8px" }}>🗑</button>
+      </div>
+    ),
+  });
+  return cols;
+}, [baseColumns, edificioOnlyColumns, tgsOnlyColumns, onlyEdificio, onlyTGS]);
+
+// 🔧 render
+return (
+  <div style={{ width: "100%" }}>
+    <DataTable
+      columns={columns}
+      data={filteredData}
+      theme="g3tTheme"
+      customStyles={customStyles}
+      dense
+      striped
+      highlightOnHover
+      responsive
+      pagination
+      paginationPerPage={50}
+      paginationRowsPerPageOptions={[10, 20, 50, 100, 150]}
+      fixedHeader
+      fixedHeaderScrollHeight="600px"
+      persistTableHead
+      noDataComponent={<div style={{ padding: 16 }}>Sin eventos para los filtros seleccionados.</div>}
+      expandableRows
+      expandableRowsComponent={ExpandedRow}
+      expandOnRowClicked
+      expandableRowsHideExpander
+    />
+  </div>
+);
+
 }
