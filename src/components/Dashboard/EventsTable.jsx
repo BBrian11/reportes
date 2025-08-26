@@ -386,23 +386,20 @@ export default function EventsTable({
     {
       name: "Ubicación",
       selector: (row) => row.ubicacion || row.edificio,
-      minWidth: "180px",   // no exagerado
+      minWidth: "140px",
       wrap: true,
       cell: (row) => <Multi text={getUbicacionDisplay(row)} />,
-      style: { minWidth: 0, whiteSpace: "normal" }, // se ajusta al alto, no invade
+      style: { minWidth: 0 },
     },
     {
       name: "Fecha",
       selector: (row) => row.fecha || row.fechaHoraEnvio,
       sortable: true,
-      minWidth: "150px",   // dale un mínimo propio
+      minWidth: "140px",
       right: true,
-      cell: (row) => (
-        <span className="dt-cell-mono dt-nowrap">{formatDate(row)}</span>
-      ),
-      style: { minWidth: 0, whiteSpace: "nowrap" }, // siempre en una sola línea
+      cell: (row) => <span className="dt-cell-mono dt-nowrap">{formatDate(row)}</span>,
+      style: { minWidth: 0 },
     },
-    
     {
       name: "Observación",
       selector: (row) => getObservacion(row),

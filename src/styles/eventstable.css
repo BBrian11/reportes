@@ -378,20 +378,13 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 /* Texto multilínea legible en celdas */
-/* Multilínea normal (Ubicación, Observación, etc.) */
 .cell-multiline {
   display: block;
   min-width: 0;
-  white-space: normal;
+  white-space: normal;      /* wrap */
   word-break: break-word;
-  overflow-wrap: anywhere;
+  overflow-wrap: anywhere;  /* rompe cadenas largas si hace falta */
 }
-
-/* Fecha siempre compacta, no se rompe */
-.dt-nowrap {
-  white-space: nowrap;
-}
-
 
 /* Asegura que todas las celdas puedan encogerse en flex */
 .rdt_TableCell { min-width: 0; }
