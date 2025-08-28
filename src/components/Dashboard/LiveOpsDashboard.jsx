@@ -9,7 +9,6 @@ import {
   Box,
   Paper,
   Typography,
-  // Chip  // (solo lo uso para los KPI del header)
   Chip,
   Stack,
   Table,
@@ -35,6 +34,7 @@ export const PALETTE = {
   tamper:"#FF4D6D", tamperBg:"#2A1120", tamperFg:"#FFE5E7",
   marqueeBg:"#2A1113", marqueeText:"#FFE5E7",
 };
+
 export const SEVERITY = {
   critical: { fill: PALETTE.critical,  bg: PALETTE.criticalBg,  fg: PALETTE.criticalFg },
   warning:  { fill: PALETTE.warning,   bg: PALETTE.warningBg,   fg: PALETTE.warningFg },
@@ -74,20 +74,22 @@ const deriveIssuesFromChecklist = (t) => {
   }
   if (c.equipoOffline === true)  issues.push({ sev:"offline", label:"OFFLINE" });
   if (c.grabacionesOK === false) issues.push({ sev:"warning", label:"Falla grabaciones" });
-  if (c.cortes220v === true)     issues.push({ sev:"warning", label:"Cortes 220V" });
+  if (c.cortes220v === true)     issues.push({ sev:"critical", label:"Cortes 220V" });
   if (c.equipoHora === true)     issues.push({ sev:"warning", label:"Hora desfasada" });
   return issues;
 };
+
 const deriveIssuesFromCams = (sum) => {
   const out=[];
   if (sum.grave>0) out.push({ sev:"critical", label:`Cáms GRAVE: ${sum.grave}`});
   if (sum.medio>0) out.push({ sev:"warning", label:`Cáms MEDIO: ${sum.medio}`});
   return out;
 };
+
 const rankSev = { critical:0, offline:0, warning:1, info:2, ok:3 };
 const worstSev = (issues) => issues.reduce((w,i)=> (rankSev[i.sev]<rankSev[w]?i.sev:w), "ok");
 
-/* ========================= Pill (reemplaza Chip) ========================= */
+/* ========================= Pills (con blink) ========================= */
 const PILL_COLORS = {
   ok:       { bg: PALETTE.okBg,       fg: PALETTE.okFg,       bd: PALETTE.ok },
   warning:  { bg: PALETTE.warningBg,  fg: PALETTE.warningFg,  bd: PALETTE.warning },
@@ -95,25 +97,47 @@ const PILL_COLORS = {
   offline:  { bg: PALETTE.offlineBg,  fg: PALETTE.offlineFg,  bd: PALETTE.offline },
   info:     { bg: PALETTE.infoBg,     fg: PALETTE.infoFg,     bd: PALETTE.info },
 };
-function Pill({ label, sev="info", sx }) {
+// colores de glow para el pulso
+const GLOW = {
+  offline: "rgba(168,85,247,.55)",
+  critical:"rgba(255,59,48,.55)",
+  warning: "rgba(255,195,0,.50)",
+  ok:      "rgba(0,217,126,.45)",
+  info:    "rgba(59,130,246,.45)",
+};
+
+function Pill({ label, sev="info", blink=false, sx }) {
   const c = PILL_COLORS[sev] || PILL_COLORS.info;
+  const glow = GLOW[sev] || GLOW.info;
   return (
     <Box
       component="span"
       sx={{
         display: "inline-block",
-        px: 1,
-        py: 0.25,
+        padding: "2px 8px",
         mr: 0.5,
         mb: 0.5,
         borderRadius: 9999,
         fontSize: 12,
         fontWeight: 800,
-        lineHeight: "20px",
         border: "1px solid",
         borderColor: c.bd,
         bgcolor: c.bg,
         color: c.fg,
+        lineHeight: "18px",
+        whiteSpace: "nowrap",
+        ...(blink
+          ? {
+              position: "relative",
+              animation: "pulseGlow 1.2s ease-out infinite",
+              filter: "saturate(125%)",
+            }
+          : {}),
+        "@keyframes pulseGlow": {
+          "0%":   { boxShadow: `0 0 0 0 ${glow}` },
+          "70%":  { boxShadow: `0 0 0 8px rgba(0,0,0,0)` },
+          "100%": { boxShadow: `0 0 0 0 rgba(0,0,0,0)` },
+        },
         ...sx,
       }}
     >
@@ -123,41 +147,37 @@ function Pill({ label, sev="info", sx }) {
 }
 
 /* ========================= Row ========================= */
-const SegBar = ({ okPct, medioPct, gravePct, w = 200 }) => (
-  <Box sx={{ width:w, height:10, display:"flex", overflow:"hidden", borderRadius:6, outline:`1px solid ${PALETTE.border}`, background:PALETTE.track }}>
-    {okPct>0    && <Box sx={{ flex:`${okPct} 0 auto`,    bgcolor: SEVERITY.ok.fill }} />}
-    {medioPct>0 && <Box sx={{ flex:`${medioPct} 0 auto`, bgcolor: SEVERITY.warning.fill }} />}
-    {gravePct>0 && <Box sx={{ flex:`${gravePct} 0 auto`, bgcolor: SEVERITY.critical.fill }} />}
-  </Box>
-);
-
 const ClientRow = React.memo(function ClientRow({ row }) {
   const color = sevColor(row.worst);
   const c = row.checklist || {};
 
-  // Estado ONLINE / OFFLINE
+  // Estado / Alarma → pills (con blink en OFFLINE / SIN COMMS / Cortes 220V)
   const statusPills = [];
-  statusPills.push(c.equipoOffline ? <Pill key="offline" label="OFFLINE" sev="offline" /> : <Pill key="online" label="ONLINE" sev="ok" />);
+  statusPills.push(
+    c.equipoOffline
+      ? <Pill key="offline" label="OFFLINE" sev="offline" blink />
+      : <Pill key="online"  label="ONLINE"  sev="ok" />
+  );
 
-  // Alarma (si existe)
   if (c.alarmaMonitoreada === true) {
-    statusPills.push(c.alarmaComunicacionOK ? <Pill key="comm-ok" label="COMM OK" sev="ok" /> : <Pill key="comm-no" label="SIN COMMS" sev="critical" />);
+    statusPills.push(
+      c.alarmaComunicacionOK
+        ? <Pill key="comm-ok" label="COMM OK" sev="ok" />
+        : <Pill key="comm-no" label="SIN COMMS" sev="critical" blink />
+    );
     statusPills.push(c.alarmaPanelArmado ? <Pill key="arm" label="ARMADO" sev="ok" /> : <Pill key="disarm" label="DESARMADO" sev="warning" />);
     if (c.alarmaZonasAbiertas) statusPills.push(<Pill key="zonas" label="Zonas abiertas" sev="warning" />);
     if (c.alarmaBateriaBaja)  statusPills.push(<Pill key="bat" label="Batería baja" sev="warning" />);
     if (c.alarmaTamper)       statusPills.push(<Pill key="tamper" label="Tamper" sev="warning" />);
   }
 
-  // Otros estados
   if (c.grabacionesOK === false) statusPills.push(<Pill key="grab-ko" label="Falla grabaciones" sev="warning" />);
   if (c.grabacionesOK === true)  statusPills.push(<Pill key="grab-ok" label="Grab OK" sev="ok" />);
-  if (c.cortes220v === true)     statusPills.push(<Pill key="220v" label="Cortes 220V" sev="critical" />);
+  if (c.cortes220v === true)     statusPills.push(<Pill key="220v" label="Cortes 220V" sev="critical" blink />);
   if (c.equipoHora === true)     statusPills.push(<Pill key="hora" label="Hora desfasada" sev="warning" />);
 
+  // Resumen cámaras (solo mostrar MEDIO/GRAVE si querés compacto)
   const total = row.sum.total || 0;
-  const okPct    = total ? Math.round((row.sum.ok    / total) * 100) : 0;
-  const medioPct = total ? Math.round((row.sum.medio / total) * 100) : 0;
-  const gravePct = total ? Math.round((row.sum.grave / total) * 100) : 0;
 
   const rowBg =
     row.worst === "critical" ? SEVERITY.critical.bg :
@@ -179,6 +199,7 @@ const ClientRow = React.memo(function ClientRow({ row }) {
             : "none",
       }}
     >
+      {/* Cliente */}
       <TableCell sx={{ fontWeight: 900, whiteSpace: "nowrap", color: PALETTE.text }}>
         {row.cliente}
       </TableCell>
@@ -187,18 +208,11 @@ const ClientRow = React.memo(function ClientRow({ row }) {
       <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
           <FaVideo style={{ opacity: 0.9 }} />
-      
-          
+          <Typography variant="body1" sx={{ fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+            Tot: {total}
+          </Typography>
           <Pill label={`MEDIO ${row.sum.medio}`} sev="warning" />
           <Pill label={`GRAVE ${row.sum.grave}`} sev="critical" />
-        </Stack>
-      </TableCell>
-
-      {/* Salud */}
-      <TableCell sx={{ color: PALETTE.text }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <SegBar okPct={okPct} medioPct={medioPct} gravePct={gravePct} w={200} />
-     
         </Stack>
       </TableCell>
 
@@ -336,7 +350,6 @@ export default function MonitoringWallboardTV() {
               <TableRow>
                 <TableCell>Cliente</TableCell>
                 <TableCell>Resumen cámaras</TableCell>
-                <TableCell>Salud</TableCell>
                 <TableCell>Estados / Alarma</TableCell>
                 <TableCell>Turno / Operador</TableCell>
                 <TableCell>Último rondín</TableCell>
@@ -346,7 +359,7 @@ export default function MonitoringWallboardTV() {
               {pageRows.map((row) => <ClientRow key={row.cliente} row={row} />)}
               {Array.from({ length: Math.max(0, rowsPerPage - pageRows.length) }).map((_, i) => (
                 <TableRow key={`empty-${i}`} sx={{ height:64 }}>
-                  <TableCell colSpan={6} />
+                  <TableCell colSpan={5} />
                 </TableRow>
               ))}
             </TableBody>
