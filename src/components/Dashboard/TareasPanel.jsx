@@ -211,6 +211,9 @@ const RespuestasView = ({ respuestas }) => {
                     {"cortes220v" in t.checklist && (
                       <BoolChip label="Cortes 220V" value={t.checklist.cortes220v} okWhen={false} />
                     )}
+                     {"equipoHora" in t.checklist && (
+                      <BoolChip label="Cortes 220V" value={t.checklist.equipoHora} okWhen={false} />
+                    )}
                     {"equipoOffline" in t.checklist && (
                       <BoolChip label="Equipo offline" value={t.checklist.equipoOffline} okWhen={false} />
                     )}

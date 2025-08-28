@@ -1,19 +1,97 @@
-import { Grid, Paper, Typography, FormLabel, RadioGroup, FormControlLabel, Radio, Checkbox, TextField } from "@mui/material";
+// src/components/Rondin/ChecklistPanel.jsx
+import React from "react";
+import {
+  Grid, Paper, Typography, FormLabel, RadioGroup, FormControlLabel, Radio,
+  TextField, Stack, Divider, Chip
+} from "@mui/material";
 import { toast } from "./swal";
 
-export default function ChecklistPanel({ t, setChecklistVal, resetFallan, toggleFallan }) {
+/* ============ Helpers de estilo (alineados a NovedadesCard) ============ */
+const Section = ({ title, children, right }) => (
+  <Paper
+    variant="outlined"
+    sx={{ p: 2, borderRadius: 2, height: "100%", display: "flex", flexDirection: "column" }}
+  >
+    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+      <Typography variant="subtitle1" fontWeight={700}>{title}</Typography>
+      {right || null}
+    </Stack>
+    {children}
+  </Paper>
+);
+
+const SubCard = ({ title, children, color = "divider" }) => (
+  <Paper
+    variant="outlined"
+    sx={{
+      p: 2,
+      borderRadius: 2,
+      mt: 1.5,
+      position: "relative",
+      bgcolor: "action.hover",
+      "&::before": {
+        content: '""',
+        position: "absolute",
+        left: 0,
+        top: 8,
+        bottom: 8,
+        width: 3,
+        borderRadius: 3,
+        bgcolor: color,
+      },
+      pl: 1.75,
+    }}
+  >
+    {title && <Typography variant="subtitle2" gutterBottom>{title}</Typography>}
+    {children}
+  </Paper>
+);
+
+const FieldLabel = ({ children, sx }) => (
+  <FormLabel component="legend" sx={{ fontSize: 13, mb: .5, ...sx }}>
+    {children}
+  </FormLabel>
+);
+
+// severidad para pintar sub-card de ALARMA
+const getAlarmSeverityColor = (cl) => {
+  const grave = cl?.alarmaTamper === true;
+  const medio = cl?.alarmaBateriaBaja === true || cl?.alarmaComunicacionOK === false || cl?.alarmaZonasAbiertas === true;
+  return grave ? "error.main" : medio ? "warning.main" : "success.main";
+};
+
+export default function ChecklistPanel({ t, setChecklistVal, resetFallan }) {
   const cl = t.checklist || {};
+  const alarmaEnabled = cl.alarmaMonitoreada === true;
+  const alarmColor = alarmaEnabled ? getAlarmSeverityColor(cl) : "divider";
+
+  // chips resumen a la derecha del header de ALARMA
+  const rightAlarm = (
+    <Stack direction="row" spacing={1}>
+      {alarmaEnabled ? (
+        <>
+          <Chip
+            size="small"
+            variant="outlined"
+            label={cl.alarmaComunicacionOK === false ? "SIN COM." : "COM. OK"}
+            color={cl.alarmaComunicacionOK === false ? "warning" : "success"}
+          />
+          {cl.alarmaBateriaBaja && <Chip size="small" color="warning" label="BATERÍA" />}
+          {cl.alarmaZonasAbiertas && <Chip size="small" color="warning" label="ZONAS" />}
+          {cl.alarmaTamper && <Chip size="small" color="error" label="TAMPER" />}
+        </>
+      ) : (
+        <Chip size="small" variant="outlined" label="SIN ALARMA" />
+      )}
+    </Stack>
+  );
 
   return (
     <Grid container spacing={2}>
       {/* ===== CARD 1: ALARMA ===== */}
       <Grid item xs={12} md={6}>
-        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-          <Typography variant="subtitle2" gutterBottom>ALARMA</Typography>
-
-          <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-            ¿TIENE ALARMA MONITOREADA?
-          </FormLabel>
+        <Section title="ALARMA" right={rightAlarm}>
+          <FieldLabel>¿TIENE ALARMA MONITOREADA?</FieldLabel>
           <RadioGroup
             row
             value={cl.alarmaMonitoreada == null ? "" : String(cl.alarmaMonitoreada)}
@@ -37,14 +115,9 @@ export default function ChecklistPanel({ t, setChecklistVal, resetFallan, toggle
             <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
           </RadioGroup>
 
-          {/* Sub-card: ESTADO DE LA ALARMA */}
-          {cl.alarmaMonitoreada === true && (
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, mt: 1.5, bgcolor: "action.hover" }}>
-              <Typography variant="subtitle2" gutterBottom>ESTADO DE LA ALARMA</Typography>
-
-              <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-                ¿COMUNICACIÓN OK?
-              </FormLabel>
+          {alarmaEnabled && (
+            <SubCard title="ESTADO DE LA ALARMA" color={alarmColor}>
+              <FieldLabel>¿COMUNICACIÓN OK?</FieldLabel>
               <RadioGroup
                 row
                 value={cl.alarmaComunicacionOK == null ? "" : String(cl.alarmaComunicacionOK)}
@@ -54,9 +127,7 @@ export default function ChecklistPanel({ t, setChecklistVal, resetFallan, toggle
                 <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
               </RadioGroup>
 
-              <FormLabel component="legend" sx={{ fontSize: 13, mb: .5, mt: 1 }}>
-                ¿PANEL ARMADO?
-              </FormLabel>
+              <FieldLabel sx={{ mt: 1 }}>¿PANEL ARMADO?</FieldLabel>
               <RadioGroup
                 row
                 value={cl.alarmaPanelArmado == null ? "" : String(cl.alarmaPanelArmado)}
@@ -68,9 +139,7 @@ export default function ChecklistPanel({ t, setChecklistVal, resetFallan, toggle
 
               <Grid container spacing={1} sx={{ mt: 0.5 }}>
                 <Grid item xs={12} sm={6}>
-                  <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-                    ¿ZONAS ABIERTAS?
-                  </FormLabel>
+                  <FieldLabel>¿ZONAS ABIERTAS?</FieldLabel>
                   <RadioGroup
                     row
                     value={cl.alarmaZonasAbiertas == null ? "" : String(cl.alarmaZonasAbiertas)}
@@ -82,9 +151,7 @@ export default function ChecklistPanel({ t, setChecklistVal, resetFallan, toggle
                 </Grid>
 
                 <Grid item xs={12} sm={6}>
-                  <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-                    ¿BATERÍA BAJA?
-                  </FormLabel>
+                  <FieldLabel>¿BATERÍA BAJA?</FieldLabel>
                   <RadioGroup
                     row
                     value={cl.alarmaBateriaBaja == null ? "" : String(cl.alarmaBateriaBaja)}
@@ -96,9 +163,7 @@ export default function ChecklistPanel({ t, setChecklistVal, resetFallan, toggle
                 </Grid>
 
                 <Grid item xs={12} sm={6}>
-                  <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-                    ¿TAMPER / TAPA ABIERTA?
-                  </FormLabel>
+                  <FieldLabel>¿TAMPER / TAPA ABIERTA?</FieldLabel>
                   <RadioGroup
                     row
                     value={cl.alarmaTamper == null ? "" : String(cl.alarmaTamper)}
@@ -132,81 +197,103 @@ export default function ChecklistPanel({ t, setChecklistVal, resetFallan, toggle
                 value={cl.alarmaObs ?? ""}
                 onChange={(e) => setChecklistVal(t.id, "alarmaObs", e.target.value)}
               />
-            </Paper>
+            </SubCard>
           )}
-        </Paper>
+        </Section>
       </Grid>
 
       {/* ===== CARD 2: SISTEMA (Grabaciones / Energía / Conexión) ===== */}
-      <Grid item xs={12} md={6}>
-        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: "100%" }}>
-          {/* GRABACIONES */}
-          <Typography variant="subtitle2" gutterBottom>GRABACIONES</Typography>
-          <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-            ¿FUNCIONAN TODAS LAS CÁMARAS?
-          </FormLabel>
-          <RadioGroup
-            row
-            value={cl.grabacionesOK == null ? "" : String(cl.grabacionesOK)}
-            onChange={(e) => {
-              const val = e.target.value === "true";
-              setChecklistVal(t.id, "grabacionesOK", val);
-              if (val) resetFallan(t.id);
-              else toast.fire({ icon: "info", title: "Indicá cuáles fallan (1–16)" });
-            }}
-          >
-            <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
-            <FormControlLabel value="false" control={<Radio size="small" />} label="No (indicar cuáles)" />
-          </RadioGroup>
+     {/* ===== CARD 2: SISTEMA (Grabaciones / Energía / Conexión) ===== */}
+<Grid item xs={12} md={6}>
+  <Section
+    title="SISTEMA"
+    right={
+      <Stack direction="row" spacing={1}>
+        {cl.grabacionesOK === true && (
+          <Chip size="small" variant="outlined" color="success" label="Grabando" />
+        )}
+        {cl.grabacionesOK === false && (
+          <Chip size="small" color="error" label="No graba" />
+        )}
+        {cl.equipoOffline === true && <Chip size="small" color="error" label="Offline" />}
+        {cl.cortes220v === true && <Chip size="small" color="warning" label="Cortes 220V" />}
+      </Stack>
+    }
+  >
+    {/* GRABACIONES */}
+    <Typography variant="subtitle2" gutterBottom>GRABACIONES</Typography>
+    <FieldLabel>¿FUNCIONAN TODAS LAS CÁMARAS?</FieldLabel>
+    <RadioGroup
+      row
+      value={cl.grabacionesOK == null ? "" : String(cl.grabacionesOK)}
+      onChange={(e) => {
+        const val = e.target.value === "true";
+        setChecklistVal(t.id, "grabacionesOK", val);
+        if (val) {
+          // Limpia campos relacionados si vuelven a OK
+          resetFallan && resetFallan(t.id);
+          setChecklistVal(t.id, "hddDetectado", null);
+        }
+      }}
+    >
+      <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
+      <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
+    </RadioGroup>
 
-          {cl.grabacionesOK === false && (
-            <Grid container spacing={1} sx={{ mt: 1 }}>
-              {Array.from({ length: 16 }, (_, i) => `cam${i + 1}`).map((k, idx) => (
-                <Grid item xs={6} sm={4} md={3} key={k}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={!!(cl.grabacionesFallan && cl.grabacionesFallan[k])}
-                        onChange={() => toggleFallan(t.id, k)}
-                      />
-                    }
-                    label={`Cámara ${idx + 1}`}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-          )}
+    {/* Si NO graba, pedir estado del disco */}
+    {cl.grabacionesOK === false && (
+      <SubCard color="warning.main" title="VERIFICACIÓN DE DISCO">
+        <FieldLabel>¿APARECE EL DISCO (HDD)?</FieldLabel>
+        <RadioGroup
+          row
+          value={cl.hddDetectado == null ? "" : String(cl.hddDetectado)}
+          onChange={(e) => setChecklistVal(t.id, "hddDetectado", e.target.value === "true")}
+        >
+          <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
+          <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
+        </RadioGroup>
+      </SubCard>
+    )}
 
-          {/* ENERGÍA */}
-          <Typography variant="subtitle2" gutterBottom sx={{ mt: 1.5 }}>ENERGÍA</Typography>
-          <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-            ¿TIENE CORTES 220V?
-          </FormLabel>
-          <RadioGroup
-            row
-            value={cl.cortes220v == null ? "" : String(cl.cortes220v)}
-            onChange={(e) => setChecklistVal(t.id, "cortes220v", e.target.value === "true")}
-          >
-            <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
-            <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
-          </RadioGroup>
+    <Divider sx={{ my: 1.5 }} />
 
-          {/* CONEXIÓN */}
-          <Typography variant="subtitle2" gutterBottom sx={{ mt: 1.5 }}>CONEXIÓN</Typography>
-          <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-            ¿EQUIPO OFFLINE?
-          </FormLabel>
-          <RadioGroup
-            row
-            value={cl.equipoOffline == null ? "" : String(cl.equipoOffline)}
-            onChange={(e) => setChecklistVal(t.id, "equipoOffline", e.target.value === "true")}
-          >
-            <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
-            <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
-          </RadioGroup>
-        </Paper>
-      </Grid>
+    {/* ENERGÍA */}
+    <Typography variant="subtitle2" gutterBottom>ENERGÍA</Typography>
+    <FieldLabel>¿TIENE CORTES 220V?</FieldLabel>
+    <RadioGroup
+      row
+      value={cl.cortes220v == null ? "" : String(cl.cortes220v)}
+      onChange={(e) => setChecklistVal(t.id, "cortes220v", e.target.value === "true")}
+    >
+      <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
+      <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
+    </RadioGroup>
+
+    <FieldLabel>¿EQUIPO EN HORA?</FieldLabel>
+    <RadioGroup
+      row
+      value={cl.equipoHora == null ? "" : String(cl.equipoHora)}
+      onChange={(e) => setChecklistVal(t.id, "equipoHora", e.target.value === "true")}
+    >
+      <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
+      <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
+    </RadioGroup>
+
+    <Divider sx={{ my: 1.5 }} />
+
+    {/* CONEXIÓN */}
+    <Typography variant="subtitle2" gutterBottom>CONEXIÓN</Typography>
+    <FieldLabel>¿EQUIPO OFFLINE?</FieldLabel>
+    <RadioGroup
+      row
+      value={cl.equipoOffline == null ? "" : String(cl.equipoOffline)}
+      onChange={(e) => setChecklistVal(t.id, "equipoOffline", e.target.value === "true")}
+    >
+      <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
+      <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
+    </RadioGroup>
+  </Section>
+</Grid>
     </Grid>
   );
 }

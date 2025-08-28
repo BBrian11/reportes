@@ -37,9 +37,9 @@ export const nuevaTanda = (id = Date.now()) => ({
 });
 
 
-export const MIN_CAMERAS_REQUIRED = 6;
+export const MIN_CAMERAS_REQUIRED = 0;
 
-export const RISK_WHITELIST = ["LOMAS DE PETION","CHACRA PETION","DROGUERIA BETAPHARMA","LA CASCADA"];
+export const RISK_WHITELIST = ["LOMAS DE PETION","CHACRA PETION","DROGUERIA BETAPHARMA","LA CASCADA", "TGS BRANDSEN", ];
 export const norm = (s = "") =>
   s.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toUpperCase();
 export const RISK_SET = new Set(RISK_WHITELIST.map(norm));

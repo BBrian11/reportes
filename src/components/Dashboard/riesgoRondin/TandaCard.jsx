@@ -5,8 +5,12 @@ import {
 import { Add, Delete } from "@mui/icons-material";
 import CameraTable from "./CameraTable";
 import ChecklistPanel from "./ChecklistPanel";
+import NovedadesCard from "./NovedadesCard";
 import useCamarasHistoricas from "./useCamarasHistoricas";
 import { norm } from "./helpers";
+
+import { db } from "../../../services/firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export default function TandaCard({
   tanda,
@@ -22,12 +26,37 @@ export default function TandaCard({
   toggleFallan,
   setResumen,
   clientesCat = [],
+  rondaId, // 👈 NUEVO: lo pasás desde el padre (FormRiesgoRondin)
 }) {
   if (!tanda) return null;
 
   const clienteKey = norm(tanda.cliente || "");
   const historicosHook = useCamarasHistoricas(clienteKey);
   const historicos = historicosProp ?? historicosHook;
+
+  // 👇 callback que usa el NovedadesCard para cambios rápidos de estado
+  const handleEstadoChanged = async (canal, next) => {
+    // 1) Si la cámara existe en la tanda, actualizamos via onCamState (UI inmediata + persistencia live que ya hacés ahí)
+    const row = tanda.camaras.find((c) => Number(c.canal) === Number(canal));
+    if (row) {
+      onCamState?.(tanda.id, row.id, next);
+      return;
+    }
+
+    // 2) Si NO existe en la tanda, persistimos directo en el índice para no perder el cambio
+    if (clienteKey && canal) {
+      try {
+        await setDoc(
+          doc(db, "rondin-index", clienteKey, "camaras", String(canal)),
+          { estado: next, updatedAt: serverTimestamp(), rondaId: rondaId || "desde-novedades" },
+          { merge: true }
+        );
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("fallback quick set failed:", e);
+      }
+    }
+  };
 
   return (
     <Card id={tanda.id} sx={{ overflow: "hidden" }}>
@@ -71,6 +100,7 @@ export default function TandaCard({
 
       <CardContent sx={{ pt: 1.5 }}>
         <Grid container spacing={2.25}>
+          {/* Izquierda: tabla de cámaras */}
           <Grid item xs={12} md={7}>
             <CameraTable
               tanda={tanda}
@@ -80,13 +110,35 @@ export default function TandaCard({
               onCamState={onCamState}
             />
           </Grid>
+
+          {/* Derecha: novedades + checklist */}
           <Grid item xs={12} md={5}>
-            <ChecklistPanel
-              t={tanda}
-              setChecklistVal={setChecklistVal}
-              resetFallan={resetFallan}
-              toggleFallan={toggleFallan}
-            />
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+              <NovedadesCard
+  clienteKey={clienteKey}
+  camaras={tanda.camaras}          // ⬅️ clave para ver la nota en vivo
+  historicos={historicos}
+  limit={8}
+  rondaId={rondaId}
+  onEstadoChanged={(canal, next) => {
+    const cam = (tanda.camaras || []).find(c => Number(c.canal) === Number(canal));
+    if (cam && onCamState) onCamState(tanda.id, cam.id, next);
+  }}
+/>
+
+
+
+              </Grid>
+              <Grid item xs={12}>
+                <ChecklistPanel
+                  t={tanda}
+                  setChecklistVal={setChecklistVal}
+                  resetFallan={resetFallan}
+                  toggleFallan={toggleFallan}
+                />
+              </Grid>
+            </Grid>
           </Grid>
         </Grid>
 

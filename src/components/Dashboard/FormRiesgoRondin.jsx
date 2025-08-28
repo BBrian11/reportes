@@ -93,7 +93,8 @@ const nuevaTanda = (id = Date.now()) => ({
   checklist: {
     grabacionesOK: null, // true/false
     grabacionesFallan: { cam1: false, cam2: false, cam3: false, cam4: false },
-    cortes220v: null,   // true/false
+    cortes220v: null,  
+    equipoHora: null, // true/false
     equipoOffline: null // true/false
   },
 });
@@ -355,6 +356,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       const incompletas = [];
       if (c.grabacionesOK === null) incompletas.push("GRABACIONES");
       if (c.cortes220v === null) incompletas.push("CORTES 220V");
+      if (c.equipoHora === null) incompletas.push("equipoHora");
       if (c.equipoOffline === null) incompletas.push("EQUIPO OFFLINE");
       if (incompletas.length) {
         issues.push(`${t.cliente || "Cliente"}: completar ${incompletas.join(", ")}`);
@@ -826,6 +828,17 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
                         row
                         value={t.checklist.equipoOffline === null ? "" : String(t.checklist.equipoOffline)}
                         onChange={(e) => setChecklistVal(t.id, "equipoOffline", e.target.value === "true")}
+                      >
+                        <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
+                        <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
+                      </RadioGroup>
+                      <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
+                        ¿EQUIPO EN HORA?
+                      </FormLabel>
+                      <RadioGroup
+                        row
+                        value={t.checklist.equipoHora === null ? "" : String(t.checklist.equipoHora )}
+                        onChange={(e) => setChecklistVal(t.id, "equipoHora ", e.target.value === "true")}
                       >
                         <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
                         <FormControlLabel value="false" control={<Radio size="small" />} label="No" />

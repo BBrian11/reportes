@@ -130,6 +130,7 @@ const deriveIssuesFromChecklist = (t) => {
   if (c.grabacionesOK === false) issues.push({ sev: "warning", label: "Falla grabaciones" });
   if (c.equipoOffline === true)  issues.push({ sev: "critical", label: "Equipo offline" });
   if (c.cortes220v === true)     issues.push({ sev: "warning", label: "Cortes 220V" });
+  if (c.equipoHora === true)     issues.push({ sev: "warning", label: "equipoHora" });
   return issues;
 };
 
@@ -241,9 +242,9 @@ const ClientRow = React.memo(function ClientRow({ row }) {
         <Stack direction="row" spacing={1} alignItems="center">
           <FaVideo style={{ opacity: 0.9 }} />
           <Typography variant="body1" sx={{ fontWeight: 700, fontVariantNumeric:"tabular-nums" }}>Tot: {total}</Typography>
-          <Chip size="small" label={`OK ${row.sum.ok}`}    sx={{ bgcolor: PALETTE.okBg,       color: PALETTE.text, border: `1px solid ${PALETTE.border}` }} />
-          <Chip size="small" label={`Med ${row.sum.medio}`} sx={{ bgcolor: PALETTE.warningBg,  color: PALETTE.text, border: `1px solid ${PALETTE.border}` }} />
-          <Chip size="small" label={`Grv ${row.sum.grave}`} sx={{ bgcolor: PALETTE.criticalBg, color: PALETTE.text, border: `1px solid ${PALETTE.border}` }} />
+          <Chip size="small" label={` ${row.sum.ok}`}    sx={{ bgcolor: PALETTE.okBg,       color: PALETTE.text, border: `1px solid ${PALETTE.border}` }} />
+          <Chip size="small" label={`Medio ${row.sum.medio}`} sx={{ bgcolor: PALETTE.warningBg,  color: PALETTE.text, border: `1px solid ${PALETTE.border}` }} />
+          <Chip size="small" label={`Grave ${row.sum.grave}`} sx={{ bgcolor: PALETTE.criticalBg, color: PALETTE.text, border: `1px solid ${PALETTE.border}` }} />
         </Stack>
       </TableCell>
 

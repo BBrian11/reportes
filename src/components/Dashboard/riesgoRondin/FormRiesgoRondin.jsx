@@ -58,7 +58,7 @@ const isTandaCompleta = (t) => {
 
   // 2) Checklist completo
   const c = t.checklist || {};
-  const chkOk = [c.grabacionesOK, c.cortes220v, c.equipoOffline].every(v => v === true || v === false);
+  const chkOk = [c.grabacionesOK, c.cortes220v, c.equipoHora, c.equipoOffline].every(v => v === true || v === false);
 
   // 3) Si grabacionesOK === false, debe tener al menos una cámara marcada en grabacionesFallan
   const grabReqOk = (c.grabacionesOK !== false) ||
@@ -392,6 +392,7 @@ useEffect(() => {
       const incompletas = [];
       if (c.grabacionesOK === null) incompletas.push("GRABACIONES");
       if (c.cortes220v === null) incompletas.push("CORTES 220V");
+      if (c.equipoHora === null) incompletas.push("equipoHora");
       if (c.equipoOffline === null) incompletas.push("EQUIPO OFFLINE");
       if (incompletas.length) {
         issues.push(`${t.cliente || "Cliente"}: completar ${incompletas.join(", ")}`);
@@ -583,6 +584,7 @@ const onCamState = async (tandaId, camId, next) => {
         grabacionesOK: null,
         cortes220v: null,
         equipoOffline: null,
+        equipoHora:null,
         grabacionesFallan: { cam1:false, cam2:false, cam3:false, cam4:false }
       };
       return {
@@ -731,182 +733,212 @@ useEffect(() => { queueAutosave(); }, [startTime, endTime, paused]); // por si q
 // dentro del return de FormRiesgoRondin
 
 return (
-  <Container maxWidth="lg" sx={{ py: 3, display:"grid", gap: 16 }}>
-  {/* HeaderBar aquí si querés, sino dejas el bloque de progreso+campos */}
-  
-  <Paper sx={{ p: 2.25, display: "grid", gap: 2 }}>
-    <ProgressRows overall={overallProgress} cameras={camerasProgress} />
-    <TopFields
-      turno={turno} setTurno={setTurno}
-      operario={operario} setOperario={setOperario}
-      operarios={operarios}
-    />
-    <TextField
-      label="Novedades generales"
-      fullWidth multiline rows={3}
-      value={novedades} onChange={(e)=>setNovedades(e.target.value)}
-    />
-  </Paper>
-
-  {/* Tandas */}
-  <Stack spacing={2}>
-  {tandas.map((t, idx) => {
-    const isActive = idx === activeTandaIdx;
-    return (
-      <Box
-        key={t.id}
-        id={t.id}
+  <Container maxWidth="lg" sx={{ py: 3, display: "grid", gap: 16 }}>
+    {/* === Header compacto y sticky === */}
+    <Box sx={{ position: "sticky", top: 8, zIndex: 12 }}>
+      <Paper
+        elevation={2}
         sx={{
-          position: "relative",
-          opacity: isActive ? 1 : 0.45,
-          pointerEvents: isActive ? "auto" : "none",
-          transition: "opacity .2s ease",
+          px: 2,
+          py: 1.5,
+          borderRadius: 2,
+          backdropFilter: "saturate(1.2) blur(6px)",
         }}
       >
-        {/* Badge opcional para claridad visual */}
-        {!isActive && (
+        <HeaderBar
+          camarasCompletadas={camarasCompletadas}
+          totalCamaras={totalCamaras}
+          minReq={MIN_CAMERAS_REQUIRED}
+          elapsed={displayElapsed}
+        />
+      </Paper>
+    </Box>
+
+    {/* Bloque de progreso + campos */}
+    <Paper sx={{ p: 2.25, display: "grid", gap: 2 }}>
+      <ProgressRows overall={overallProgress} cameras={camerasProgress} />
+      <TopFields
+        turno={turno}
+        setTurno={setTurno}
+        operario={operario}
+        setOperario={setOperario}
+        operarios={operarios}
+      />
+      <TextField
+        label="Novedades generales"
+        fullWidth
+        multiline
+        rows={3}
+        value={novedades}
+        onChange={(e) => setNovedades(e.target.value)}
+      />
+    </Paper>
+
+    {/* Tandas */}
+    <Stack spacing={2}>
+      {tandas.map((t, idx) => {
+        const isActive = idx === activeTandaIdx;
+        return (
           <Box
+            key={t.id}
+            id={t.id}
             sx={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              zIndex: 2,
-              px: 1,
-              py: 0.25,
-              bgcolor: "warning.light",
-              color: "warning.contrastText",
-              borderRadius: 1,
-              fontSize: 12,
+              position: "relative",
+              opacity: isActive ? 1 : 0.45,
+              pointerEvents: isActive ? "auto" : "none",
+              transition: "opacity .2s ease",
             }}
           >
-            Esperá a completar el anterior
+            {/* Badge opcional para claridad visual */}
+            {!isActive && (
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  right: 8,
+                  zIndex: 2,
+                  px: 1,
+                  py: 0.25,
+                  bgcolor: "warning.light",
+                  color: "warning.contrastText",
+                  borderRadius: 1,
+                  fontSize: 12,
+                }}
+              >
+                Esperá a completar el anterior
+              </Box>
+            )}
+
+            <TandaCard
+              tanda={t}
+              clientesCat={clientesCat}
+              onSetCliente={setTandaCliente}
+              onAddCam={addCamRow}
+              onRemoveTanda={(id) => (tandas.length === 1 ? null : removeTanda(id))}
+              onCamField={setCamField}
+              onCamRemove={removeCamRow}
+              onCamState={onCamState}
+              setChecklistVal={setChecklistVal}
+              resetFallan={resetFallan}
+              toggleFallan={toggleGrabacionFalla}
+              setResumen={setTandaResumen}
+              historicos={historicosPorCliente[norm(t.cliente || "")]}
+            />
           </Box>
-        )}
+        );
+      })}
 
-        <TandaCard
-          tanda={t}
-          clientesCat={clientesCat}
-          onSetCliente={setTandaCliente}
-          onAddCam={addCamRow}
-          onRemoveTanda={(id) => (tandas.length === 1 ? null : removeTanda(id))}
-          onCamField={setCamField}
-          onCamRemove={removeCamRow}
-          onCamState={onCamState}
-          setChecklistVal={setChecklistVal}
-          resetFallan={resetFallan}
-          toggleFallan={toggleGrabacionFalla}
-          setResumen={setTandaResumen}
-          historicos={historicosPorCliente[norm(t.cliente || "")]}
-        />
+      <Button
+        onClick={addTanda}
+        variant="outlined"
+        disabled={tandas.length >= Math.min(clientesCat.length || 0, MAX_TANDAS)}
+        sx={{ alignSelf: "flex-start" }}
+      >
+        Agregar cliente {tandas.length}/{Math.min(clientesCat.length || 0, MAX_TANDAS)}
+      </Button>
+    </Stack>
+
+    {/* Observaciones + Footer */}
+
+
+    <Paper
+      sx={{
+        p: 2,
+        position: { md: "sticky" },
+        bottom: { md: 12 },
+        zIndex: 10,
+        backdropFilter: "saturate(1.2) blur(6px)",
+      }}
+    >
+      <FooterActions
+        totalCamaras={totalCamaras}
+        elapsed={displayElapsed}
+        estadoRonda={estadoRonda}
+        onIniciar={handleIniciar}
+        onPausar={handlePausar}
+        onReanudar={handleReanudar}
+        onFinalizar={handleFinalizar}
+        onReset={softReset}
+      />
+
+      <Box component="span">
+        <Box component="br" />
+        <Box component="br" />
       </Box>
-    );
-  })}
 
-  <Button
-    onClick={addTanda}
-    variant="outlined"
-    disabled={tandas.length >= Math.min(clientesCat.length || 0, MAX_TANDAS)}
-    sx={{ alignSelf: "flex-start" }}
-  >
-    Agregar cliente {tandas.length}/{Math.min(clientesCat.length || 0, MAX_TANDAS)}
-  </Button>
-
-</Stack>
-
-  {/* Observaciones + Footer */}
-  <Paper sx={{ p: 2.25 }}>
-    <TextField
-      label="Observaciones generales"
-      fullWidth multiline rows={3}
-      value={observaciones}
-      onChange={(e) => setObservaciones(e.target.value)}
-    />
-  </Paper>
-
-  <Paper
-    sx={{
-      p: 2,
-      position: { md: "sticky" },
-      bottom: { md: 12 },
-      zIndex: 10,
-      backdropFilter: "saturate(1.2) blur(6px)",
-    }}
-  >
-    <FooterActions
-      totalCamaras={totalCamaras}
-      elapsed={displayElapsed}
-      estadoRonda={estadoRonda}
-      onIniciar={handleIniciar}
-      onPausar={handlePausar}
-      onReanudar={handleReanudar}
-      onFinalizar={handleFinalizar}
-      onReset={softReset}
-    />
-    <Box component="span">
- 
-     <Box component="br" /> <Box component="br" />
-    </Box>
-    
-      <Button size="small" variant="text" sx={{ mt: 1 }} onClick={() => {
-        const miss = { camerasNotTouched: [], camerasNullState: [] };
-        tandas.forEach(t => t.camaras.forEach(c => {
-          if (!c.touched) miss.camerasNotTouched.push({ cliente: t.cliente, canal: c.canal });
-          if (c.touched && c.estado === null) miss.camerasNullState.push({ cliente: t.cliente, canal: c.canal });
-        }));
-        const li = (arr, fmt) => (arr.length ? `<ul style="margin:6px 0 0 18px">${arr.map(fmt).join("")}</ul>` : "<i>—</i>");
-        Swal.fire({
-          title: "¿Qué falta completar?",
-          html: `
-            <div style="text-align:left">
-              <p><b>Cámaras sin tocar:</b> ${miss.camerasNotTouched.length}</p>
-              ${li(miss.camerasNotTouched, x =>`<li>${x.cliente || "Cliente"} — Cam ${x.canal}</li>`)}
-              <p style="margin-top:10px"><b>Cámaras sin estado:</b> ${miss.camerasNullState.length}</p>
-              ${li(miss.camerasNullState, x => `<li>${x.cliente || "Cliente"} — Cam ${x.canal}</li>`)}
-            </div>
-          `,
-          icon: (miss.camerasNotTouched.length || miss.camerasNullState.length) ? "info" : "success",
-          confirmButtonText: "OK",
-        });
-      }}>
+      <Button
+        size="small"
+        variant="text"
+        sx={{ mt: 1 }}
+        onClick={() => {
+          const miss = { camerasNotTouched: [], camerasNullState: [] };
+          tandas.forEach((t) =>
+            t.camaras.forEach((c) => {
+              if (!c.touched) miss.camerasNotTouched.push({ cliente: t.cliente, canal: c.canal });
+              if (c.touched && c.estado === null)
+                miss.camerasNullState.push({ cliente: t.cliente, canal: c.canal });
+            })
+          );
+          const li = (arr, fmt) =>
+            arr.length
+              ? `<ul style="margin:6px 0 0 18px">${arr.map(fmt).join("")}</ul>`
+              : "<i>—</i>";
+          Swal.fire({
+            title: "¿Qué falta completar?",
+            html: `
+              <div style="text-align:left">
+                <p><b>Cámaras sin tocar:</b> ${miss.camerasNotTouched.length}</p>
+                ${li(miss.camerasNotTouched, (x) => `<li>${x.cliente || "Cliente"} — Cam ${x.canal}</li>`)}
+                <p style="margin-top:10px"><b>Cámaras sin estado:</b> ${miss.camerasNullState.length}</p>
+                ${li(miss.camerasNullState, (x) => `<li>${x.cliente || "Cliente"} — Cam ${x.canal}</li>`)}
+              </div>
+            `,
+            icon: miss.camerasNotTouched.length || miss.camerasNullState.length ? "info" : "success",
+            confirmButtonText: "OK",
+          });
+        }}
+      >
         Ver pendientes
-      </Button> <Button
-  size="small"
-  variant="contained"
-  sx={{
-    ml: 1,
-    px: 2.5,
-    py: 0.75,
-    borderRadius: 2,
-    fontSize: 13,
-    fontWeight: "bold",
-    textTransform: "none",
-    bgcolor: "#1976d2",
-    color: "#fff",
-    boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
-    "&:hover": {
-      bgcolor: "#1565c0",
-      boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
-    },
-    "&:active": {
-      transform: "scale(0.97)",
-    },
-  }}
-  onClick={() => {
-    const prox = nextIncompleteIdx(activeTandaIdx);
-    if (prox === null) {
-      Swal.fire("Sin pendientes", "No quedan clientes pendientes en esta tanda.", "info");
-    } else {
-      setActiveTandaIdx(prox);
-      const nextEl = document.getElementById(tandas[prox]?.id);
-      if (nextEl) nextEl.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }}
->
-  Ir al siguiente cliente
-</Button>
+      </Button>
 
+      <Button
+        size="small"
+        variant="contained"
+        sx={{
+          ml: 1,
+          px: 2.5,
+          py: 0.75,
+          borderRadius: 2,
+          fontSize: 13,
+          fontWeight: "bold",
+          textTransform: "none",
+          bgcolor: "#1976d2",
+          color: "#fff",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+          "&:hover": {
+            bgcolor: "#1565c0",
+            boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
+          },
+          "&:active": {
+            transform: "scale(0.97)",
+          },
+        }}
+        onClick={() => {
+          const prox = nextIncompleteIdx(activeTandaIdx);
+          if (prox === null) {
+            Swal.fire("Sin pendientes", "No quedan clientes pendientes en esta tanda.", "info");
+          } else {
+            setActiveTandaIdx(prox);
+            const nextEl = document.getElementById(tandas[prox]?.id);
+            if (nextEl) nextEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }}
+      >
+        Ir al siguiente cliente
+      </Button>
     </Paper>
   </Container>
 );
+
 
 }
