@@ -166,9 +166,8 @@ export default function NovedadesCard({
       // Overlay optimista (se ve el cambio al instante)
       setLocalEstado(prev => ({ ...prev, [canal]: next }));
       setLocalNota(prev => ({ ...prev, [canal]: nota }));
-
-      // Callback a padre (si lo usa)
       onEstadoChanged?.(Number(canal), next, nota);
+
 
       // Persistencia Firestore
       if (clienteKey) {
@@ -266,7 +265,7 @@ export default function NovedadesCard({
             {merged.map((n, idx) => {
               const canal = camNum(n);
 
-              // Estado final: overlay local > TANDA > historicos > normalizado del evento
+              
               const estadoActual =
                 localEstado[canal] ||
                 estadoMap[canal] ||
@@ -274,7 +273,7 @@ export default function NovedadesCard({
                 normalizarEstado(n?.evento) ||
                 null;
 
-              // Nota final: overlay local > TANDA > hook
+    
               const notaFinal =
                 (localNota[canal] ?? "") ||
                 (notaMap[canal] ?? "") ||
@@ -301,7 +300,7 @@ export default function NovedadesCard({
                 </Box>
               );
 
-              // color lateral por estado
+         
               const borderColor =
                 estadoActual === "grave" ? "error.main" :
                 estadoActual === "medio" ? "warning.main" :
