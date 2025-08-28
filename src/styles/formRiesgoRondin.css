@@ -259,3 +259,58 @@
 .item-card.status-pendiente { outline: 1px dashed var(--medio); }
 .progress-bar-sm { height: 10px !important; border-radius: 999px !important; }
 .progress-bar-xs { height: 6px !important; border-radius: 999px !important; }
+/* ====== FORZAR DENSIDAD Y SELECTS GRANDES EN RONDÍN ====== */
+.rondin-force .MuiFormControl-root { margin-bottom: 0 !important; }
+
+/* Alto real del select (Outlined) + bordes */
+.rondin-force .MuiOutlinedInput-root {
+  height: 56px !important;
+  border-radius: 10px !important;
+}
+
+/* Padding y tipografía del contenido del select */
+.rondin-force .MuiOutlinedInput-input {
+  padding: 14px !important;     /* vertical + horizontal */
+  font-size: 16px !important;
+  line-height: 1.25 !important;
+}
+
+/* Label más legible */
+.rondin-force .MuiFormLabel-root {
+  font-size: 0.95rem !important;
+}
+
+/* ¡MUY IMPORTANTE!: NO usar display:flex acá. Forzamos block y truncamiento elegante */
+.rondin-force .MuiSelect-select {
+  display: block !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Menú del Select bien ancho (global) */
+.rondin-force .MuiMenu-paper {
+  min-width: 420px !important;
+  max-height: 480px !important;
+}
+
+/* Progresos compactos */
+.rondin-force .progress-row { margin-bottom: 8px !important; }
+
+/* TopFields layout: Turno 25% / Operador 75% en md+  */
+@media (min-width: 900px) {
+  .rondin-force .TopFields-grid .turno-col {
+    flex-basis: 25% !important;
+    max-width: 25% !important;
+  }
+  .rondin-force .TopFields-grid .operador-col {
+    flex-basis: 75% !important;
+    max-width: 75% !important;
+  }
+}
+
+/* Evitar que el Grid hijo achique el contenido por min-width */
+.rondin-force .TopFields-grid .turno-col,
+.rondin-force .TopFields-grid .operador-col {
+  min-width: 0 !important;
+}

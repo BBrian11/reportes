@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, serverTimestamp, writeBatch,  
+  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, serverTimestamp, writeBatch, 
   onSnapshot
 } from "firebase/firestore";
 import { db } from "../../../services/firebase";
-import { Box, Paper, Divider, Grid, TextField, Button,Container, Stack, Typography, Card } from "@mui/material";
+import { Box, Paper, Divider, Grid, TextField, Button,Container, Stack, Typography, Card,  GlobalStyles, } from "@mui/material";
 import HeaderBar from "./HeaderBar";
 import ProgressRows from "./ProgressRows";
 import TopFields from "./TopFields";
@@ -733,212 +733,184 @@ useEffect(() => { queueAutosave(); }, [startTime, endTime, paused]); // por si q
 // dentro del return de FormRiesgoRondin
 
 return (
-  <Container maxWidth="lg" sx={{ py: 3, display: "grid", gap: 16 }}>
-    {/* === Header compacto y sticky === */}
-    <Box sx={{ position: "sticky", top: 8, zIndex: 12 }}>
-      <Paper
-        elevation={2}
-        sx={{
-          px: 2,
-          py: 1.5,
-          borderRadius: 2,
-          backdropFilter: "saturate(1.2) blur(6px)",
-        }}
-      >
-        <HeaderBar
-          camarasCompletadas={camarasCompletadas}
-          totalCamaras={totalCamaras}
-          minReq={MIN_CAMERAS_REQUIRED}
-          elapsed={displayElapsed}
-        />
-      </Paper>
-    </Box>
+  <>
+    {/* CSS global que fuerza tamaños y layout del TopFields */}
+    <GlobalStyles styles={{
+      ".rondin-force .MuiOutlinedInput-root": { height: 56, borderRadius: 12, background: "#fff" },
+      ".rondin-force .MuiOutlinedInput-input": { padding: "14px 14px", fontSize: 16, lineHeight: 1.25 },
+      ".rondin-force .MuiFormLabel-root": { fontSize: "0.95rem" },
+      ".rondin-force .MuiSelect-select": { display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+      ".rondin-force .MuiMenu-paper": { minWidth: 440, maxHeight: 480 },
+      ".rondin-force .TopFields-grid .turno-col": { minWidth: 0 },
+      ".rondin-force .TopFields-grid .operador-col": { minWidth: 0 },
+      "@media (min-width:900px)": {
+        ".rondin-force .TopFields-grid .turno-col": { flexBasis: "25%", maxWidth: "25%" },
+        ".rondin-force .TopFields-grid .operador-col": { flexBasis: "75%", maxWidth: "75%" },
+      },
+    }} />
 
-    {/* Bloque de progreso + campos */}
-    <Paper sx={{ p: 2.25, display: "grid", gap: 2 }}>
-      <ProgressRows overall={overallProgress} cameras={camerasProgress} />
-      <TopFields
-        turno={turno}
-        setTurno={setTurno}
-        operario={operario}
-        setOperario={setOperario}
-        operarios={operarios}
-      />
-      <TextField
-        label="Novedades generales"
-        fullWidth
-        multiline
-        rows={3}
-        value={novedades}
-        onChange={(e) => setNovedades(e.target.value)}
-      />
-    </Paper>
-
-    {/* Tandas */}
-    <Stack spacing={2}>
-      {tandas.map((t, idx) => {
-        const isActive = idx === activeTandaIdx;
-        return (
-          <Box
-            key={t.id}
-            id={t.id}
-            sx={{
-              position: "relative",
-              opacity: isActive ? 1 : 0.45,
-              pointerEvents: isActive ? "auto" : "none",
-              transition: "opacity .2s ease",
-            }}
-          >
-            {/* Badge opcional para claridad visual */}
-            {!isActive && (
-              <Box
-                sx={{
-                  position: "absolute",
-                  top: 8,
-                  right: 8,
-                  zIndex: 2,
-                  px: 1,
-                  py: 0.25,
-                  bgcolor: "warning.light",
-                  color: "warning.contrastText",
-                  borderRadius: 1,
-                  fontSize: 12,
-                }}
-              >
-                Esperá a completar el anterior
-              </Box>
-            )}
-
-            <TandaCard
-              tanda={t}
-              clientesCat={clientesCat}
-              onSetCliente={setTandaCliente}
-              onAddCam={addCamRow}
-              onRemoveTanda={(id) => (tandas.length === 1 ? null : removeTanda(id))}
-              onCamField={setCamField}
-              onCamRemove={removeCamRow}
-              onCamState={onCamState}
-              setChecklistVal={setChecklistVal}
-              resetFallan={resetFallan}
-              toggleFallan={toggleGrabacionFalla}
-              setResumen={setTandaResumen}
-              historicos={historicosPorCliente[norm(t.cliente || "")]}
-            />
-          </Box>
-        );
-      })}
-
-      <Button
-        onClick={addTanda}
-        variant="outlined"
-        disabled={tandas.length >= Math.min(clientesCat.length || 0, MAX_TANDAS)}
-        sx={{ alignSelf: "flex-start" }}
-      >
-        Agregar cliente {tandas.length}/{Math.min(clientesCat.length || 0, MAX_TANDAS)}
-      </Button>
-    </Stack>
-
-    {/* Observaciones + Footer */}
-
-
-    <Paper
-      sx={{
-        p: 2,
-        position: { md: "sticky" },
-        bottom: { md: 12 },
-        zIndex: 10,
-        backdropFilter: "saturate(1.2) blur(6px)",
-      }}
-    >
-      <FooterActions
-        totalCamaras={totalCamaras}
-        elapsed={displayElapsed}
-        estadoRonda={estadoRonda}
-        onIniciar={handleIniciar}
-        onPausar={handlePausar}
-        onReanudar={handleReanudar}
-        onFinalizar={handleFinalizar}
-        onReset={softReset}
-      />
-
-      <Box component="span">
-        <Box component="br" />
-        <Box component="br" />
+    <Container maxWidth="lg" className="rondin-force" sx={{ py: 2, display: "grid", gap: 2 }}>
+      {/* Header sticky */}
+      <Box sx={{ position: "sticky", top: 8, zIndex: 12 }}>
+        <Paper elevation={1} sx={{ px: 1.5, py: 1, borderRadius: 2, backdropFilter: "saturate(1.2) blur(6px)" }}>
+          <HeaderBar
+            camarasCompletadas={camarasCompletadas}
+            totalCamaras={totalCamaras}
+            minReq={MIN_CAMERAS_REQUIRED}
+            elapsed={displayElapsed}
+          />
+        </Paper>
       </Box>
 
-      <Button
-        size="small"
-        variant="text"
-        sx={{ mt: 1 }}
-        onClick={() => {
-          const miss = { camerasNotTouched: [], camerasNullState: [] };
-          tandas.forEach((t) =>
-            t.camaras.forEach((c) => {
-              if (!c.touched) miss.camerasNotTouched.push({ cliente: t.cliente, canal: c.canal });
-              if (c.touched && c.estado === null)
-                miss.camerasNullState.push({ cliente: t.cliente, canal: c.canal });
-            })
+      {/* Progreso + Campos superiores */}
+      <Paper sx={{ p: 2, display: "grid", gap: 1.25 }}>
+        <ProgressRows overall={overallProgress} cameras={camerasProgress} dense />
+       <TopFields
+  turno={turno}
+  setTurno={setTurno}
+  operario={operario}
+  setOperario={setOperario}
+  operarios={OPERARIOS_DEFAULT}
+  layout="wide"          // "wide" | "half" | "single"
+  size="medium"          // "small" | "medium"
+  required={{ turno: true, operario: true }}
+  helperText={{ turno: "Seleccioná el turno de la ronda.", operario: "Elegí el operador a cargo." }}
+/>
+
+        <TextField
+          label="Novedades generales"
+          fullWidth
+          multiline
+          rows={2}
+          value={novedades}
+          onChange={(e) => setNovedades(e.target.value)}
+        />
+      </Paper>
+
+      {/* Tandas */}
+      <Stack spacing={2}>
+        {tandas.map((t, idx) => {
+          const isActive = idx === activeTandaIdx;
+          return (
+            <Box
+              key={t.id}
+              id={t.id}
+              sx={{
+                position: "relative",
+                opacity: isActive ? 1 : 0.45,
+                pointerEvents: isActive ? "auto" : "none",
+                transition: "opacity .2s ease",
+              }}
+            >
+              {!isActive && (
+                <Box
+                  sx={{
+                    position: "absolute", top: 8, right: 8, zIndex: 2, px: 1, py: 0.25,
+                    bgcolor: "warning.light", color: "warning.contrastText", borderRadius: 1, fontSize: 12,
+                  }}
+                >
+                  Esperá a completar el anterior
+                </Box>
+              )}
+              <TandaCard
+                tanda={t}
+                clientesCat={clientesCat}
+                onSetCliente={setTandaCliente}
+                onAddCam={addCamRow}
+                onRemoveTanda={(id) => (tandas.length === 1 ? null : removeTanda(id))}
+                onCamField={setCamField}
+                onCamRemove={removeCamRow}
+                onCamState={onCamState}
+                setChecklistVal={setChecklistVal}
+                resetFallan={resetFallan}
+                toggleFallan={toggleGrabacionFalla}
+                setResumen={setTandaResumen}
+                historicos={historicosPorCliente[norm(t.cliente || "")]}
+              />
+            </Box>
           );
-          const li = (arr, fmt) =>
-            arr.length
+        })}
+        <Button
+          onClick={addTanda}
+          variant="outlined"
+          disabled={tandas.length >= Math.min(clientesCat.length || 0, MAX_TANDAS)}
+          sx={{ alignSelf: "flex-start" }}
+        >
+          Agregar cliente {tandas.length}/{Math.min(clientesCat.length || 0, MAX_TANDAS)}
+        </Button>
+      </Stack>
+
+      {/* Footer */}
+      <Paper sx={{ p: 2, position: { md: "sticky" }, bottom: { md: 12 }, zIndex: 10, backdropFilter: "saturate(1.2) blur(6px)" }}>
+        <FooterActions
+          totalCamaras={totalCamaras}
+          elapsed={displayElapsed}
+          estadoRonda={estadoRonda}
+          onIniciar={handleIniciar}
+          onPausar={handlePausar}
+          onReanudar={handleReanudar}
+          onFinalizar={handleFinalizar}
+          onReset={softReset}
+        />
+        <Box component="span"><br /><br /></Box>
+        <Button
+          size="small"
+          variant="text"
+          sx={{ mt: 1 }}
+          onClick={() => {
+            const miss = { camerasNotTouched: [], camerasNullState: [] };
+            tandas.forEach((t) =>
+              t.camaras.forEach((c) => {
+                if (!c.touched) miss.camerasNotTouched.push({ cliente: t.cliente, canal: c.canal });
+                if (c.touched && c.estado === null) miss.camerasNullState.push({ cliente: t.cliente, canal: c.canal });
+              })
+            );
+            const li = (arr, fmt) => (arr.length
               ? `<ul style="margin:6px 0 0 18px">${arr.map(fmt).join("")}</ul>`
-              : "<i>—</i>";
-          Swal.fire({
-            title: "¿Qué falta completar?",
-            html: `
-              <div style="text-align:left">
-                <p><b>Cámaras sin tocar:</b> ${miss.camerasNotTouched.length}</p>
-                ${li(miss.camerasNotTouched, (x) => `<li>${x.cliente || "Cliente"} — Cam ${x.canal}</li>`)}
-                <p style="margin-top:10px"><b>Cámaras sin estado:</b> ${miss.camerasNullState.length}</p>
-                ${li(miss.camerasNullState, (x) => `<li>${x.cliente || "Cliente"} — Cam ${x.canal}</li>`)}
-              </div>
-            `,
-            icon: miss.camerasNotTouched.length || miss.camerasNullState.length ? "info" : "success",
-            confirmButtonText: "OK",
-          });
-        }}
-      >
-        Ver pendientes
-      </Button>
+              : "<i>—</i>");
+            Swal.fire({
+              title: "¿Qué falta completar?",
+              html: `
+                <div style="text-align:left">
+                  <p><b>Cámaras sin tocar:</b> ${miss.camerasNotTouched.length}</p>
+                  ${li(miss.camerasNotTouched, (x) => `<li>${x.cliente || "Cliente"} — Cam ${x.canal}</li>`)}
+                  <p style="margin-top:10px"><b>Cámaras sin estado:</b> ${miss.camerasNullState.length}</p>
+                  ${li(miss.camerasNullState, (x) => `<li>${x.cliente || "Cliente"} — Cam ${x.canal}</li>`)}
+                </div>
+              `,
+              icon: miss.camerasNotTouched.length || miss.camerasNullState.length ? "info" : "success",
+              confirmButtonText: "OK",
+            });
+          }}
+        >
+          Ver pendientes
+        </Button>
 
-      <Button
-        size="small"
-        variant="contained"
-        sx={{
-          ml: 1,
-          px: 2.5,
-          py: 0.75,
-          borderRadius: 2,
-          fontSize: 13,
-          fontWeight: "bold",
-          textTransform: "none",
-          bgcolor: "#1976d2",
-          color: "#fff",
-          boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
-          "&:hover": {
-            bgcolor: "#1565c0",
-            boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
-          },
-          "&:active": {
-            transform: "scale(0.97)",
-          },
-        }}
-        onClick={() => {
-          const prox = nextIncompleteIdx(activeTandaIdx);
-          if (prox === null) {
-            Swal.fire("Sin pendientes", "No quedan clientes pendientes en esta tanda.", "info");
-          } else {
-            setActiveTandaIdx(prox);
-            const nextEl = document.getElementById(tandas[prox]?.id);
-            if (nextEl) nextEl.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }}
-      >
-        Ir al siguiente cliente
-      </Button>
-    </Paper>
-  </Container>
+        <Button
+          size="small"
+          variant="contained"
+          sx={{
+            ml: 1, px: 2.5, py: 0.75, borderRadius: 2, fontSize: 13, fontWeight: "bold",
+            textTransform: "none", bgcolor: "#1976d2", color: "#fff",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+            "&:hover": { bgcolor: "#1565c0", boxShadow: "0 4px 10px rgba(0,0,0,0.25)" },
+            "&:active": { transform: "scale(0.97)" },
+          }}
+          onClick={() => {
+            const prox = nextIncompleteIdx(activeTandaIdx);
+            if (prox === null) {
+              Swal.fire("Sin pendientes", "No quedan clientes pendientes en esta tanda.", "info");
+            } else {
+              setActiveTandaIdx(prox);
+              const nextEl = document.getElementById(tandas[prox]?.id);
+              if (nextEl) nextEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }}
+        >
+          Ir al siguiente cliente
+        </Button>
+      </Paper>
+    </Container>
+  </>
 );
-
-
 }

@@ -601,60 +601,108 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       </Box>
 
       {/* CONTENEDOR */}
-      <Paper className="riesgo-container">
-        {/* Progreso */}
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="subtitle2" className="muted">Progreso global</Typography>
-          <LinearProgress variant="determinate" value={overallProgress} className="progress-bar-sm" />
-          <Typography variant="caption">{overallProgress}%</Typography>
-        </Stack>
+      <Paper className="riesgo-container" sx={{ p: 2, borderRadius: 2 }}>
+  {/* Progresos en fila */}
+  <Stack direction="row" spacing={4} alignItems="center" sx={{ mb: 2 }}>
+    {/* Progreso global */}
+    <Stack direction="row" spacing={1} alignItems="center" flex={1}>
+      <Typography variant="subtitle2" color="text.secondary">Progreso global</Typography>
+      <LinearProgress
+        variant="determinate"
+        value={overallProgress}
+        sx={{ flex: 1, height: 8, borderRadius: 5 }}
+      />
+      <Typography variant="caption" sx={{ minWidth: 36, textAlign: "right" }}>
+        {overallProgress}%
+      </Typography>
+    </Stack>
 
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="subtitle2" className="muted">Cámaras</Typography>
-          <LinearProgress variant="determinate" value={camerasProgress} className="progress-bar-xs" />
-          <Typography variant="caption">{camerasProgress}%</Typography>
-        </Stack>
+    {/* Cámaras */}
+    <Stack direction="row" spacing={1} alignItems="center" flex={1}>
+      <Typography variant="subtitle2" color="text.secondary">Cámaras</Typography>
+      <LinearProgress
+        variant="determinate"
+        value={camerasProgress}
+        sx={{ flex: 1, height: 6, borderRadius: 5 }}
+      />
+      <Typography variant="caption" sx={{ minWidth: 36, textAlign: "right" }}>
+        {camerasProgress}%
+      </Typography>
+    </Stack>
+  </Stack>
 
-        {/* Datos superiores */}
-        <Grid container spacing={2} alignItems="center" className="riesgo-top-form">
-          <Grid item xs={12} md={4} className="top-field">
-            <FormControl fullWidth size="medium" className="big-control">
-              <InputLabel>Turno</InputLabel>
-              <Select value={turno} label="Turno" onChange={(e) => setTurno(e.target.value)}>
-                <MenuItem value="Noche">Nocturno</MenuItem>
-                <MenuItem value="Día">Día</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
+  {/* Datos superiores en una sola fila */}
+{/* Datos superiores en una sola fila */}
+<Grid container spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+  {/* Turno (1/3) */}
+  <Grid item xs={12} md={4}>
+    <FormControl fullWidth size="medium"
+      sx={{
+        "& .MuiInputBase-root": { height: 56, borderRadius: 2 },
+        "& .MuiFormLabel-root": { fontSize: "0.95rem" },
+        "& .MuiSelect-select": { display: "flex", alignItems: "center", py: 1.25 }
+      }}
+    >
+      <InputLabel>Turno</InputLabel>
+      <Select
+        value={turno}
+        label="Turno"
+        onChange={(e) => setTurno(e.target.value)}
+        MenuProps={{ PaperProps: { sx: { maxHeight: 360, minWidth: 220 } } }}
+      >
+        <MenuItem value="Noche">Nocturno</MenuItem>
+        <MenuItem value="Día">Día</MenuItem>
+      </Select>
+    </FormControl>
+  </Grid>
 
-          <Grid item xs={12} md={4} className="top-field">
-            <FormControl fullWidth size="medium" className="big-control">
-              <InputLabel>Operador</InputLabel>
-              <Select value={operario} label="Operario" onChange={(e) => setOperario(e.target.value)}>
-                {operarios.map(op => (<MenuItem key={op} value={op}>{op}</MenuItem>))}
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
+  {/* Operador (2/3) — GRANDE y legible */}
+  <Grid item xs={12} md={8}>
+    <FormControl fullWidth size="medium"
+      sx={{
+        "& .MuiInputBase-root": { height: 56, borderRadius: 2 },
+        "& .MuiFormLabel-root": { fontSize: "0.95rem" },
+        "& .MuiSelect-select": { display: "flex", alignItems: "center", py: 1.25 }
+      }}
+    >
+      <InputLabel>Operador</InputLabel>
+      <Select
+        value={operario}
+        label="Operador"
+        onChange={(e) => setOperario(e.target.value)}
+        // menú ancho y cómodo para leer nombres largos
+        MenuProps={{ PaperProps: { sx: { maxHeight: 420, minWidth: 360 } } }}
+      >
+        {operarios.map(op => (
+          <MenuItem key={op} value={op}>
+            <Typography sx={{ fontSize: "0.98rem", whiteSpace: "nowrap" }}>{op}</Typography>
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  </Grid>
+</Grid>
 
-        <Box className="obs-section">
-          <TextField
-            className="obs-full"
-            label="Novedades Generales"
-            fullWidth
-            multiline
-            rows={4}
-            value={novedades}
-            onChange={(e) => setNovedades(e.target.value)}
-            sx={{
-              "& .MuiOutlinedInput-root": { fontSize: "1rem", borderRadius: "12px" },
-              "& .MuiInputLabel-root": { fontSize: "1rem" },
-              "& textarea": { padding: "14px" }
-            }}
-          />
-        </Box>
 
-        <Divider className="riesgo-divider" />
+
+  {/* Observaciones */}
+  <Box sx={{ mb: 1 }}>
+    <TextField
+      label="Novedades Generales"
+      fullWidth
+      multiline
+      rows={3}
+      value={novedades}
+      onChange={(e) => setNovedades(e.target.value)}
+      sx={{
+        "& .MuiOutlinedInput-root": { fontSize: "0.95rem", borderRadius: "10px" },
+        "& .MuiInputLabel-root": { fontSize: "0.95rem" },
+        "& textarea": { padding: "10px" }
+      }}
+    />
+  </Box>
+
+
 
         {/* TANDAS (clientes) */}
         <Box className="tandas-grid">

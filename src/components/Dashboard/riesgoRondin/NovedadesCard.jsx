@@ -1,3 +1,4 @@
+// src/components/Rondin/NovedadesCard.jsx
 import React from "react";
 import {
   Card, CardHeader, CardContent, List, ListItem, ListItemText, ListItemIcon,
@@ -10,6 +11,11 @@ import DoneOutlinedIcon from "@mui/icons-material/DoneOutlined";
 import useNovedadesCliente from "./useNovedadesCliente";
 import { db } from "../../../services/firebase";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
+import "sweetalert2/dist/sweetalert2.min.css";
+
+const MySwal = withReactContent(Swal);
 
 const ESTADOS = ["ok", "medio", "grave"];
 const estadoColor = (e) =>
@@ -49,7 +55,13 @@ export default function NovedadesCard({
   // 2ª fuente: novedades + índice + ÚLTIMA RESPUESTA (con notas)
   const { items, loading, error, partialError } = useNovedadesCliente(clienteKey, limit);
 
-  // Mapas de TANDA
+  // ——— Overlay local para ver el cambio en tiempo real (optimista) ———
+  // localEstado: { [canal]: "ok" | "medio" | "grave" }
+  // localNota:   { [canal]: "texto de nota" }
+  const [localEstado, setLocalEstado] = React.useState({});
+  const [localNota, setLocalNota] = React.useState({});
+
+  // Mapas de TANDA (props.camaras)
   const notaMap = React.useMemo(() => {
     const m = {};
     (camaras || []).forEach(c => { const n = Number(c?.canal) || 0; if (n) m[n] = (c?.nota ?? "").toString().trim(); });
@@ -112,12 +124,13 @@ export default function NovedadesCard({
     return arr;
   }, [fromTanda, fromHook]);
 
-  // resumen de estados
+  // resumen de estados (toma overlay local primero)
   const resumen = React.useMemo(() => {
     const r = { ok: 0, medio: 0, grave: 0 };
     merged.forEach(it => {
       const canal = camNum(it);
       const estadoActual =
+        localEstado[canal] ||              // overlay en vivo
         estadoMap[canal] ||
         historicos?.[canal] ||
         normalizarEstado(it?.evento) ||
@@ -125,22 +138,76 @@ export default function NovedadesCard({
       if (estadoActual && r[estadoActual] !== undefined) r[estadoActual]++;
     });
     return r;
-  }, [merged, estadoMap, historicos]);
+  }, [merged, localEstado, estadoMap, historicos]);
 
-  const quickSetEstado = async (canal, next) => {
+  // === Click de estado: pide nota, actualiza optimista, guarda en Firestore y confirma ===
+  const quickSetEstado = React.useCallback(async (canal, next) => {
+    if (!canal) return;
+
     try {
-      onEstadoChanged?.(Number(canal), next);
-      if (clienteKey && canal) {
+      const result = await MySwal.fire({
+        title: `Agregar nota para CAM ${canal}`,
+        input: "textarea",
+        inputLabel: "Observación",
+        inputPlaceholder: "Escribí la nota…",
+        inputAttributes: { "aria-label": "Escribí la nota" },
+        showCancelButton: true,
+        confirmButtonText: "Guardar",
+        cancelButtonText: "Cancelar",
+        inputValidator: (value) => {
+          if (!value) return "La nota no puede estar vacía";
+        },
+      });
+
+      if (!result.isConfirmed) return;
+
+      const nota = (result.value ?? "").trim();
+
+      // Overlay optimista (se ve el cambio al instante)
+      setLocalEstado(prev => ({ ...prev, [canal]: next }));
+      setLocalNota(prev => ({ ...prev, [canal]: nota }));
+
+      // Callback a padre (si lo usa)
+      onEstadoChanged?.(Number(canal), next, nota);
+
+      // Persistencia Firestore
+      if (clienteKey) {
         await setDoc(
           doc(db, "rondin-index", clienteKey, "camaras", String(canal)),
-          { estado: next, updatedAt: serverTimestamp(), rondaId: rondaId || "desde-novedades" },
+          {
+            estado: next,
+            nota,
+            updatedAt: serverTimestamp(),
+            rondaId: rondaId || "desde-novedades",
+          },
           { merge: true }
         );
       }
+
+      MySwal.fire({
+        icon: "success",
+        title: "Guardado",
+        text: `Estado ${next.toUpperCase()} y nota registrados.`,
+        timer: 1400,
+        showConfirmButton: false,
+      });
     } catch (e) {
+      // Rollback del overlay si falla
+      setLocalEstado(prev => {
+        const p = { ...prev }; delete p[canal]; return p;
+      });
+      setLocalNota(prev => {
+        const p = { ...prev }; delete p[canal]; return p;
+      });
+
       console.error("quickSetEstado failed:", e);
+      MySwal.fire({
+        icon: "error",
+        title: "Error",
+        text: "No se pudo guardar el estado en Firestore.",
+      });
     }
-  };
+  }, [clienteKey, rondaId, onEstadoChanged]);
 
   const skeletons = Array.from({ length: 3 }).map((_, i) => (
     <Box key={`sk-${i}`}>
@@ -199,15 +266,19 @@ export default function NovedadesCard({
             {merged.map((n, idx) => {
               const canal = camNum(n);
 
-              // Estado final: TANDA > historicos > normalizado del evento
+              // Estado final: overlay local > TANDA > historicos > normalizado del evento
               const estadoActual =
+                localEstado[canal] ||
                 estadoMap[canal] ||
                 historicos?.[canal] ||
                 normalizarEstado(n?.evento) ||
                 null;
 
-              // Nota final: TANDA > hook (respuestas / novedades)
-              const notaFinal = (notaMap[canal] || n.nota || "").toString().trim();
+              // Nota final: overlay local > TANDA > hook
+              const notaFinal =
+                (localNota[canal] ?? "") ||
+                (notaMap[canal] ?? "") ||
+                (n.nota ?? "");
 
               const created = safeDate(n?.createdAt) || null;
               const colorChip = estadoColor(estadoActual);
@@ -225,7 +296,7 @@ export default function NovedadesCard({
                     </Typography>
                   )}
                   <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                    {notaFinal || "Sin observación"}
+                    {notaFinal ? notaFinal : "Sin observación"}
                   </Typography>
                 </Box>
               );
@@ -280,7 +351,7 @@ export default function NovedadesCard({
 
                       <ListItemText
                         primary={
-                            <Stack spacing={0.25}>
+                          <Stack spacing={0.25}>
                             {/* Fila 1: cámara + estado */}
                             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                               <Typography variant="body2" fontWeight={700}>Cam {canal || "—"}</Typography>
@@ -294,10 +365,11 @@ export default function NovedadesCard({
                                 label={chipLabel}
                                 color={colorChip}
                                 variant={chipVariant}
-                                sx={{ height: 22 }}
+                                sx={{ height: 22, cursor: "pointer" }}
+                                onClick={() => quickSetEstado(canal, estadoActual || "ok")}
                               />
                             </Stack>
-                          
+
                             {/* Fila 2: fecha */}
                             {created && (
                               <Typography variant="caption" color="text.secondary">
@@ -305,8 +377,6 @@ export default function NovedadesCard({
                               </Typography>
                             )}
                           </Stack>
-                          
-                          
                         }
                         secondary={
                           <Stack spacing={0.75} sx={{ mt: notaFinal ? 0.5 : 0 }}>
