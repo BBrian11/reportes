@@ -27,14 +27,12 @@ import {
   FaPause,
   FaPlay,
   FaEdit,
-  FaHistory,
   FaBell,
   FaBellSlash,
   FaDownload,
-  FaVolumeUp,
-  FaVolumeMute,
   FaExpand,
   FaCompress,
+  FaBook,
 } from "react-icons/fa";
 
 import "../../styles/wallboard-soc.css";
@@ -105,12 +103,37 @@ const fmtAgo = (dt) => {
   return `${h}h ${m % 60}m`;
 };
 
-/* Cam summary */
+/* -------- Normalización de severidad por cámara ---------- */
+function normalizeSev(val) {
+  if (val === true) return "grave";
+  if (val === false) return "ok";
+  if (typeof val === "number") {
+    // admite 0/1/2 o 1/2/3, etc.
+    if (val >= 2) return "grave";
+    if (val >= 1) return "medio";
+    return "ok";
+  }
+  let s = String(val ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+  // críticos
+  if (["grave", "critico", "critica", "critical", "alto", "alta", "high", "severo", "severa"].includes(s)) return "grave";
+  // medios
+  if (["medio", "media", "moderado", "moderada", "warn", "warning", "medium"].includes(s)) return "medio";
+  // ok
+  if (["ok", "bien", "normal", "healthy", "verde", "green"].includes(s)) return "ok";
+  return "nd";
+}
+
+/* Cam summary robusto */
 const camSummaryFromTanda = (t) => {
   const cams = Array.isArray(t?.camaras) ? t.camaras : [];
   const counts = cams.reduce(
     (acc, c) => {
-      const e = String(c?.estado ?? "").toLowerCase();
+      const raw = c?.estado ?? c?.criticidad ?? c?.severity ?? c?.nivel;
+      const e = normalizeSev(raw);
       if (e === "grave") acc.grave += 1;
       else if (e === "medio") acc.medio += 1;
       else if (e === "ok") acc.ok += 1;
@@ -206,8 +229,21 @@ function Pill({ label, sev = "info", blink = false, sx }) {
   );
 }
 
+/* ========================= Playbooks (guías rápidas) ========================= */
+const PLAYBOOKS = {
+  "SIN COMMS": [
+    "Verificar WAN/4G/ISP del sitio",
+    "Probar ping al equipo",
+    "Reiniciar equipo remoto si es posible",
+    "Escalar a redes si persiste",
+  ],
+  OFFLINE: ["Chequear energía/UPS", "Verificar estado del NVR/DVR", "Confirmar última conexión"],
+  "Cortes 220V": ["Confirmar suministro y UPS", "Contactar al responsable del sitio"],
+  Tamper: ["Validar integridad de caja/sensor", "Revisar cámaras cercanas a gabinete"],
+};
+
 /* ========================= Row ========================= */
-const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onHistory }) {
+const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onPlaybook }) {
   const color = sevColor(row.worst);
   const c = row.checklist || {};
   const now = Date.now();
@@ -215,6 +251,9 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onHi
   const mFrom = row.maintenanceFrom?.getTime?.();
   const mTo = row.maintenanceTo?.getTime?.();
   const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
+
+  const ageMin = row.time ? Math.floor((Date.now() - row.time.getTime()) / 60000) : 0;
+  const agingFilter = ageMin >= 180 ? "saturate(85%) brightness(0.9)" : ageMin >= 60 ? "saturate(90%) brightness(0.95)" : undefined;
 
   const statusPills = [];
   statusPills.push(
@@ -240,7 +279,10 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onHi
   if (c.grabacionesOK === false) statusPills.push(<Pill key="grab-ko" label="Falla grabaciones" sev="warning" />);
   if (c.cortes220v === true) statusPills.push(<Pill key="220v" label="Cortes 220V" sev="critical" blink={!ackActive && !mantActive} />);
   if (c.equipoHora === true) statusPills.push(<Pill key="hora" label="Hora desfasada" sev="warning" />);
-  if (ackActive) statusPills.push(<Pill key="ack" label={`ACK hasta ${row.ackUntil.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`} sev="info" />);
+  if (ackActive)
+    statusPills.push(
+      <Pill key="ack" label={`ACK hasta ${row.ackUntil.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`} sev="info" />
+    );
   if (mantActive) statusPills.push(<Pill key="mant" label="MANTENIMIENTO" sev="info" />);
 
   if (row.escalation?.to) statusPills.push(<Pill key="esc" label={`ESC → ${row.escalation.to}`} sev="warning" />);
@@ -266,6 +308,7 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onHi
         opacity: ackActive || mantActive ? 0.7 : 1,
         borderLeft: `6px solid ${color}`,
         outline: `1px solid ${PALETTE.border}`,
+        filter: agingFilter,
         boxShadow:
           row.worst === "critical"
             ? `0 0 0 1px ${PALETTE.border}, 0 0 18px 2px rgba(255,59,48,.18)`
@@ -281,8 +324,8 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onHi
       <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
           <FaVideo style={{ opacity: 0.9 }} />
-          <Pill label={`MEDIO ${row.sum.medio}`} sev="warning" />
-          <Pill label={`GRAVE ${row.sum.grave}`} sev="critical" />
+          <Pill label={`MEDIO ${row.sum.medio || 0}`} sev="warning" />
+          <Pill label={`GRAVE ${row.sum.grave || 0}`} sev="critical" />
         </Stack>
       </TableCell>
 
@@ -291,10 +334,21 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onHi
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexWrap: "wrap" }}>
           <FaShieldAlt style={{ opacity: 0.9 }} />
           {statusPills.length ? statusPills : <Pill label="Sin alarma / OK" sev="ok" />}
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlaybook?.(row);
+            }}
+            sx={{ color: PALETTE.subtext, ml: 0.5 }}
+            title="Guía rápida (playbook)"
+          >
+            <FaBook />
+          </IconButton>
         </Stack>
       </TableCell>
 
-      {/* Operador + ACK + Historial */}
+      {/* Operador + ACK */}
       <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography variant="body1" sx={{ fontWeight: 800 }}>
@@ -302,16 +356,21 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onHi
           </Typography>
           <IconButton
             size="small"
-            title={ackActive ? "Quitar ACK" : "Reconocer (ACK) por 1 hora"}
+            title={ackActive ? "Quitar ACK" : "ACK 1h (Shift: 4h · Alt: 15m)"}
             onClick={(e) => {
               e.stopPropagation();
-              onToggleAck?.(row, ackActive ? null : new Date(Date.now() + 60 * 60 * 1000));
+              if (ackActive) {
+                onToggleAck?.(row, null);
+                return;
+              }
+              const base = Date.now();
+              const ms = e.shiftKey ? 4 * 60 * 60 * 1000 : e.altKey ? 15 * 60 * 1000 : 60 * 60 * 1000;
+              onToggleAck?.(row, new Date(base + ms));
             }}
             sx={{ color: PALETTE.subtext }}
           >
             {ackActive ? <FaBellSlash /> : <FaBell />}
           </IconButton>
-        
         </Stack>
       </TableCell>
 
@@ -337,10 +396,15 @@ export default function MonitoringWallboardTV() {
 
   const [paused, setPaused] = useState(false);
   const [isFs, setIsFs] = useState(false);
-  const [soundOn, setSoundOn] = useState(true);
-  const audioCtxRef = useRef(null);
 
   const [docs, setDocs] = useState([]);
+
+  // Tick cada 1s para refrescar labels "hace Xm"
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((t) => (t + 1) % 1_000_000), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // ====== Firestore listener ======
   useEffect(() => {
@@ -351,7 +415,7 @@ export default function MonitoringWallboardTV() {
     return () => unsub();
   }, []);
 
-  // ====== Ticker manual ======
+  // ====== Ticker manual (persistente) ======
   const [tickerItems, setTickerItems] = useState([]); // { text, time }
   const [tickerInput, setTickerInput] = useState("");
   const addTickerItem = () => {
@@ -362,7 +426,23 @@ export default function MonitoringWallboardTV() {
   };
   const clearTickerItems = () => setTickerItems([]);
 
-  // ====== Datos agregados por cliente (sin filtros) ======
+  // Cargar/guardar preferencias (pausa + ticker)
+  useEffect(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem("wallboard_prefs") || "{}");
+      if (typeof s.paused === "boolean") setPaused(s.paused);
+      if (Array.isArray(s.tickerItems))
+        setTickerItems(s.tickerItems.map((t) => ({ ...t, time: t.time ? new Date(t.time) : new Date() })));
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      const data = { paused, tickerItems };
+      localStorage.setItem("wallboard_prefs", JSON.stringify(data));
+    } catch {}
+  }, [paused, tickerItems]);
+
+  // ====== Datos agregados por cliente (acumula todas las tandas del cliente) ======
   const byClient = useMemo(() => {
     const map = new Map();
     for (const { id, data } of docs) {
@@ -370,46 +450,80 @@ export default function MonitoringWallboardTV() {
       const turno = data?.respuestas?.turno || data?.turno || "";
       const operador = data?.operador || "—";
       const tandas = Array.isArray(data?.respuestas?.tandas) ? data.respuestas.tandas : [];
+
       for (const t of tandas) {
         const cliente = t?.cliente || "Sin cliente";
         const sum = camSummaryFromTanda(t);
-        const issues = [...deriveIssuesFromCams(sum), ...deriveIssuesFromChecklist(t)];
+        const checklistIssues = deriveIssuesFromChecklist(t);
         const ackUntil = tsToDate(t?.ackUntil);
         const maintenanceFrom = tsToDate(t?.maintenanceFrom);
         const maintenanceTo = tsToDate(t?.maintenanceTo);
         const escalation = t?.escalation || null;
-        const payload = {
-          docId: id,
-          cliente,
-          operador,
-          turno,
-          time: baseTime,
-          sum,
-          checklist: t?.checklist || {},
-          issues,
-          notas: t?.notas || "",
-          ackUntil,
-          maintenanceFrom,
-          maintenanceTo,
-          escalation,
-          worst: "ok",
-        };
-        payload.worst = worstSev(payload.issues);
+
         const prev = map.get(cliente);
-        if (!prev || (baseTime && prev.time && baseTime > prev.time) || (!prev?.time && baseTime)) map.set(cliente, payload);
+        if (!prev) {
+          map.set(cliente, {
+            docId: id,
+            cliente,
+            operador,
+            turno,
+            time: baseTime,
+            sum: { ok: sum.ok, medio: sum.medio, grave: sum.grave, nd: sum.nd, total: sum.total },
+            checklist: t?.checklist || {},
+            checklistIssues: [...checklistIssues], // guardo separados para no duplicar
+            notas: t?.notas || "",
+            ackUntil,
+            maintenanceFrom,
+            maintenanceTo,
+            escalation,
+          });
+        } else {
+          // acumular
+          prev.sum.ok += sum.ok;
+          prev.sum.medio += sum.medio;
+          prev.sum.grave += sum.grave;
+          prev.sum.nd += sum.nd;
+          prev.sum.total += sum.total;
+
+          prev.checklistIssues.push(...checklistIssues);
+
+          // conservar la fecha más reciente
+          if (baseTime && (!prev.time || baseTime > prev.time)) {
+            prev.time = baseTime;
+            prev.operador = operador || prev.operador;
+            prev.turno = turno || prev.turno;
+            prev.docId = id;
+          }
+
+          // ACK/Mant: mantener el más “activo” o más reciente
+          if (ackUntil && (!prev.ackUntil || ackUntil > prev.ackUntil)) prev.ackUntil = ackUntil;
+          if (maintenanceFrom && (!prev.maintenanceFrom || maintenanceFrom < prev.maintenanceFrom)) prev.maintenanceFrom = maintenanceFrom;
+          if (maintenanceTo && (!prev.maintenanceTo || maintenanceTo > prev.maintenanceTo)) prev.maintenanceTo = maintenanceTo;
+          if (escalation && !prev.escalation) prev.escalation = escalation;
+        }
       }
     }
-    const arr = Array.from(map.values());
+
+    // Ahora que sumamos por cliente, derivamos issues de cámaras y worst
+    const arr = Array.from(map.values()).map((v) => {
+      const camIssues = deriveIssuesFromCams(v.sum);
+      const allIssues = [...v.checklistIssues, ...camIssues];
+      const worst = worstSev(allIssues);
+      return { ...v, issues: allIssues, worst };
+    });
+
+    // Orden: críticos/offline → warnings → resto; dentro de cada grupo, por fecha desc
     arr.sort((a, b) => {
       const ord = (s) => (s === "critical" || s === "offline" ? 0 : s === "warning" ? 1 : 2);
       const o = ord(a.worst) - ord(b.worst);
       if (o !== 0) return o;
       return (b.time?.getTime?.() || 0) - (a.time?.getTime?.() || 0);
     });
+
     return arr;
   }, [docs]);
 
-  // ====== Detección de NUEVOS críticos/offline (beep + toast) ======
+  // ====== Detección de NUEVOS críticos/offline (solo toast; SIN sonido) ======
   const prevSevSet = useRef(new Set());
   useEffect(() => {
     const now = Date.now();
@@ -430,7 +544,6 @@ export default function MonitoringWallboardTV() {
     for (const k of cur) if (!prevSevSet.current.has(k)) newCount++;
     prevSevSet.current = cur;
     if (newCount > 0) {
-      if (soundOn) beep();
       MySwal.fire({
         toast: true,
         icon: "warning",
@@ -450,6 +563,22 @@ export default function MonitoringWallboardTV() {
     const warn = byClient.filter((x) => x.worst === "warning").length;
     const ok = total - critOrOff - warn;
     return { total, critOrOff, warn, ok };
+  }, [byClient]);
+
+  // ====== Top críticos (sin ACK/Mtto) ======
+  const topCrits = useMemo(() => {
+    const now = Date.now();
+    const isActive = (r) => {
+      const ack = r.ackUntil && r.ackUntil.getTime() > now;
+      const mFrom = r.maintenanceFrom?.getTime?.();
+      const mTo = r.maintenanceTo?.getTime?.();
+      const mant = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
+      return !ack && !mant && (r.worst === "critical" || r.worst === "offline");
+    };
+    return byClient
+      .filter(isActive)
+      .sort((a, b) => (b.time?.getTime?.() || 0) - (a.time?.getTime?.() || 0))
+      .slice(0, 3);
   }, [byClient]);
 
   // ====== Layout / paginación automática ======
@@ -535,27 +664,6 @@ export default function MonitoringWallboardTV() {
       console.error(e);
     }
   };
-
-  // ====== Sonido (beep) ======
-  function beep() {
-    try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      const ctx = audioCtxRef.current || new Ctx();
-      audioCtxRef.current = ctx;
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "sine";
-      o.frequency.value = 720;
-      o.connect(g);
-      g.connect(ctx.destination);
-      g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
-      o.start();
-      o.stop(ctx.currentTime + 0.3);
-    } catch {}
-  }
 
   // ====== Helpers/Acciones ======
   function buildAutoTickerItems() {
@@ -756,51 +864,20 @@ export default function MonitoringWallboardTV() {
     }
   }
 
-  // Historial
-  async function openHistory(row) {
-    try {
-      setPaused(true);
-      const ref = doc(db, "respuestas-tareas", row.docId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) throw new Error("Documento no existe");
-
-      const data = snap.data() || {};
-      const tandas = Array.isArray(data?.respuestas?.tandas) ? data.respuestas.tandas : [];
-      const t = tandas.find((tt) => (tt?.cliente || "Sin cliente") === row.cliente) || {};
-      const log = Array.isArray(t.log) ? t.log : [];
-
-      const items =
-        log
-          .slice()
-          .reverse()
-          .map((en) => {
-            const at = tsToDate(en.at);
-            const when = at ? at.toLocaleString("es-AR") : "—";
-            const who = en.operador || "—";
-            const action = en.action || "update";
-            const patch = en.patch ? JSON.stringify(en.patch, null, 2) : "";
-            return `
-              <div style="padding:8px 0;border-bottom:1px solid ${PALETTE.border}">
-                <div style="font-weight:800">${when}</div>
-                <div>Operador: <b>${who}</b> · Acción: ${action}</div>
-                <pre style="white-space:pre-wrap;font-size:12px;opacity:.9;margin:6px 0 0">${patch}</pre>
-              </div>
-            `;
-          })
-          .join("") || "<i>Sin actividad registrada</i>";
-
-      await MySwal.fire({
-        title: `Historial · ${row.cliente}`,
-        html: `<div style="text-align:left;max-height:60vh;overflow:auto">${items}</div>`,
-        width: 720,
-        confirmButtonText: "Cerrar",
-      });
-    } catch (e) {
-      console.error(e);
-      MySwal.fire({ icon: "error", title: "Error", text: String(e?.message || e) });
-    } finally {
-      setPaused(false);
+  // Guía rápida por issues críticos
+  function openRowPlaybook(row) {
+    const crits = row.issues.filter((i) => PLAYBOOKS[i.label]);
+    if (!crits.length) {
+      MySwal.fire({ toast: true, icon: "info", title: "Sin guía disponible", timer: 900, showConfirmButton: false });
+      return;
     }
+    const blocks = crits
+      .map((i) => {
+        const steps = PLAYBOOKS[i.label].map((s) => `• ${s}`).join("\n");
+        return `<div style="margin:8px 0"><b>${i.label}</b><pre style="white-space:pre-wrap;margin:6px 0 0">${steps}</pre></div>`;
+      })
+      .join("");
+    MySwal.fire({ title: `Guía · ${row.cliente}`, html: `<div style="text-align:left">${blocks}</div>`, width: 600 });
   }
 
   // ====== Export CSV (todo) ======
@@ -849,9 +926,28 @@ export default function MonitoringWallboardTV() {
     URL.revokeObjectURL(url);
   }
 
-  // ====== Render ======
+  // ====== Atajos de teclado ======
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target && ["INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        setPaused((p) => !p);
+      } else if (e.key?.toLowerCase() === "f") {
+        toggleFs();
+      } else if (e.key === "ArrowRight") {
+        setPage((p) => (p + 1) % Math.max(1, totalPages));
+      } else if (e.key === "ArrowLeft") {
+        setPage((p) => (p - 1 + Math.max(1, totalPages)) % Math.max(1, totalPages));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [totalPages]);
+
+  /* ====== Render ====== */
   return (
-    <Box sx={{ height: "100vh", display: "grid", gridTemplateRows: "auto auto 1fr auto", bgcolor: PALETTE.bg, color: PALETTE.text, fontSize: 16 }}>
+    <Box sx={{ height: "100vh", display: "grid", gridTemplateRows: "auto auto auto 1fr auto", bgcolor: PALETTE.bg, color: PALETTE.text, fontSize: 16 }}>
       <AppBar position="static" elevation={0} sx={{ bgcolor: PALETTE.header, borderBottom: `1px solid ${PALETTE.border}` }}>
         <Toolbar sx={{ minHeight: 80, gap: 1, flexWrap: "wrap" }}>
           <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: 0.6 }}>
@@ -870,17 +966,13 @@ export default function MonitoringWallboardTV() {
               <FaDownload />
             </IconButton>
 
-            <IconButton onClick={() => setSoundOn((v) => !v)} sx={{ color: PALETTE.subtext }} title={soundOn ? "Silenciar alertas" : "Habilitar alertas"}>
-              {soundOn ? <FaVolumeUp /> : <FaVolumeMute />}
-            </IconButton>
-
-            <IconButton onClick={() => setPaused((p) => !p)} sx={{ color: PALETTE.subtext }} title={paused ? "Reanudar rotación" : "Pausar rotación"}>
+            <IconButton onClick={() => setPaused((p) => !p)} sx={{ color: PALETTE.subtext }} title={paused ? "Reanudar rotación [Space]" : "Pausar rotación [Space]"}>
               {paused ? <FaPlay /> : <FaPause />}
             </IconButton>
             <IconButton onClick={openTickerManager} sx={{ color: PALETTE.subtext }} title="Editar ticker">
               <FaEdit />
             </IconButton>
-            <IconButton onClick={toggleFs} sx={{ color: PALETTE.subtext }} title={isFs ? "Salir de pantalla completa" : "Pantalla completa"}>
+            <IconButton onClick={toggleFs} sx={{ color: PALETTE.subtext }} title={isFs ? "Salir de pantalla completa [F]" : "Pantalla completa [F]"}>
               {isFs ? <FaCompress /> : <FaExpand />}
             </IconButton>
           </Stack>
@@ -944,6 +1036,52 @@ export default function MonitoringWallboardTV() {
         </Typography>
       </Box>
 
+      {/* Top críticos (acción rápida) */}
+      {topCrits.length > 0 && (
+        <Box sx={{ p: 1.5, pt: 1, display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))" }}>
+          {topCrits.map((r) => (
+            <Box
+              key={`top-${r.cliente}`}
+              sx={{
+                p: 1.2,
+                border: `1px solid ${PALETTE.border}`,
+                bgcolor: PALETTE.panel,
+                borderLeft: `6px solid ${sevColor(r.worst)}`,
+                borderRadius: 1.2,
+              }}
+            >
+              <Typography sx={{ fontWeight: 900 }}>{r.cliente}</Typography>
+              <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                {r.time ? `hace ${fmtAgo(r.time)}` : "—"}
+              </Typography>
+              <Box sx={{ mt: 1 }}>
+                {r.issues
+                  .filter((i) => i.sev === "critical" || i.sev === "offline")
+                  .map((i, idx) => (
+                    <Pill key={idx} label={i.label} sev={i.sev} blink />
+                  ))}
+              </Box>
+              <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                <IconButton size="small" onClick={() => openEditor(r)} title="Editar" sx={{ color: PALETTE.subtext }}>
+                  <FaEdit />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => setAck(r, new Date(Date.now() + 60 * 60 * 1000))}
+                  title="ACK 1h"
+                  sx={{ color: PALETTE.subtext }}
+                >
+                  <FaBell />
+                </IconButton>
+                <IconButton size="small" onClick={() => openRowPlaybook(r)} title="Guía rápida" sx={{ color: PALETTE.subtext }}>
+                  <FaBook />
+                </IconButton>
+              </Stack>
+            </Box>
+          ))}
+        </Box>
+      )}
+
       {/* Tabla */}
       <Box ref={containerRef} sx={{ overflow: "hidden", p: 1.5 }}>
         <Paper elevation={0} sx={{ border: `1px solid ${PALETTE.border}`, bgcolor: PALETTE.panel }}>
@@ -985,7 +1123,7 @@ export default function MonitoringWallboardTV() {
                       MySwal.fire({ icon: "error", title: "Error", text: String(e?.message || e) });
                     }
                   }}
-                  onHistory={openHistory}
+                  onPlaybook={openRowPlaybook}
                 />
               ))}
               {Array.from({ length: Math.max(0, rowsPerPage - pageRows.length) }).map((_, i) => (
@@ -999,7 +1137,17 @@ export default function MonitoringWallboardTV() {
       </Box>
 
       {/* Footer / página */}
-      <Box sx={{ height: 44, display: "flex", alignItems: "center", justifyContent: "center", color: PALETTE.subtext, borderTop: `1px solid ${PALETTE.border}`, background: PALETTE.header }}>
+      <Box
+        sx={{
+          height: 44,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: PALETTE.subtext,
+          borderTop: `1px solid ${PALETTE.border}`,
+          background: PALETTE.header,
+        }}
+      >
         <Typography variant="caption" sx={{ letterSpacing: 0.5 }}>
           Página {totalPages ? page + 1 : 1}/{Math.max(1, totalPages)} · {new Date().toLocaleString("es-AR")}
         </Typography>
