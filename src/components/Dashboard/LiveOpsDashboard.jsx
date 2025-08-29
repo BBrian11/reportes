@@ -37,6 +37,10 @@ import {
   FaPlus,
   FaTimes,
   FaTools,
+  FaVolumeUp,
+  FaVolumeMute,
+  FaBullhorn,
+  FaColumns,
 } from "react-icons/fa";
 
 import "../../styles/wallboard-soc.css";
@@ -109,7 +113,6 @@ const fmtAgo = (dt) => {
 
 // === Normalizador de severidad ===
 function normalizeSev(val) {
-  // ✅ booleanos: true = OK, false = GRAVE
   if (typeof val === "boolean") return val ? "ok" : "grave";
   if (typeof val === "number") {
     if (val >= 2) return "grave";
@@ -138,7 +141,7 @@ function normalizeText(s) {
 
 function getStatusTextFromCam(c) {
   const parts = [
-    c?.estado, // ✅ incluir campo estado como texto libre
+    c?.estado,
     c?.status,
     c?.estadoTexto,
     c?.detalle,
@@ -158,7 +161,6 @@ function getStatusTextFromCam(c) {
 }
 
 function interpretCamStatus(c) {
-  // ✅ corto-circuito: si estado es booleano, lo respetamos
   if (typeof c?.estado === "boolean") {
     return c.estado ? "ok" : "grave";
   }
@@ -177,7 +179,6 @@ function interpretCamStatus(c) {
   if (c?.offline === true || onlineBool === false || okBool === false || operativaBool === false) return "grave";
   if (okBool === true || onlineBool === true || operativaBool === true) return "ok";
 
-  // texto libre
   const s = getStatusTextFromCam(c);
 
   if (/\bno\s*.{0,6}func/i.test(s) || /\bno\s+anda\b/.test(s) || /\bno\s+marcha\b/.test(s) || /\bno\s+opera\b/.test(s)) return "grave";
@@ -220,7 +221,6 @@ function interpretCamStatus(c) {
   )
     return "medio";
 
-  // timestamps
   const last =
     tsToDate(c?.lastFrame) ||
     tsToDate(c?.ultimaCaptura) ||
@@ -233,7 +233,6 @@ function interpretCamStatus(c) {
     if (mins > STALE_MINUTES) return "grave";
   }
 
-  // campo de severidad clásico (ok/medio/grave/nd, números, etc.)
   const raw = c?.estado ?? c?.criticidad ?? c?.severity ?? c?.nivel;
   const norm = normalizeSev(raw);
   if (norm !== "nd") return norm;
@@ -418,7 +417,14 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onPl
 
   if (row.escalation?.to) statusPills.push(<Pill key="esc" label={`ESC → ${row.escalation.to}`} sev="warning" />);
 
-  const rowBg = row.worst === "critical" ? PALETTE.criticalBg : row.worst === "offline" ? PALETTE.offlineBg : row.worst === "warning" ? PALETTE.warningBg : PALETTE.panel;
+  const rowBg =
+    row.worst === "critical"
+      ? PALETTE.criticalBg
+      : row.worst === "offline"
+      ? PALETTE.offlineBg
+      : row.worst === "warning"
+      ? PALETTE.warningBg
+      : PALETTE.panel;
 
   const handleKey = (e) => {
     if (e.key === "Enter" || e.key === " ") onOpen?.(row);
@@ -550,10 +556,14 @@ export default function MonitoringWallboardTV() {
   const ROW_HEIGHT = 64,
     HEADER_H = 80,
     FOOTER_H = 44,
-    PAGE_MS = 12000;
+    PAGE_MS = 12000,
+    REMIND_MS = 3 * 60 * 1000; // cada tanto (3 min) recordatorio
 
   const [paused, setPaused] = useState(false);
   const [isFs, setIsFs] = useState(false);
+  const [splitView, setSplitView] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
+  const [ttsOn, setTtsOn] = useState(false);
 
   const [docs, setDocs] = useState([]);
 
@@ -572,6 +582,64 @@ export default function MonitoringWallboardTV() {
     });
     return () => unsub();
   }, []);
+
+  // ====== Audio (beep) + Speech ======
+  const audioCtxRef = useRef(null);
+  function ensureAudioCtx() {
+    try {
+      if (audioCtxRef.current) return audioCtxRef.current;
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audioCtxRef.current = new Ctx();
+      return audioCtxRef.current;
+    } catch {
+      return null;
+    }
+  }
+  function resumeAudioCtx() {
+    try {
+      const ctx = ensureAudioCtx();
+      if (ctx && ctx.state === "suspended") ctx.resume();
+    } catch {}
+  }
+  useEffect(() => {
+    const h = () => resumeAudioCtx();
+    window.addEventListener("click", h, { passive: true });
+    window.addEventListener("keydown", h);
+    return () => {
+      window.removeEventListener("click", h);
+      window.removeEventListener("keydown", h);
+    };
+  }, []);
+  function playBeep(kind = "critical") {
+    try {
+      const ctx = ensureAudioCtx();
+      if (!ctx) return;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      const now = ctx.currentTime;
+      const freq = kind === "critical" ? 880 : kind === "offline" ? 660 : kind === "warning" ? 520 : 600;
+      o.frequency.setValueAtTime(freq, now);
+      o.type = "sine";
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(0.25, now + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(now);
+      o.stop(now + 0.42);
+    } catch {}
+  }
+  function speak(text) {
+    try {
+      if (!("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "es-AR";
+      u.rate = 1;
+      window.speechSynthesis.speak(u);
+    } catch {}
+  }
 
   // ====== Ticker manual (persistente) ======
   const [tickerItems, setTickerItems] = useState([]); // { text, time }
@@ -639,20 +707,23 @@ export default function MonitoringWallboardTV() {
   }
   const removeMiniCard = (id) => setMiniCards((prev) => prev.filter((c) => c.id !== id));
 
-  // Cargar/guardar preferencias (pausa + ticker)
+  // Cargar/guardar preferencias (pausa + ticker + audio/voz + split)
   useEffect(() => {
     try {
       const s = JSON.parse(localStorage.getItem("wallboard_prefs") || "{}");
       if (typeof s.paused === "boolean") setPaused(s.paused);
       if (Array.isArray(s.tickerItems)) setTickerItems(s.tickerItems.map((t) => ({ ...t, time: t.time ? new Date(t.time) : new Date() })));
+      if (typeof s.soundOn === "boolean") setSoundOn(s.soundOn);
+      if (typeof s.ttsOn === "boolean") setTtsOn(s.ttsOn);
+      if (typeof s.splitView === "boolean") setSplitView(s.splitView);
     } catch {}
   }, []);
   useEffect(() => {
     try {
-      const data = { paused, tickerItems };
+      const data = { paused, tickerItems, soundOn, ttsOn, splitView };
       localStorage.setItem("wallboard_prefs", JSON.stringify(data));
     } catch {}
-  }, [paused, tickerItems]);
+  }, [paused, tickerItems, soundOn, ttsOn, splitView]);
 
   // ====== Datos por cliente (SOLO último rondín) ======
   const byClient = useMemo(() => {
@@ -685,7 +756,6 @@ export default function MonitoringWallboardTV() {
             raw: cam,
           }));
 
-        // SOLO quedarse con la tanda más reciente por cliente (último rondín)
         const shouldSet = !prev || (baseTime && prev.time && baseTime > prev.time) || (!prev?.time && baseTime);
         if (shouldSet) {
           map.set(cliente, {
@@ -703,13 +773,12 @@ export default function MonitoringWallboardTV() {
             maintenanceTo,
             escalation,
             lastTanda: t,
-            camFails, // detalle listo para usar
+            camFails,
           });
         }
       }
     }
 
-    // Derivar issues y worst
     const arr = Array.from(map.values()).map((v) => {
       const camIssues = deriveIssuesFromCams(v.lastTanda);
       const allIssues = [...v.checklistIssues, ...camIssues];
@@ -717,7 +786,6 @@ export default function MonitoringWallboardTV() {
       return { ...v, issues: allIssues, worst };
     });
 
-    // Orden
     arr.sort((a, b) => {
       const ord = (s) => (s === "critical" || s === "offline" ? 0 : s === "warning" ? 1 : 2);
       const o = ord(a.worst) - ord(b.worst);
@@ -728,7 +796,23 @@ export default function MonitoringWallboardTV() {
     return arr;
   }, [docs]);
 
-  // ====== Detección de NUEVOS críticos/offline ======
+  // === util: críticos/offline activos (sin ACK/Mantenimiento) ===
+  const activeCriticals = useMemo(() => {
+    const now = Date.now();
+    const list = [];
+    for (const r of byClient) {
+      const ackActive = r.ackUntil && r.ackUntil.getTime() > now;
+      const mFrom = r.maintenanceFrom?.getTime?.();
+      const mTo = r.maintenanceTo?.getTime?.();
+      const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
+      if (ackActive || mantActive) continue;
+      const crits = r.issues.filter((i) => i.sev === "critical" || i.sev === "offline");
+      if (crits.length) list.push({ cliente: r.cliente, labels: crits.map((i) => i.label) });
+    }
+    return list;
+  }, [byClient]);
+
+  // ====== Detección de NUEVOS críticos/offline (sonidos + toast + voz opcional) ======
   const prevSevSet = useRef(new Set());
   useEffect(() => {
     const now = Date.now();
@@ -757,9 +841,31 @@ export default function MonitoringWallboardTV() {
         showConfirmButton: false,
         timer: 2000,
       });
+      if (soundOn) playBeep("critical");
+      if (ttsOn) {
+        const names = activeCriticals.slice(0, 3).map((x) => x.cliente).join(", ");
+        speak(`${newCount} eventos críticos u offline nuevos. Ejemplo: ${names}.`);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [byClient]);
+  }, [byClient, soundOn, ttsOn]);
+
+  // ====== Recordatorio periódico por sonido/voz ======
+  useEffect(() => {
+    if (!soundOn && !ttsOn) return;
+    if (paused) return;
+    const id = setInterval(() => {
+      const n = activeCriticals.length;
+      if (n > 0) {
+        if (soundOn) playBeep("warning");
+        if (ttsOn) {
+          const names = activeCriticals.slice(0, 3).map((x) => x.cliente).join(", ");
+          speak(`${n} sitios con críticos u offline activos. Ejemplo: ${names}.`);
+        }
+      }
+    }, REMIND_MS);
+    return () => clearInterval(id);
+  }, [activeCriticals, soundOn, ttsOn, paused]);
 
   // ====== KPIs ======
   const kpis = useMemo(() => {
@@ -809,8 +915,9 @@ export default function MonitoringWallboardTV() {
     };
   }, []);
 
-  const rowsPerPage = Math.max(6, Math.floor((containerH - FOOTER_H) / ROW_HEIGHT));
-  const totalPages = Math.max(1, Math.ceil((byClient.length || 1) / rowsPerPage));
+  // Filas por panel (cuando split son dos paneles)
+  const rowsPerPane = Math.max(6, Math.floor((containerH - FOOTER_H) / ROW_HEIGHT));
+  const totalPages = Math.max(1, Math.ceil((byClient.length || 1) / rowsPerPane));
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -819,11 +926,20 @@ export default function MonitoringWallboardTV() {
 
   useEffect(() => {
     if (paused) return;
-    const id = setInterval(() => setPage((p) => (p + 1) % totalPages), PAGE_MS);
+    const step = splitView ? 2 : 1; // en split avanzamos de a dos páginas
+    const id = setInterval(() => setPage((p) => (p + step) % totalPages), PAGE_MS);
     return () => clearInterval(id);
-  }, [totalPages, paused]);
+  }, [totalPages, paused, splitView]);
 
-  const pageRows = useMemo(() => byClient.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage), [byClient, page, rowsPerPage]);
+  const pageRowsLeft = useMemo(
+    () => byClient.slice(page * rowsPerPane, page * rowsPerPane + rowsPerPane),
+    [byClient, page, rowsPerPane]
+  );
+  const nextPage = (page + 1) % totalPages;
+  const pageRowsRight = useMemo(
+    () => byClient.slice(nextPage * rowsPerPane, nextPage * rowsPerPane + rowsPerPane),
+    [byClient, nextPage, rowsPerPane]
+  );
 
   // ====== Marquee (manual + auto, omite ACK y Mantenimiento) ======
   const marquee = useMemo(() => {
@@ -892,16 +1008,16 @@ export default function MonitoringWallboardTV() {
     if (typeof patch.notas === "string") {
       t.notas = patch.notas;
     }
-    if (patch.hasOwnProperty("ackUntil")) {
+    if (Object.prototype.hasOwnProperty.call(patch, "ackUntil")) {
       t.ackUntil = patch.ackUntil ? patch.ackUntil : null;
     }
-    if (patch.hasOwnProperty("maintenanceFrom")) {
+    if (Object.prototype.hasOwnProperty.call(patch, "maintenanceFrom")) {
       t.maintenanceFrom = patch.maintenanceFrom ? patch.maintenanceFrom : null;
     }
-    if (patch.hasOwnProperty("maintenanceTo")) {
+    if (Object.prototype.hasOwnProperty.call(patch, "maintenanceTo")) {
       t.maintenanceTo = patch.maintenanceTo ? patch.maintenanceTo : null;
     }
-    if (patch.hasOwnProperty("escalation")) {
+    if (Object.prototype.hasOwnProperty.call(patch, "escalation")) {
       if (patch.escalation === null) {
         t.escalation = null;
       } else if (patch.escalation) {
@@ -922,20 +1038,17 @@ export default function MonitoringWallboardTV() {
       } else if (cur && typeof cur === "object") {
         t.camaras = { ...cur };
       } else {
-        // si no existe, creamos como objeto
         t.camaras = {};
       }
 
       for (const [camId, upd] of Object.entries(patch.camaras)) {
         const now = new Date();
         if (Array.isArray(t.camaras)) {
-          // Buscar por id/canal primero
           let idxCam = t.camaras.findIndex(
             (x) =>
               String(x?.id ?? x?.__id ?? x?.cam ?? x?.camera ?? x?.canal) === String(camId) ||
               String(x?.canal) === String(camId)
           );
-          // Fallback por número (1-based o 0-based)
           if (idxCam === -1 && !Number.isNaN(Number(camId))) {
             const n = Number(camId);
             idxCam = n > 0 && t.camaras[n - 1] ? n - 1 : n;
@@ -944,7 +1057,6 @@ export default function MonitoringWallboardTV() {
             const prev = t.camaras[idxCam] || {};
             t.camaras[idxCam] = { ...prev, ...upd, updatedAt: now };
           } else {
-            // Si no se encuentra, agregamos entrada nueva
             t.camaras.push({ id: String(camId), ...upd, updatedAt: now });
           }
         } else {
@@ -954,7 +1066,6 @@ export default function MonitoringWallboardTV() {
       }
     }
 
-    // log simple
     const entry = { at: new Date(), operador: data.operador || "", action: "update", patch: { ...patch } };
     t.log = Array.isArray(t.log) ? [...t.log, entry] : [entry];
 
@@ -972,7 +1083,6 @@ export default function MonitoringWallboardTV() {
   }
 
   // ====== Editores / Vistas ======
-  // Editor de checklist + notas (como tenías)
   async function openEditor(row) {
     try {
       setPaused(true);
@@ -1017,7 +1127,7 @@ export default function MonitoringWallboardTV() {
             operador,
             checklist: {
               equipoOffline: Q("swal-offline")?.checked || false,
-              alarmaComunicacionOK: !(Q("swal-comm")?.checked || false), // "SIN COMMS" marcado => false
+              alarmaComunicacionOK: !(Q("swal-comm")?.checked || false),
               alarmaTamper: Q("swal-tamper")?.checked || false,
               alarmaPanelArmado: Q("swal-armado")?.checked || false,
               alarmaZonasAbiertas: Q("swal-zonas")?.checked || false,
@@ -1064,9 +1174,7 @@ export default function MonitoringWallboardTV() {
   async function openCamsManager(row) {
     try {
       setPaused(true);
-      // armamos un pequeño grid para todas las cámaras (solo falla por defecto)
       const cams = camsToArray(row.lastTanda);
-      // ordenamos por sev (grave/medio primero), luego por id
       const enriched = cams
         .map((c) => ({ ...c, __sev: interpretCamStatus(c) }))
         .sort((a, b) => {
@@ -1078,7 +1186,7 @@ export default function MonitoringWallboardTV() {
         });
 
       const rowsHTML = enriched
-        .map((c, i) => {
+        .map((c) => {
           const id = c?.nombre || c?.name || c?.cam || c?.camera || c.__id;
           const nota = c?.nota || c?.novedad || c?.detalle || "";
           const last = tsToDate(c?.updatedAt) || tsToDate(c?.lastSeen) || tsToDate(c?.ultimaCaptura) || null;
@@ -1221,13 +1329,113 @@ export default function MonitoringWallboardTV() {
     return () => window.removeEventListener("keydown", onKey);
   }, [totalPages]);
 
-  /* ====== Render ====== */
+  // ====== Gestos táctiles: swipe para paginar, doble-tap para dividir pantalla ======
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    let sx = 0,
+      sy = 0,
+      st = 0,
+      lastTap = 0;
+    const onStart = (e) => {
+      const t = e.touches?.[0];
+      if (!t) return;
+      sx = t.clientX;
+      sy = t.clientY;
+      st = Date.now();
+    };
+    const onEnd = (e) => {
+      const t = e.changedTouches?.[0];
+      if (!t) return;
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
+      const dt = Date.now() - st;
+
+      // tap
+      if (dt < 250 && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+        const now = Date.now();
+        if (now - lastTap < 350) {
+          setSplitView((v) => !v); // doble-tap alterna split
+        }
+        lastTap = now;
+        return;
+      }
+      // swipe
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+        if (dx < 0) setPage((p) => (p + 1) % totalPages);
+        else setPage((p) => (p - 1 + totalPages) % totalPages);
+      }
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchend", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchend", onEnd);
+    };
+  }, [totalPages]);
+
+  // ====== Render ======
+  const TablePane = ({ rows }) => (
+    <Paper elevation={0} sx={{ border: `1px solid ${PALETTE.border}`, bgcolor: PALETTE.panel }}>
+      <Table
+        stickyHeader
+        size="small"
+        sx={{
+          "& th": {
+            background: PALETTE.header,
+            color: PALETTE.text,
+            fontWeight: 900,
+            borderBottom: `1px solid ${PALETTE.border}`,
+            fontSize: 16,
+            textTransform: "uppercase",
+            letterSpacing: 0.06,
+          },
+          "& td": { color: PALETTE.text, borderBottom: `1px solid ${PALETTE.border}`, fontSize: 15, height: 64 },
+        }}
+      >
+        <TableHead>
+          <TableRow>
+            <TableCell>Cliente</TableCell>
+            <TableCell>Cámaras</TableCell>
+            <TableCell>Estados / Alarma</TableCell>
+            <TableCell>Operador</TableCell>
+            <TableCell>Último rondín</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <ClientRow
+              key={row.cliente}
+              row={row}
+              onOpen={openEditor}
+              onToggleAck={async (r, until) => {
+                try {
+                  await setAck(r, until);
+                } catch (e) {
+                  MySwal.fire({ icon: "error", title: "Error", text: String(e?.message || e) });
+                }
+              }}
+              onPlaybook={openRowPlaybook}
+              onShowFails={openFails}
+              onManageCams={openCamsManager}
+            />
+          ))}
+          {Array.from({ length: Math.max(0, rowsPerPane - rows.length) }).map((_, i) => (
+            <TableRow key={`empty-${i}`} sx={{ height: 64 }}>
+              <TableCell colSpan={5} />
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Paper>
+  );
+
   return (
     <Box
       sx={{
         height: "100vh",
         display: "grid",
-        gridTemplateRows: "auto auto auto 1fr auto auto", // + zócalo de mini-cards
+        gridTemplateRows: "auto auto auto 1fr auto auto",
         bgcolor: PALETTE.bg,
         color: PALETTE.text,
         fontSize: 16,
@@ -1249,6 +1457,28 @@ export default function MonitoringWallboardTV() {
 
             <IconButton onClick={exportCSV} sx={{ color: PALETTE.subtext }} title="Exportar CSV">
               <FaDownload />
+            </IconButton>
+
+            {/* Sonido (beep) */}
+            <IconButton
+              onClick={() => {
+                resumeAudioCtx();
+                setSoundOn((v) => !v);
+              }}
+              sx={{ color: soundOn ? PALETTE.ok : PALETTE.subtext }}
+              title={soundOn ? "Sonido activado" : "Sonido desactivado"}
+            >
+              {soundOn ? <FaVolumeUp /> : <FaVolumeMute />}
+            </IconButton>
+
+            {/* Voz TTS */}
+            <IconButton onClick={() => setTtsOn((v) => !v)} sx={{ color: ttsOn ? PALETTE.brand : PALETTE.subtext }} title={ttsOn ? "Recordatorio por voz ON" : "Recordatorio por voz OFF"}>
+              <FaBullhorn />
+            </IconButton>
+
+            {/* Split view */}
+            <IconButton onClick={() => setSplitView((v) => !v)} sx={{ color: splitView ? PALETTE.brand : PALETTE.subtext }} title={splitView ? "Salir de pantalla dividida" : "Pantalla dividida"}>
+              <FaColumns />
             </IconButton>
 
             <IconButton onClick={() => setPaused((p) => !p)} sx={{ color: PALETTE.subtext }} title={paused ? "Reanudar rotación [Space]" : "Pausar rotación [Space]"}>
@@ -1372,60 +1602,23 @@ export default function MonitoringWallboardTV() {
         </Box>
       )}
 
-      {/* Tabla */}
-      <Box ref={containerRef} sx={{ overflow: "hidden", p: 1.5 }}>
-        <Paper elevation={0} sx={{ border: `1px solid ${PALETTE.border}`, bgcolor: PALETTE.panel }}>
-          <Table
-            stickyHeader
-            size="small"
-            sx={{
-              "& th": {
-                background: PALETTE.header,
-                color: PALETTE.text,
-                fontWeight: 900,
-                borderBottom: `1px solid ${PALETTE.border}`,
-                fontSize: 16,
-                textTransform: "uppercase",
-                letterSpacing: 0.06,
-              },
-              "& td": { color: PALETTE.text, borderBottom: `1px solid ${PALETTE.border}`, fontSize: 15, height: 64 },
-            }}
-          >
-            <TableHead>
-              <TableRow>
-                <TableCell>Cliente</TableCell>
-                <TableCell>Cámaras</TableCell>
-                <TableCell>Estados / Alarma</TableCell>
-                <TableCell>Operador</TableCell>
-                <TableCell>Último rondín</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {pageRows.map((row) => (
-                <ClientRow
-                  key={row.cliente}
-                  row={row}
-                  onOpen={openEditor}
-                  onToggleAck={async (r, until) => {
-                    try {
-                      await setAck(r, until);
-                    } catch (e) {
-                      MySwal.fire({ icon: "error", title: "Error", text: String(e?.message || e) });
-                    }
-                  }}
-                  onPlaybook={openRowPlaybook}
-                  onShowFails={openFails}
-                  onManageCams={openCamsManager}
-                />
-              ))}
-              {Array.from({ length: Math.max(0, rowsPerPage - pageRows.length) }).map((_, i) => (
-                <TableRow key={`empty-${i}`} sx={{ height: 64 }}>
-                  <TableCell colSpan={5} />
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Paper>
+      {/* Tabla(s) */}
+      <Box
+        ref={containerRef}
+        sx={{
+          overflow: "hidden",
+          p: 1.5,
+          touchAction: "manipulation", // mejora gestos
+        }}
+      >
+        {splitView ? (
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <TablePane rows={pageRowsLeft} />
+            <TablePane rows={pageRowsRight} />
+          </Box>
+        ) : (
+          <TablePane rows={pageRowsLeft} />
+        )}
       </Box>
 
       {/* Zócalo de mini-cards de novedades */}
@@ -1494,7 +1687,8 @@ export default function MonitoringWallboardTV() {
         }}
       >
         <Typography variant="caption" sx={{ letterSpacing: 0.5 }}>
-          Página {totalPages ? page + 1 : 1}/{Math.max(1, totalPages)} · {new Date().toLocaleString("es-AR")}
+          Página {totalPages ? page + 1 : 1}/{Math.max(1, totalPages)}{splitView ? ` · (mostrando ${page + 1} y ${((page + 1) % totalPages) + 1})` : ""} ·{" "}
+          {new Date().toLocaleString("es-AR")}
         </Typography>
       </Box>
     </Box>
