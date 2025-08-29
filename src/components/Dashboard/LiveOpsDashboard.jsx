@@ -19,7 +19,24 @@ import {
   Divider,
   IconButton,
 } from "@mui/material";
-import { FaExclamationTriangle, FaShieldAlt, FaVideo, FaPause, FaPlay, FaEdit } from "react-icons/fa";
+
+import {
+  FaExclamationTriangle,
+  FaShieldAlt,
+  FaVideo,
+  FaPause,
+  FaPlay,
+  FaEdit,
+  FaHistory,
+  FaBell,
+  FaBellSlash,
+  FaDownload,
+  FaVolumeUp,
+  FaVolumeMute,
+  FaExpand,
+  FaCompress,
+} from "react-icons/fa";
+
 import "../../styles/wallboard-soc.css";
 
 import Swal from "sweetalert2";
@@ -77,6 +94,7 @@ const preferDate = (d) =>
   tsToDate(d?.fechaEnvio) ||
   tsToDate(d?.controlRonda?.startTime) ||
   null;
+
 const fmtAgo = (dt) => {
   if (!dt) return "—";
   const s = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 1000));
@@ -87,6 +105,7 @@ const fmtAgo = (dt) => {
   return `${h}h ${m % 60}m`;
 };
 
+/* Cam summary */
 const camSummaryFromTanda = (t) => {
   const cams = Array.isArray(t?.camaras) ? t.camaras : [];
   const counts = cams.reduce(
@@ -188,14 +207,19 @@ function Pill({ label, sev = "info", blink = false, sx }) {
 }
 
 /* ========================= Row ========================= */
-const ClientRow = React.memo(function ClientRow({ row, onOpen }) {
+const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onHistory }) {
   const color = sevColor(row.worst);
   const c = row.checklist || {};
+  const now = Date.now();
+  const ackActive = row.ackUntil && row.ackUntil.getTime() > now;
+  const mFrom = row.maintenanceFrom?.getTime?.();
+  const mTo = row.maintenanceTo?.getTime?.();
+  const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
 
   const statusPills = [];
   statusPills.push(
     c.equipoOffline ? (
-      <Pill key="offline" label="OFFLINE" sev="offline" blink />
+      <Pill key="offline" label="OFFLINE" sev="offline" blink={!ackActive && !mantActive} />
     ) : (
       <Pill key="online" label="ONLINE" sev="ok" />
     )
@@ -206,26 +230,23 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen }) {
       c.alarmaComunicacionOK ? (
         <Pill key="comm-ok" label="COMM OK" sev="ok" />
       ) : (
-        <Pill key="comm-no" label="SIN COMMS" sev="critical" blink />
+        <Pill key="comm-no" label="SIN COMMS" sev="critical" blink={!ackActive && !mantActive} />
       )
     );
-    statusPills.push(
-      c.alarmaPanelArmado ? (
-        <Pill key="arm" label="ARMADO" sev="ok" />
-      ) : (
-        <Pill key="disarm" label="DESARMADO" sev="warning" />
-      )
-    );
+    statusPills.push(c.alarmaPanelArmado ? <Pill key="arm" label="ARMADO" sev="ok" /> : <Pill key="disarm" label="DESARMADO" sev="warning" />);
     if (c.alarmaZonasAbiertas) statusPills.push(<Pill key="zonas" label="Zonas abiertas" sev="warning" />);
     if (c.alarmaBateriaBaja) statusPills.push(<Pill key="bat" label="Batería baja" sev="warning" />);
   }
-
   if (c.grabacionesOK === false) statusPills.push(<Pill key="grab-ko" label="Falla grabaciones" sev="warning" />);
-  if (c.cortes220v === true) statusPills.push(<Pill key="220v" label="Cortes 220V" sev="critical" blink />);
+  if (c.cortes220v === true) statusPills.push(<Pill key="220v" label="Cortes 220V" sev="critical" blink={!ackActive && !mantActive} />);
   if (c.equipoHora === true) statusPills.push(<Pill key="hora" label="Hora desfasada" sev="warning" />);
+  if (ackActive) statusPills.push(<Pill key="ack" label={`ACK hasta ${row.ackUntil.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`} sev="info" />);
+  if (mantActive) statusPills.push(<Pill key="mant" label="MANTENIMIENTO" sev="info" />);
+
+  if (row.escalation?.to) statusPills.push(<Pill key="esc" label={`ESC → ${row.escalation.to}`} sev="warning" />);
 
   const rowBg =
-    row.worst === "critical" ? SEVERITY.critical.bg : row.worst === "offline" ? SEVERITY.offline.bg : row.worst === "warning" ? SEVERITY.warning.bg : PALETTE.panel;
+    row.worst === "critical" ? PALETTE.criticalBg : row.worst === "offline" ? PALETTE.offlineBg : row.worst === "warning" ? PALETTE.warningBg : PALETTE.panel;
 
   const handleKey = (e) => {
     if (e.key === "Enter" || e.key === " ") onOpen?.(row);
@@ -242,6 +263,7 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen }) {
         cursor: "pointer",
         height: 64,
         background: rowBg,
+        opacity: ackActive || mantActive ? 0.7 : 1,
         borderLeft: `6px solid ${color}`,
         outline: `1px solid ${PALETTE.border}`,
         boxShadow:
@@ -252,8 +274,10 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen }) {
             : "none",
       }}
     >
+      {/* Cliente */}
       <TableCell sx={{ fontWeight: 900, whiteSpace: "nowrap", color: PALETTE.text }}>{row.cliente}</TableCell>
 
+      {/* Resumen cámaras */}
       <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
           <FaVideo style={{ opacity: 0.9 }} />
@@ -262,6 +286,7 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen }) {
         </Stack>
       </TableCell>
 
+      {/* Estados / Alarma */}
       <TableCell sx={{ color: PALETTE.text }}>
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexWrap: "wrap" }}>
           <FaShieldAlt style={{ opacity: 0.9 }} />
@@ -269,12 +294,38 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen }) {
         </Stack>
       </TableCell>
 
+      {/* Operador + ACK + Historial */}
       <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
-        <Typography variant="body1" sx={{ fontWeight: 800 }}>
-          {row.operador || "—"}
-        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="body1" sx={{ fontWeight: 800 }}>
+            {row.operador || "—"}
+          </Typography>
+          <IconButton
+            size="small"
+            title={ackActive ? "Quitar ACK" : "Reconocer (ACK) por 1 hora"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleAck?.(row, ackActive ? null : new Date(Date.now() + 60 * 60 * 1000));
+            }}
+            sx={{ color: PALETTE.subtext }}
+          >
+            {ackActive ? <FaBellSlash /> : <FaBell />}
+          </IconButton>
+          <IconButton
+            size="small"
+            title="Ver historial del cliente"
+            onClick={(e) => {
+              e.stopPropagation();
+              onHistory?.(row);
+            }}
+            sx={{ color: PALETTE.subtext }}
+          >
+            <FaHistory />
+          </IconButton>
+        </Stack>
       </TableCell>
 
+      {/* Tiempo */}
       <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
         <Typography variant="body1" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
           {row.time ? fmtAgo(row.time) : "—"}
@@ -295,6 +346,10 @@ export default function MonitoringWallboardTV() {
     PAGE_MS = 12000;
 
   const [paused, setPaused] = useState(false);
+  const [isFs, setIsFs] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
+  const audioCtxRef = useRef(null);
+
   const [docs, setDocs] = useState([]);
 
   // ====== Firestore listener ======
@@ -317,7 +372,7 @@ export default function MonitoringWallboardTV() {
   };
   const clearTickerItems = () => setTickerItems([]);
 
-  // ====== Datos agregados por cliente ======
+  // ====== Datos agregados por cliente (sin filtros) ======
   const byClient = useMemo(() => {
     const map = new Map();
     for (const { id, data } of docs) {
@@ -329,12 +384,32 @@ export default function MonitoringWallboardTV() {
         const cliente = t?.cliente || "Sin cliente";
         const sum = camSummaryFromTanda(t);
         const issues = [...deriveIssuesFromCams(sum), ...deriveIssuesFromChecklist(t)];
-        const payload = { docId: id, cliente, operador, turno, time: baseTime, sum, checklist: t?.checklist || {}, issues, notas: t?.notas || "" };
+        const ackUntil = tsToDate(t?.ackUntil);
+        const maintenanceFrom = tsToDate(t?.maintenanceFrom);
+        const maintenanceTo = tsToDate(t?.maintenanceTo);
+        const escalation = t?.escalation || null;
+        const payload = {
+          docId: id,
+          cliente,
+          operador,
+          turno,
+          time: baseTime,
+          sum,
+          checklist: t?.checklist || {},
+          issues,
+          notas: t?.notas || "",
+          ackUntil,
+          maintenanceFrom,
+          maintenanceTo,
+          escalation,
+          worst: "ok",
+        };
+        payload.worst = worstSev(payload.issues);
         const prev = map.get(cliente);
         if (!prev || (baseTime && prev.time && baseTime > prev.time) || (!prev?.time && baseTime)) map.set(cliente, payload);
       }
     }
-    const arr = Array.from(map.values()).map((x) => ({ ...x, worst: worstSev(x.issues) }));
+    const arr = Array.from(map.values());
     arr.sort((a, b) => {
       const ord = (s) => (s === "critical" || s === "offline" ? 0 : s === "warning" ? 1 : 2);
       const o = ord(a.worst) - ord(b.worst);
@@ -344,7 +419,41 @@ export default function MonitoringWallboardTV() {
     return arr;
   }, [docs]);
 
-  // ====== KPIs ======
+  // ====== Detección de NUEVOS críticos/offline (beep + toast) ======
+  const prevSevSet = useRef(new Set());
+  useEffect(() => {
+    const now = Date.now();
+    const cur = new Set();
+    for (const r of byClient) {
+      const ackActive = r.ackUntil && r.ackUntil.getTime() > now;
+      const mFrom = r.maintenanceFrom?.getTime?.();
+      const mTo = r.maintenanceTo?.getTime?.();
+      const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
+      if (ackActive || mantActive) continue;
+      for (const it of r.issues) {
+        if (it.sev === "critical" || it.sev === "offline") {
+          cur.add(`${r.cliente}|${it.label}`);
+        }
+      }
+    }
+    let newCount = 0;
+    for (const k of cur) if (!prevSevSet.current.has(k)) newCount++;
+    prevSevSet.current = cur;
+    if (newCount > 0) {
+      if (soundOn) beep();
+      MySwal.fire({
+        toast: true,
+        icon: "warning",
+        position: "top-end",
+        title: `${newCount} nuevo(s) evento(s) crítico/offline`,
+        showConfirmButton: false,
+        timer: 2000,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byClient]);
+
+  // ====== KPIs (de todo) ======
   const kpis = useMemo(() => {
     const total = byClient.length;
     const critOrOff = byClient.filter((x) => x.worst === "critical" || x.worst === "offline").length;
@@ -362,12 +471,15 @@ export default function MonitoringWallboardTV() {
       setContainerH(h);
     };
     measure();
-    const r = new ResizeObserver(measure);
-    if (containerRef.current) r.observe(containerRef.current);
+    let r = null;
+    if (typeof ResizeObserver !== "undefined") {
+      r = new ResizeObserver(measure);
+      if (containerRef.current) r.observe(containerRef.current);
+    }
     window.addEventListener("resize", measure);
     return () => {
       try {
-        r.disconnect();
+        r?.disconnect();
       } catch {}
       window.removeEventListener("resize", measure);
     };
@@ -377,12 +489,10 @@ export default function MonitoringWallboardTV() {
   const totalPages = Math.max(1, Math.ceil((byClient.length || 1) / rowsPerPage));
   const [page, setPage] = useState(0);
 
-  // Corrige page si queda fuera de rango
   useEffect(() => {
     if (page > totalPages - 1) setPage(0);
   }, [totalPages, page]);
 
-  // Avanza página automáticamente si no está pausado
   useEffect(() => {
     if (paused) return;
     const id = setInterval(() => setPage((p) => (p + 1) % totalPages), PAGE_MS);
@@ -391,10 +501,16 @@ export default function MonitoringWallboardTV() {
 
   const pageRows = useMemo(() => byClient.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage), [byClient, page, rowsPerPage]);
 
-  // ====== Marquee (manual + auto) ======
+  // ====== Marquee (manual + auto, omite ACK y Mantenimiento) ======
   const marquee = useMemo(() => {
     const auto = [];
+    const now = Date.now();
     for (const x of byClient) {
+      const ackActive = x.ackUntil && x.ackUntil.getTime() > now;
+      const mFrom = x.maintenanceFrom?.getTime?.();
+      const mTo = x.maintenanceTo?.getTime?.();
+      const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
+      if (ackActive || mantActive) continue;
       for (const it of x.issues) {
         if (it.sev === "critical" || it.sev === "offline") {
           auto.push({ text: `${x.cliente}: ${it.label}`, time: x.time });
@@ -412,10 +528,55 @@ export default function MonitoringWallboardTV() {
     return both || "";
   }, [byClient, tickerItems]);
 
-  // ====== Helpers/Acciones (DENTRO del componente para usar setPaused) ======
+  /* ====== Fullscreen helpers ====== */
+  useEffect(() => {
+    const onFs = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+  const toggleFs = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // ====== Sonido (beep) ======
+  function beep() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = audioCtxRef.current || new Ctx();
+      audioCtxRef.current = ctx;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = 720;
+      o.connect(g);
+      g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+      o.start();
+      o.stop(ctx.currentTime + 0.3);
+    } catch {}
+  }
+
+  // ====== Helpers/Acciones ======
   function buildAutoTickerItems() {
     const auto = [];
+    const now = Date.now();
     for (const x of byClient) {
+      const ackActive = x.ackUntil && x.ackUntil.getTime() > now;
+      const mFrom = x.maintenanceFrom?.getTime?.();
+      const mTo = x.maintenanceTo?.getTime?.();
+      const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
+      if (ackActive || mantActive) continue;
       for (const it of x.issues) {
         if (it.sev === "critical" || it.sev === "offline") {
           auto.push({ text: `${x.cliente}: ${it.label} (${x.time ? fmtAgo(x.time) : "—"})`, time: x.time });
@@ -488,6 +649,7 @@ export default function MonitoringWallboardTV() {
     if (idx === -1) throw new Error("No se encontró la tanda del cliente en el documento");
 
     const t = { ...(tandas[idx] || {}) };
+
     if (typeof patch.operador === "string") {
       data.operador = patch.operador;
     }
@@ -495,6 +657,31 @@ export default function MonitoringWallboardTV() {
     if (typeof patch.notas === "string") {
       t.notas = patch.notas;
     }
+    if (patch.hasOwnProperty("ackUntil")) {
+      t.ackUntil = patch.ackUntil ? patch.ackUntil : null;
+    }
+    if (patch.hasOwnProperty("maintenanceFrom")) {
+      t.maintenanceFrom = patch.maintenanceFrom ? patch.maintenanceFrom : null;
+    }
+    if (patch.hasOwnProperty("maintenanceTo")) {
+      t.maintenanceTo = patch.maintenanceTo ? patch.maintenanceTo : null;
+    }
+    if (patch.hasOwnProperty("escalation")) {
+      if (patch.escalation === null) {
+        t.escalation = null;
+      } else if (patch.escalation) {
+        t.escalation = {
+          to: patch.escalation.to || "",
+          reason: patch.escalation.reason || "",
+          at: new Date(),
+        };
+      }
+    }
+
+    // log simple
+    const entry = { at: new Date(), operador: data.operador || "", action: "update", patch: { ...patch } };
+    t.log = Array.isArray(t.log) ? [...t.log, entry] : [entry];
+
     tandas[idx] = t;
 
     await updateDoc(ref, {
@@ -504,6 +691,11 @@ export default function MonitoringWallboardTV() {
     });
   }
 
+  async function setAck(row, until) {
+    await updateClienteInDoc(row.docId, row.cliente, { ackUntil: until });
+  }
+
+  // Editor SIN ACK/Mantenimiento/Escalación
   async function openEditor(row) {
     try {
       setPaused(true);
@@ -511,7 +703,7 @@ export default function MonitoringWallboardTV() {
       const html = `
         <div style="text-align:left">
           <div style="font-weight:800;margin-bottom:8px">Cliente</div>
-          <input id="swal-cliente" class="swal2-input" style="width:100%" value="${row.cliente || ""}" disabled />
+          <input class="swal2-input" style="width:100%" value="${row.cliente || ""}" disabled />
 
           <div style="font-weight:800;margin:6px 0 2px">Operador</div>
           <input id="swal-operador" class="swal2-input" style="width:100%" value="${row.operador || ""}" />
@@ -534,7 +726,7 @@ export default function MonitoringWallboardTV() {
       const result = await MySwal.fire({
         title: "Editar cliente",
         html,
-        width: 640,
+        width: 720,
         focusConfirm: false,
         showCancelButton: true,
         confirmButtonText: "Guardar",
@@ -546,7 +738,7 @@ export default function MonitoringWallboardTV() {
             operador,
             checklist: {
               equipoOffline: Q("swal-offline")?.checked || false,
-              alarmaComunicacionOK: !(Q("swal-comm")?.checked || false), // checked = SIN COMMS → false
+              alarmaComunicacionOK: !(Q("swal-comm")?.checked || false), // "SIN COMMS" marcado => false
               alarmaTamper: Q("swal-tamper")?.checked || false,
               alarmaPanelArmado: Q("swal-armado")?.checked || false,
               alarmaZonasAbiertas: Q("swal-zonas")?.checked || false,
@@ -574,25 +766,160 @@ export default function MonitoringWallboardTV() {
     }
   }
 
+  // Historial
+  async function openHistory(row) {
+    try {
+      setPaused(true);
+      const ref = doc(db, "respuestas-tareas", row.docId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) throw new Error("Documento no existe");
+
+      const data = snap.data() || {};
+      const tandas = Array.isArray(data?.respuestas?.tandas) ? data.respuestas.tandas : [];
+      const t = tandas.find((tt) => (tt?.cliente || "Sin cliente") === row.cliente) || {};
+      const log = Array.isArray(t.log) ? t.log : [];
+
+      const items =
+        log
+          .slice()
+          .reverse()
+          .map((en) => {
+            const at = tsToDate(en.at);
+            const when = at ? at.toLocaleString("es-AR") : "—";
+            const who = en.operador || "—";
+            const action = en.action || "update";
+            const patch = en.patch ? JSON.stringify(en.patch, null, 2) : "";
+            return `
+              <div style="padding:8px 0;border-bottom:1px solid ${PALETTE.border}">
+                <div style="font-weight:800">${when}</div>
+                <div>Operador: <b>${who}</b> · Acción: ${action}</div>
+                <pre style="white-space:pre-wrap;font-size:12px;opacity:.9;margin:6px 0 0">${patch}</pre>
+              </div>
+            `;
+          })
+          .join("") || "<i>Sin actividad registrada</i>";
+
+      await MySwal.fire({
+        title: `Historial · ${row.cliente}`,
+        html: `<div style="text-align:left;max-height:60vh;overflow:auto">${items}</div>`,
+        width: 720,
+        confirmButtonText: "Cerrar",
+      });
+    } catch (e) {
+      console.error(e);
+      MySwal.fire({ icon: "error", title: "Error", text: String(e?.message || e) });
+    } finally {
+      setPaused(false);
+    }
+  }
+
+  // ====== Export CSV (todo) ======
+  function exportCSV() {
+    const headers = [
+      "Cliente",
+      "Severidad",
+      "Operador",
+      "Turno",
+      "UltimoRondin",
+      "CamsMedio",
+      "CamsGrave",
+      "Issues",
+      "ACKHasta",
+      "MantDesde",
+      "MantHasta",
+      "Notas",
+    ];
+    const lines = [headers.join(",")];
+    const esc = (s) => `"${String(s ?? "").replace(/"/g, '""')}"`;
+    for (const r of byClient) {
+      const issues = r.issues.map((i) => i.label).join(" | ");
+      lines.push(
+        [
+          esc(r.cliente),
+          esc(r.worst),
+          esc(r.operador || ""),
+          esc(r.turno || ""),
+          esc(r.time?.toLocaleString?.("es-AR") || ""),
+          r.sum.medio ?? 0,
+          r.sum.grave ?? 0,
+          esc(issues),
+          esc(r.ackUntil ? r.ackUntil.toLocaleString("es-AR") : ""),
+          esc(r.maintenanceFrom ? r.maintenanceFrom.toLocaleString("es-AR") : ""),
+          esc(r.maintenanceTo ? r.maintenanceTo.toLocaleString("es-AR") : ""),
+          esc(r.notas || ""),
+        ].join(",")
+      );
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `wallboard_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ====== Render ======
   return (
     <Box sx={{ height: "100vh", display: "grid", gridTemplateRows: "auto auto 1fr auto", bgcolor: PALETTE.bg, color: PALETTE.text, fontSize: 16 }}>
       <AppBar position="static" elevation={0} sx={{ bgcolor: PALETTE.header, borderBottom: `1px solid ${PALETTE.border}` }}>
-        <Toolbar sx={{ minHeight: 80 }}>
+        <Toolbar sx={{ minHeight: 80, gap: 1, flexWrap: "wrap" }}>
           <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: 0.6 }}>
             Wallboard · Monitoreo
           </Typography>
+
           <Box sx={{ flex: 1 }} />
+
           <Stack direction="row" spacing={1} alignItems="center">
             <Chip label={`Total ${kpis.total}`} sx={{ bgcolor: "#1E293B", color: PALETTE.text, fontWeight: 800, border: `1px solid ${PALETTE.border}` }} />
             <Chip label={`Crít/Off ${kpis.critOrOff}`} sx={{ bgcolor: "#5A0E3A", color: "#FFD6F6", fontWeight: 800, border: `1px solid ${PALETTE.border}` }} />
             <Chip label={`Avisos ${kpis.warn}`} sx={{ bgcolor: "#5A420E", color: "#FFF2CC", fontWeight: 800, border: `1px solid ${PALETTE.border}` }} />
             <Divider orientation="vertical" flexItem sx={{ mx: 1, borderColor: PALETTE.border }} />
+
+            <IconButton onClick={exportCSV} sx={{ color: PALETTE.subtext }} title="Exportar CSV">
+              <FaDownload />
+            </IconButton>
+
+            <IconButton onClick={() => setSoundOn((v) => !v)} sx={{ color: PALETTE.subtext }} title={soundOn ? "Silenciar alertas" : "Habilitar alertas"}>
+              {soundOn ? <FaVolumeUp /> : <FaVolumeMute />}
+            </IconButton>
+
             <IconButton onClick={() => setPaused((p) => !p)} sx={{ color: PALETTE.subtext }} title={paused ? "Reanudar rotación" : "Pausar rotación"}>
               {paused ? <FaPlay /> : <FaPause />}
             </IconButton>
             <IconButton onClick={openTickerManager} sx={{ color: PALETTE.subtext }} title="Editar ticker">
               <FaEdit />
+            </IconButton>
+            <IconButton onClick={toggleFs} sx={{ color: PALETTE.subtext }} title={isFs ? "Salir de pantalla completa" : "Pantalla completa"}>
+              {isFs ? <FaCompress /> : <FaExpand />}
+            </IconButton>
+          </Stack>
+
+          {/* Controles del ticker manual */}
+          <Divider orientation="vertical" flexItem sx={{ mx: 1, borderColor: PALETTE.border }} />
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ maxWidth: 520 }}>
+            <Box
+              component="input"
+              value={tickerInput}
+              onChange={(e) => setTickerInput(e.target.value)}
+              placeholder="Agregar al ticker…"
+              title="Escribe un mensaje para que circule en el marquee"
+              style={{
+                background: PALETTE.panel,
+                color: PALETTE.text,
+                border: `1px solid ${PALETTE.border}`,
+                borderRadius: 8,
+                padding: "8px 10px",
+                width: 280,
+                outline: "none",
+                fontWeight: 700,
+              }}
+            />
+            <IconButton onClick={addTickerItem} sx={{ color: PALETTE.subtext }} title="Agregar al ticker">
+              <FaPlay />
+            </IconButton>
+            <IconButton onClick={clearTickerItems} sx={{ color: PALETTE.subtext }} title="Limpiar mensajes manuales">
+              <FaPause />
             </IconButton>
           </Stack>
         </Toolbar>
@@ -630,7 +957,9 @@ export default function MonitoringWallboardTV() {
       {/* Tabla */}
       <Box ref={containerRef} sx={{ overflow: "hidden", p: 1.5 }}>
         <Paper elevation={0} sx={{ border: `1px solid ${PALETTE.border}`, bgcolor: PALETTE.panel }}>
-          <Table stickyHeader size="small"
+          <Table
+            stickyHeader
+            size="small"
             sx={{
               "& th": {
                 background: PALETTE.header,
@@ -655,7 +984,19 @@ export default function MonitoringWallboardTV() {
             </TableHead>
             <TableBody>
               {pageRows.map((row) => (
-                <ClientRow key={row.cliente} row={row} onOpen={openEditor} />
+                <ClientRow
+                  key={row.cliente}
+                  row={row}
+                  onOpen={openEditor}
+                  onToggleAck={async (r, until) => {
+                    try {
+                      await setAck(r, until);
+                    } catch (e) {
+                      MySwal.fire({ icon: "error", title: "Error", text: String(e?.message || e) });
+                    }
+                  }}
+                  onHistory={openHistory}
+                />
               ))}
               {Array.from({ length: Math.max(0, rowsPerPage - pageRows.length) }).map((_, i) => (
                 <TableRow key={`empty-${i}`} sx={{ height: 64 }}>
