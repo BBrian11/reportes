@@ -109,8 +109,8 @@ const fmtAgo = (dt) => {
 
 // === Normalizador de severidad ===
 function normalizeSev(val) {
-  if (val === true) return "grave";
-  if (val === false) return "ok";
+  // ✅ booleanos: true = OK, false = GRAVE
+  if (typeof val === "boolean") return val ? "ok" : "grave";
   if (typeof val === "number") {
     if (val >= 2) return "grave";
     if (val >= 1) return "medio";
@@ -138,6 +138,7 @@ function normalizeText(s) {
 
 function getStatusTextFromCam(c) {
   const parts = [
+    c?.estado, // ✅ incluir campo estado como texto libre
     c?.status,
     c?.estadoTexto,
     c?.detalle,
@@ -157,6 +158,11 @@ function getStatusTextFromCam(c) {
 }
 
 function interpretCamStatus(c) {
+  // ✅ corto-circuito: si estado es booleano, lo respetamos
+  if (typeof c?.estado === "boolean") {
+    return c.estado ? "ok" : "grave";
+  }
+
   const asBool = (v) =>
     v === true || v === false
       ? v
@@ -227,7 +233,7 @@ function interpretCamStatus(c) {
     if (mins > STALE_MINUTES) return "grave";
   }
 
-  // campo de severidad clásico
+  // campo de severidad clásico (ok/medio/grave/nd, números, etc.)
   const raw = c?.estado ?? c?.criticidad ?? c?.severity ?? c?.nivel;
   const norm = normalizeSev(raw);
   if (norm !== "nd") return norm;
@@ -264,9 +270,9 @@ const camSummaryFromTanda = (t) => {
     else counts.nd += 1;
   }
 
-  // Si el backend además manda "camarasOffline" y no hay marcas por-cámara, las sumamos.
-  if (Array.isArray(t?.camarasOffline) && t.camarasOffline.length > 0) {
-    if (cams.length === 0 || counts.grave === 0) counts.grave += t.camarasOffline.length;
+  // Solo usar camarasOffline si no hay lista y no había graves
+  if (Array.isArray(t?.camarasOffline) && t.camarasOffline.length > 0 && cams.length === 0 && counts.grave === 0) {
+    counts.grave += t.camarasOffline.length;
   }
 
   return { total: cams.length || (Array.isArray(t?.camarasOffline) ? t.camarasOffline.length : 0), ...counts };
@@ -907,9 +913,8 @@ export default function MonitoringWallboardTV() {
       }
     }
 
-    // === NUEVO: actualización de cámaras ===
+    // === Actualización de cámaras (robusta: array u objeto) ===
     if (patch.camaras && typeof patch.camaras === "object") {
-      // soporta mapa/objeto y array
       const cur = t.camaras;
       const isArray = Array.isArray(cur);
       if (isArray) {
@@ -924,9 +929,24 @@ export default function MonitoringWallboardTV() {
       for (const [camId, upd] of Object.entries(patch.camaras)) {
         const now = new Date();
         if (Array.isArray(t.camaras)) {
-          const idxCam = Number(camId) - 1 >= 0 ? Number(camId) - 1 : Number(camId);
-          const prev = t.camaras[idxCam] || {};
-          t.camaras[idxCam] = { ...prev, ...upd, updatedAt: now };
+          // Buscar por id/canal primero
+          let idxCam = t.camaras.findIndex(
+            (x) =>
+              String(x?.id ?? x?.__id ?? x?.cam ?? x?.camera ?? x?.canal) === String(camId) ||
+              String(x?.canal) === String(camId)
+          );
+          // Fallback por número (1-based o 0-based)
+          if (idxCam === -1 && !Number.isNaN(Number(camId))) {
+            const n = Number(camId);
+            idxCam = n > 0 && t.camaras[n - 1] ? n - 1 : n;
+          }
+          if (Number.isFinite(idxCam) && idxCam >= 0) {
+            const prev = t.camaras[idxCam] || {};
+            t.camaras[idxCam] = { ...prev, ...upd, updatedAt: now };
+          } else {
+            // Si no se encuentra, agregamos entrada nueva
+            t.camaras.push({ id: String(camId), ...upd, updatedAt: now });
+          }
         } else {
           const prev = t.camaras[camId] || {};
           t.camaras[camId] = { ...prev, ...upd, updatedAt: now };
