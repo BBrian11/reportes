@@ -311,17 +311,7 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onHi
           >
             {ackActive ? <FaBellSlash /> : <FaBell />}
           </IconButton>
-          <IconButton
-            size="small"
-            title="Ver historial del cliente"
-            onClick={(e) => {
-              e.stopPropagation();
-              onHistory?.(row);
-            }}
-            sx={{ color: PALETTE.subtext }}
-          >
-            <FaHistory />
-          </IconButton>
+        
         </Stack>
       </TableCell>
 
