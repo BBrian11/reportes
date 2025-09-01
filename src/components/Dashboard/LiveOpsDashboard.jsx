@@ -463,6 +463,7 @@ export default function MonitoringWallboardTV() {
     FOOTER_H = 44,
     PAGE_MS = 12000,
     REMIND_MS = 3 * 60 * 1000;
+    const SOUND_PASS = "@Grupo3T1134";
 
   const [paused, setPaused] = useState(false);
   const [isFs, setIsFs] = useState(false);
@@ -501,6 +502,37 @@ export default function MonitoringWallboardTV() {
       return null;
     }
   }
+
+  const handleToggleSound = async () => {
+    // Si está ON y querés silenciar, pedimos contraseña
+    if (soundOn) {
+      const res = await MySwal.fire({
+        title: "Contraseña requerida",
+        input: "password",
+        inputLabel: "Ingresá la contraseña para silenciar",
+        inputPlaceholder: "Contraseña",
+        inputAttributes: {
+          autocapitalize: "off",
+          autocomplete: "current-password",
+        },
+        showCancelButton: true,
+        confirmButtonText: "Silenciar",
+        cancelButtonText: "Cancelar",
+        preConfirm: (val) => {
+          if (val !== SOUND_PASS) {
+            MySwal.showValidationMessage("Contraseña incorrecta");
+            return false;
+          }
+          return true;
+        },
+      });
+      if (res.isConfirmed) setSoundOn(false);
+      return;
+    }
+    // Si está OFF, volver a ON no requiere contraseña
+    setSoundOn(true);
+  };
+  
   function resumeAudioCtx() {
     try {
       const ctx = ensureAudioCtx();
@@ -1372,15 +1404,17 @@ export default function MonitoringWallboardTV() {
             </IconButton>
 
             {/* Sonido (beep) */}
-            <IconButton onClick={() => setSoundOn((v) => !v)} sx={{ color: soundOn ? PALETTE.brand : PALETTE.subtext }} title={soundOn ? "Sonido ON" : "Sonido OFF"}>
-              {soundOn ? <FaVolumeUp /> : <FaVolumeMute />}
-            </IconButton>
+            <IconButton
+  onClick={handleToggleSound}
+  sx={{ color: soundOn ? PALETTE.brand : PALETTE.subtext }}
+  title={soundOn ? "Sonido ON" : "Sonido OFF"}
+>
+  {soundOn ? <FaVolumeUp /> : <FaVolumeMute />}
+</IconButton>
+
 
             {/* Voz TTS */}
-            <IconButton onClick={() => setTtsOn((v) => !v)} sx={{ color: ttsOn ? PALETTE.brand : PALETTE.subtext }} title={ttsOn ? "TTS ON" : "TTS OFF"}>
-              <FaBullhorn />
-            </IconButton>
-
+         
             {/* Split view */}
             <IconButton onClick={() => setSplitView((v) => !v)} sx={{ color: splitView ? PALETTE.brand : PALETTE.subtext }} title={splitView ? "Salir de pantalla dividida" : "Pantalla dividida"}>
               <FaColumns />
