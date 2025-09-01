@@ -1,4 +1,4 @@
-// src/components/MonitoringWallboardTV.jsx
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { collection, onSnapshot, doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../services/firebase";
@@ -27,7 +27,6 @@ import {
   FaVideo,
   FaPause,
   FaPlay,
-  FaEdit,
   FaBell,
   FaBellSlash,
   FaDownload,
@@ -130,7 +129,7 @@ function normalizeSev(val) {
   return "nd";
 }
 
-const STALE_MINUTES = 45; // si la última imagen/heartbeat supera este umbral => grave
+const STALE_MINUTES = 45;
 
 function normalizeText(s) {
   return String(s || "")
@@ -141,30 +140,16 @@ function normalizeText(s) {
 
 function getStatusTextFromCam(c) {
   const parts = [
-    c?.estado,
-    c?.status,
-    c?.estadoTexto,
-    c?.detalle,
-    c?.mensaje,
-    c?.comentario,
-    c?.comentarios,
-    c?.observacion,
-    c?.observación,
-    c?.nota,
-    c?.descripcion,
-    c?.descripcionEstado,
-    c?.novedad,
-    c?.ultimaNovedad,
-    c?.ultimasNovedades,
+    c?.estado, c?.status, c?.estadoTexto, c?.detalle, c?.mensaje,
+    c?.comentario, c?.comentarios, c?.observacion, c?.observación,
+    c?.nota, c?.descripcion, c?.descripcionEstado, c?.novedad,
+    c?.ultimaNovedad, c?.ultimasNovedades,
   ].filter(Boolean);
   return normalizeText(parts.join(" · "));
 }
 
 function interpretCamStatus(c) {
-  if (typeof c?.estado === "boolean") {
-    return c.estado ? "ok" : "grave";
-  }
-
+  if (typeof c?.estado === "boolean") return c.estado ? "ok" : "grave";
   const asBool = (v) =>
     v === true || v === false
       ? v
@@ -184,50 +169,23 @@ function interpretCamStatus(c) {
   if (/\bno\s*.{0,6}func/i.test(s) || /\bno\s+anda\b/.test(s) || /\bno\s+marcha\b/.test(s) || /\bno\s+opera\b/.test(s)) return "grave";
 
   if (
-    s.includes("sin senal") ||
-    s.includes("sin señal") ||
-    s.includes("sin video") ||
-    s.includes("no video") ||
-    s.includes("offline") ||
-    s.includes("fuera de servicio") ||
-    s.includes("desconectad") ||
-    s.includes("caida") ||
-    s.includes("fallo") ||
-    s.includes("falla") ||
-    s.includes("error") ||
-    s.includes("roto") ||
-    s.includes("rota") ||
-    s.includes("quemad") ||
-    s.includes("pantalla negra") ||
-    s.includes("imagen negra")
-  )
-    return "grave";
+    s.includes("sin senal") || s.includes("sin señal") || s.includes("sin video") || s.includes("no video") ||
+    s.includes("offline") || s.includes("fuera de servicio") || s.includes("desconectad") ||
+    s.includes("caida") || s.includes("fallo") || s.includes("falla") || s.includes("error") ||
+    s.includes("roto") || s.includes("rota") || s.includes("quemad") ||
+    s.includes("pantalla negra") || s.includes("imagen negra")
+  ) return "grave";
 
   if (
-    s.includes("intermit") ||
-    s.includes("degrad") ||
-    s.includes("warning") ||
-    s.includes("media") ||
-    s.includes("packet") ||
-    s.includes("paquete") ||
-    s.includes("jitter") ||
-    s.includes("borros") ||
-    s.includes("desenfoc") ||
-    s.includes("pixel") ||
-    s.includes("congel") ||
-    s.includes("lag") ||
-    s.includes("lento") ||
-    s.includes("latencia")
-  )
-    return "medio";
+    s.includes("intermit") || s.includes("degrad") || s.includes("warning") || s.includes("media") ||
+    s.includes("packet") || s.includes("paquete") || s.includes("jitter") ||
+    s.includes("borros") || s.includes("desenfoc") || s.includes("pixel") ||
+    s.includes("congel") || s.includes("lag") || s.includes("lento") || s.includes("latencia")
+  ) return "medio";
 
   const last =
-    tsToDate(c?.lastFrame) ||
-    tsToDate(c?.ultimaCaptura) ||
-    tsToDate(c?.lastSeen) ||
-    tsToDate(c?.timestamp) ||
-    tsToDate(c?.ultimaImagen) ||
-    tsToDate(c?.updatedAt);
+    tsToDate(c?.lastFrame) || tsToDate(c?.ultimaCaptura) || tsToDate(c?.lastSeen) ||
+    tsToDate(c?.timestamp) || tsToDate(c?.ultimaImagen) || tsToDate(c?.updatedAt);
   if (last) {
     const mins = (Date.now() - last.getTime()) / 60000;
     if (mins > STALE_MINUTES) return "grave";
@@ -236,25 +194,14 @@ function interpretCamStatus(c) {
   const raw = c?.estado ?? c?.criticidad ?? c?.severity ?? c?.nivel;
   const norm = normalizeSev(raw);
   if (norm !== "nd") return norm;
-
   return "nd";
 }
 
 /* ===== util: obtener cámaras como array (soporta objeto/mapa o array) ===== */
 function camsToArray(t) {
   const cc = t?.camaras;
-  if (Array.isArray(cc)) {
-    return cc.map((cam, i) => ({
-      __id: String(cam?.id ?? i + 1),
-      ...cam,
-    }));
-  }
-  if (cc && typeof cc === "object") {
-    return Object.entries(cc).map(([k, v]) => ({
-      __id: String(k),
-      ...v,
-    }));
-  }
+  if (Array.isArray(cc)) return cc.map((cam, i) => ({ __id: String(cam?.id ?? i + 1), ...cam }));
+  if (cc && typeof cc === "object") return Object.entries(cc).map(([k, v]) => ({ __id: String(k), ...v }));
   return [];
 }
 
@@ -262,18 +209,14 @@ function camsToArray(t) {
 const camSummaryFromTanda = (t) => {
   const cams = camsToArray(t);
   const counts = { ok: 0, medio: 0, grave: 0, nd: 0 };
-
   for (const cam of cams) {
     const sev = interpretCamStatus(cam);
     if (counts[sev] !== undefined) counts[sev] += 1;
     else counts.nd += 1;
   }
-
-  // Solo usar camarasOffline si no hay lista y no había graves
   if (Array.isArray(t?.camarasOffline) && t.camarasOffline.length > 0 && cams.length === 0 && counts.grave === 0) {
     counts.grave += t.camarasOffline.length;
   }
-
   return { total: cams.length || (Array.isArray(t?.camarasOffline) ? t.camarasOffline.length : 0), ...counts };
 };
 
@@ -464,30 +407,8 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onPl
           <Pill label={`GRAVE ${row.camSum.grave || 0}`} sev="critical" />
           {(row.camSum.grave > 0 || row.camSum.medio > 0) && (
             <>
-              <Tooltip title="Ver cámaras con falla">
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onShowFails?.(row);
-                  }}
-                  sx={{ color: PALETTE.subtext }}
-                >
-                  <FaVideo />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Gestionar cámaras (editar estado/nota)">
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onManageCams?.(row);
-                  }}
-                  sx={{ color: PALETTE.subtext }}
-                >
-                  <FaTools />
-                </IconButton>
-              </Tooltip>
+              
+             
             </>
           )}
         </Stack>
@@ -518,23 +439,7 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onPl
           <Typography variant="body1" sx={{ fontWeight: 800 }}>
             {row.operador || "—"}
           </Typography>
-          <IconButton
-            size="small"
-            title={ackActive ? "Quitar ACK" : "ACK 1h (Shift: 4h · Alt: 15m)"}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (ackActive) {
-                onToggleAck?.(row, null);
-                return;
-              }
-              const base = Date.now();
-              const ms = e.shiftKey ? 4 * 60 * 60 * 1000 : e.altKey ? 15 * 60 * 1000 : 60 * 60 * 1000;
-              onToggleAck?.(row, new Date(base + ms));
-            }}
-            sx={{ color: PALETTE.subtext }}
-          >
-            {ackActive ? <FaBellSlash /> : <FaBell />}
-          </IconButton>
+          
         </Stack>
       </TableCell>
 
@@ -557,7 +462,7 @@ export default function MonitoringWallboardTV() {
     HEADER_H = 80,
     FOOTER_H = 44,
     PAGE_MS = 12000,
-    REMIND_MS = 3 * 60 * 1000; // cada tanto (3 min) recordatorio
+    REMIND_MS = 3 * 60 * 1000;
 
   const [paused, setPaused] = useState(false);
   const [isFs, setIsFs] = useState(false);
@@ -915,7 +820,6 @@ export default function MonitoringWallboardTV() {
     };
   }, []);
 
-  // Filas por panel (cuando split son dos paneles)
   const rowsPerPane = Math.max(6, Math.floor((containerH - FOOTER_H) / ROW_HEIGHT));
   const totalPages = Math.max(1, Math.ceil((byClient.length || 1) / rowsPerPane));
   const [page, setPage] = useState(0);
@@ -926,7 +830,7 @@ export default function MonitoringWallboardTV() {
 
   useEffect(() => {
     if (paused) return;
-    const step = splitView ? 2 : 1; // en split avanzamos de a dos páginas
+    const step = splitView ? 2 : 1;
     const id = setInterval(() => setPage((p) => (p + step) % totalPages), PAGE_MS);
     return () => clearInterval(id);
   }, [totalPages, paused, splitView]);
@@ -935,11 +839,22 @@ export default function MonitoringWallboardTV() {
     () => byClient.slice(page * rowsPerPane, page * rowsPerPane + rowsPerPane),
     [byClient, page, rowsPerPane]
   );
+
+  // si hay solo 1 página, la derecha muestra la otra mitad; si hay >=2, muestra la siguiente página
   const nextPage = (page + 1) % totalPages;
-  const pageRowsRight = useMemo(
-    () => byClient.slice(nextPage * rowsPerPane, nextPage * rowsPerPane + rowsPerPane),
-    [byClient, nextPage, rowsPerPane]
-  );
+  const pageRowsRight = useMemo(() => {
+    if (totalPages > 1) {
+      return byClient.slice(nextPage * rowsPerPane, nextPage * rowsPerPane + rowsPerPane);
+    }
+    const half = Math.ceil(pageRowsLeft.length / 2);
+    return pageRowsLeft.slice(half);
+  }, [byClient, nextPage, rowsPerPane, totalPages, pageRowsLeft]);
+
+  const leftForSplit = useMemo(() => {
+    if (totalPages > 1) return pageRowsLeft;
+    const half = Math.ceil(pageRowsLeft.length / 2);
+    return pageRowsLeft.slice(0, half);
+  }, [pageRowsLeft, totalPages]);
 
   // ====== Marquee (manual + auto, omite ACK y Mantenimiento) ======
   const marquee = useMemo(() => {
@@ -1333,10 +1248,8 @@ export default function MonitoringWallboardTV() {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    let sx = 0,
-      sy = 0,
-      st = 0,
-      lastTap = 0;
+
+    let sx = 0, sy = 0, st = 0, lastTap = 0;
     const onStart = (e) => {
       const t = e.touches?.[0];
       if (!t) return;
@@ -1351,21 +1264,20 @@ export default function MonitoringWallboardTV() {
       const dy = t.clientY - sy;
       const dt = Date.now() - st;
 
-      // tap
+      // tap / double-tap
       if (dt < 250 && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
         const now = Date.now();
-        if (now - lastTap < 350) {
-          setSplitView((v) => !v); // doble-tap alterna split
-        }
+        if (now - lastTap < 350) setSplitView((v) => !v);
         lastTap = now;
         return;
       }
-      // swipe
+      // swipe horizontal (ignora scroll vertical)
       if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
         if (dx < 0) setPage((p) => (p + 1) % totalPages);
         else setPage((p) => (p - 1 + totalPages) % totalPages);
       }
     };
+
     el.addEventListener("touchstart", onStart, { passive: true });
     el.addEventListener("touchend", onEnd);
     return () => {
@@ -1460,19 +1372,12 @@ export default function MonitoringWallboardTV() {
             </IconButton>
 
             {/* Sonido (beep) */}
-            <IconButton
-              onClick={() => {
-                resumeAudioCtx();
-                setSoundOn((v) => !v);
-              }}
-              sx={{ color: soundOn ? PALETTE.ok : PALETTE.subtext }}
-              title={soundOn ? "Sonido activado" : "Sonido desactivado"}
-            >
+            <IconButton onClick={() => setSoundOn((v) => !v)} sx={{ color: soundOn ? PALETTE.brand : PALETTE.subtext }} title={soundOn ? "Sonido ON" : "Sonido OFF"}>
               {soundOn ? <FaVolumeUp /> : <FaVolumeMute />}
             </IconButton>
 
             {/* Voz TTS */}
-            <IconButton onClick={() => setTtsOn((v) => !v)} sx={{ color: ttsOn ? PALETTE.brand : PALETTE.subtext }} title={ttsOn ? "Recordatorio por voz ON" : "Recordatorio por voz OFF"}>
+            <IconButton onClick={() => setTtsOn((v) => !v)} sx={{ color: ttsOn ? PALETTE.brand : PALETTE.subtext }} title={ttsOn ? "TTS ON" : "TTS OFF"}>
               <FaBullhorn />
             </IconButton>
 
@@ -1484,7 +1389,7 @@ export default function MonitoringWallboardTV() {
             <IconButton onClick={() => setPaused((p) => !p)} sx={{ color: PALETTE.subtext }} title={paused ? "Reanudar rotación [Space]" : "Pausar rotación [Space]"}>
               {paused ? <FaPlay /> : <FaPause />}
             </IconButton>
-            <IconButton onClick={() => addMiniCard()} sx={{ color: PALETTE.subtext }} title="Agregar mini-card de novedad">
+            <IconButton onClick={addMiniCard} sx={{ color: PALETTE.subtext }} title="Agregar mini-card de novedad">
               <FaPlus />
             </IconButton>
             <IconButton onClick={toggleFs} sx={{ color: PALETTE.subtext }} title={isFs ? "Salir de pantalla completa [F]" : "Pantalla completa [F]"}>
@@ -1551,69 +1456,19 @@ export default function MonitoringWallboardTV() {
         </Typography>
       </Box>
 
-      {/* Top críticos (acción rápida) */}
-      {topCrits.length > 0 && (
-        <Box sx={{ p: 1.5, pt: 1, display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))" }}>
-          {topCrits.map((r) => (
-            <Box
-              key={`top-${r.cliente}`}
-              sx={{
-                p: 1.2,
-                border: `1px solid ${PALETTE.border}`,
-                bgcolor: PALETTE.panel,
-                borderLeft: `6px solid ${sevColor(r.worst)}`,
-                borderRadius: 1.2,
-              }}
-            >
-              <Typography sx={{ fontWeight: 900 }}>{r.cliente}</Typography>
-              <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                {r.time ? `hace ${fmtAgo(r.time)}` : "—"}
-              </Typography>
-              <Box sx={{ mt: 1 }}>
-                {r.issues
-                  .filter((i) => i.sev === "critical" || i.sev === "offline")
-                  .map((i, idx) => (
-                    <Pill key={idx} label={i.label} sev={i.sev} blink />
-                  ))}
-              </Box>
-              <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                <IconButton size="small" onClick={() => openEditor(r)} title="Editar checklist/notas" sx={{ color: PALETTE.subtext }}>
-                  <FaEdit />
-                </IconButton>
-                <IconButton size="small" onClick={() => setAck(r, new Date(Date.now() + 60 * 60 * 1000))} title="ACK 1h" sx={{ color: PALETTE.subtext }}>
-                  <FaBell />
-                </IconButton>
-                <IconButton size="small" onClick={() => openRowPlaybook(r)} title="Guía rápida" sx={{ color: PALETTE.subtext }}>
-                  <FaBook />
-                </IconButton>
-                {(r.camSum.grave > 0 || r.camSum.medio > 0) && (
-                  <>
-                    <IconButton size="small" onClick={() => openFails(r)} title="Ver cámaras en falla" sx={{ color: PALETTE.subtext }}>
-                      <FaVideo />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => openCamsManager(r)} title="Gestionar cámaras" sx={{ color: PALETTE.subtext }}>
-                      <FaTools />
-                    </IconButton>
-                  </>
-                )}
-              </Stack>
-            </Box>
-          ))}
-        </Box>
-      )}
-
       {/* Tabla(s) */}
       <Box
         ref={containerRef}
         sx={{
-          overflow: "hidden",
+          overflow: "auto",                 // <-- permite desplazamiento táctil vertical
+          WebkitOverflowScrolling: "touch", // <-- scroll suave en iOS
           p: 1.5,
-          touchAction: "manipulation", // mejora gestos
+          touchAction: "pan-y",             // <-- habilita scroll vertical; swipe horizontal sigue funcionando
         }}
       >
         {splitView ? (
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <TablePane rows={pageRowsLeft} />
+            <TablePane rows={leftForSplit} />
             <TablePane rows={pageRowsRight} />
           </Box>
         ) : (
@@ -1642,32 +1497,49 @@ export default function MonitoringWallboardTV() {
               const col = PILL_COLORS[c.sev] || PILL_COLORS.info;
               return (
                 <Box
-                  key={c.id}
+                key={c.id}
+                sx={{
+                  minWidth: 160,
+                  maxWidth: 260,
+                  px: 1,
+                  py: 0.5,
+                  border: `1px solid ${PALETTE.border}`,
+                  bgcolor: col.bg,
+                  color: col.fg,
+                  borderLeft: `4px solid ${col.bd}`,
+                  borderRadius: 1.5,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.75,
+                }}
+              >
+                <Typography
+                  title={c.text}
                   sx={{
-                    minWidth: 220,
-                    maxWidth: 320,
-                    p: 1,
-                    border: `1px solid ${PALETTE.border}`,
-                    bgcolor: col.bg,
-                    color: col.fg,
-                    borderLeft: `6px solid ${col.bd}`,
-                    borderRadius: 1.5,
-                    display: "grid",
-                    gridTemplateRows: "auto auto",
-                    gap: 0.5,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: "100%",
                   }}
                 >
-                  <Typography sx={{ fontWeight: 800, lineHeight: 1.2 }}>{c.text}</Typography>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                    <Typography variant="caption" sx={{ opacity: 0.85 }}>
-                      {fmtAgo(c.at)} · {c.at?.toLocaleString?.("es-AR")}
-                    </Typography>
-                    <Box sx={{ flex: 1 }} />
-                    <IconButton size="small" onClick={() => removeMiniCard(c.id)} sx={{ color: col.fg, opacity: 0.85 }}>
-                      <FaTimes />
-                    </IconButton>
-                  </Stack>
-                </Box>
+                  {c.text}
+                </Typography>
+              
+                <Box sx={{ flex: 1 }} />
+              
+                <IconButton
+                  size="small"
+                  onClick={() => removeMiniCard(c.id)}
+                  sx={{ color: col.fg, opacity: 0.85, p: 0.25, ml: 0.25, lineHeight: 0 }}
+                  aria-label="Cerrar"
+                >
+                  <FaTimes style={{ fontSize: 12 }} />
+                </IconButton>
+              </Box>
+              
               );
             })}
           </Stack>
@@ -1687,8 +1559,13 @@ export default function MonitoringWallboardTV() {
         }}
       >
         <Typography variant="caption" sx={{ letterSpacing: 0.5 }}>
-          Página {totalPages ? page + 1 : 1}/{Math.max(1, totalPages)}{splitView ? ` · (mostrando ${page + 1} y ${((page + 1) % totalPages) + 1})` : ""} ·{" "}
-          {new Date().toLocaleString("es-AR")}
+          Página {totalPages ? page + 1 : 1}/{Math.max(1, totalPages)}
+          {splitView
+            ? ` · (mostrando ${page + 1}${
+                totalPages > 1 ? ` y ${((page + 1) % totalPages) + 1}` : ""
+              })`
+            : ""}
+          · {new Date().toLocaleString("es-AR")}
         </Typography>
       </Box>
     </Box>
