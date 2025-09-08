@@ -1,23 +1,29 @@
 // src/components/Rondin/NovedadesCard.jsx
 import React from "react";
 import {
-  Card, CardHeader, CardContent, List, ListItem, ListItemText, ListItemIcon,
-  Chip, Stack, Tooltip, Typography, Divider, Box, ButtonGroup, Button, Skeleton, Alert
+  Card,
+  CardHeader,
+  CardContent,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Chip,
+  Stack,
+  Tooltip,
+  Typography,
+  Divider,
+  Box,
+  Skeleton,
+  Alert,
 } from "@mui/material";
 import VideocamOutlinedIcon from "@mui/icons-material/VideocamOutlined";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import DoneOutlinedIcon from "@mui/icons-material/DoneOutlined";
 import useNovedadesCliente from "./useNovedadesCliente";
-import { db } from "../../../services/firebase";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import Swal from "sweetalert2";
-import withReactContent from "sweetalert2-react-content";
-import "sweetalert2/dist/sweetalert2.min.css";
 
-const MySwal = withReactContent(Swal);
-
-const ESTADOS = ["ok", "medio", "grave"];
+// === Helpers ===
 const estadoColor = (e) =>
   e === "grave" ? "error" : e === "medio" ? "warning" : e === "ok" ? "success" : "default";
 
@@ -34,7 +40,10 @@ const safeDate = (d) => {
   if (!d) return null;
   if (typeof d?.toDate === "function") return d.toDate();
   if (typeof d === "number") return new Date(d);
-  if (typeof d === "string") { const nd = new Date(d); return isNaN(nd) ? null : nd; }
+  if (typeof d === "string") {
+    const nd = new Date(d);
+    return isNaN(nd) ? null : nd;
+  }
   if (typeof d === "object" && d.seconds) return new Date(d.seconds * 1000);
   return null;
 };
@@ -44,40 +53,43 @@ const camNum = (o) => Number(o?.canal ?? o?.cam ?? o?.channel ?? o?.chan ?? 0);
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleString(undefined, { dateStyle: "short", timeStyle: "medium" }) : "";
 
+// === Componente ===
 export default function NovedadesCard({
   clienteKey,
-  camaras = [],        // ← notas/estados en vivo (UI)
-  historicos = {},    // { [canal:number]: 'ok'|'medio'|'grave' }
+  clienteName, // no se usa, pero lo dejamos para compatibilidad
+  docId,       // no se usa, pero lo dejamos para compatibilidad
+  camaras = [],
+  historicos = {},
   limit = 8,
-  onEstadoChanged,
-  rondaId
+  onEstadoChanged, // no se usa (modo solo lectura)
+  rondaId,         // no se usa
 }) {
-  // 2ª fuente: novedades + índice + ÚLTIMA RESPUESTA (con notas)
+  // Fuente principal: hook de novedades
   const { items, loading, error, partialError } = useNovedadesCliente(clienteKey, limit);
-
-  // ——— Overlay local para ver el cambio en tiempo real (optimista) ———
-  // localEstado: { [canal]: "ok" | "medio" | "grave" }
-  // localNota:   { [canal]: "texto de nota" }
-  const [localEstado, setLocalEstado] = React.useState({});
-  const [localNota, setLocalNota] = React.useState({});
 
   // Mapas de TANDA (props.camaras)
   const notaMap = React.useMemo(() => {
     const m = {};
-    (camaras || []).forEach(c => { const n = Number(c?.canal) || 0; if (n) m[n] = (c?.nota ?? "").toString().trim(); });
+    (camaras || []).forEach((c) => {
+      const n = Number(c?.canal) || 0;
+      if (n) m[n] = (c?.nota ?? "").toString().trim();
+    });
     return m;
   }, [camaras]);
 
   const estadoMap = React.useMemo(() => {
     const m = {};
-    (camaras || []).forEach(c => { const n = Number(c?.canal) || 0; if (n && c?.estado) m[n] = c.estado; });
+    (camaras || []).forEach((c) => {
+      const n = Number(c?.canal) || 0;
+      if (n && c?.estado) m[n] = c.estado;
+    });
     return m;
   }, [camaras]);
 
   // 1) Items desde TANDA (si tienen nota o estado problemático)
   const fromTanda = React.useMemo(() => {
     return (camaras || [])
-      .map(c => ({
+      .map((c) => ({
         id: `t-${c.id || c.canal}`,
         cam: Number(c?.canal) || 0,
         evento: c?.estado || null,
@@ -85,13 +97,13 @@ export default function NovedadesCard({
         createdAt: null,
         source: "tanda",
       }))
-      .filter(x => x.cam && (x.nota !== "" || (x.evento && x.evento !== "ok")));
+      .filter((x) => x.cam && (x.nota !== "" || (x.evento && x.evento !== "ok")));
   }, [camaras]);
 
   // 2) Items del hook (novedades + index + respuestas)
   const fromHook = React.useMemo(() => {
     return (items || [])
-      .map(n => ({
+      .map((n) => ({
         ...n,
         cam: camNum(n),
         evento: n?.evento ?? null,
@@ -99,14 +111,14 @@ export default function NovedadesCard({
         createdAt: n?.createdAt ?? n?.updatedAt ?? null,
         source: n?.source || "hook",
       }))
-      .filter(x => x.cam);
+      .filter((x) => x.cam);
   }, [items]);
 
   // Merge por canal: TANDA > RESPUESTAS > NOVEDADES > INDEX
   const merged = React.useMemo(() => {
     const byCam = new Map();
     // 1) tanda
-    fromTanda.forEach(it => byCam.set(it.cam, it));
+    fromTanda.forEach((it) => byCam.set(it.cam, it));
     // 2) resto (si llega "respuestas" y no es tanda, priorizar)
     for (const it of fromHook) {
       if (!byCam.has(it.cam)) byCam.set(it.cam, it);
@@ -124,13 +136,12 @@ export default function NovedadesCard({
     return arr;
   }, [fromTanda, fromHook]);
 
-  // resumen de estados (toma overlay local primero)
+  // Resumen de estados (solo lectura)
   const resumen = React.useMemo(() => {
     const r = { ok: 0, medio: 0, grave: 0 };
-    merged.forEach(it => {
+    merged.forEach((it) => {
       const canal = camNum(it);
       const estadoActual =
-        localEstado[canal] ||              // overlay en vivo
         estadoMap[canal] ||
         historicos?.[canal] ||
         normalizarEstado(it?.evento) ||
@@ -138,76 +149,9 @@ export default function NovedadesCard({
       if (estadoActual && r[estadoActual] !== undefined) r[estadoActual]++;
     });
     return r;
-  }, [merged, localEstado, estadoMap, historicos]);
+  }, [merged, estadoMap, historicos]);
 
-  // === Click de estado: pide nota, actualiza optimista, guarda en Firestore y confirma ===
-  const quickSetEstado = React.useCallback(async (canal, next) => {
-    if (!canal) return;
-
-    try {
-      const result = await MySwal.fire({
-        title: `Agregar nota para CAM ${canal}`,
-        input: "textarea",
-        inputLabel: "Observación",
-        inputPlaceholder: "Escribí la nota…",
-        inputAttributes: { "aria-label": "Escribí la nota" },
-        showCancelButton: true,
-        confirmButtonText: "Guardar",
-        cancelButtonText: "Cancelar",
-        inputValidator: (value) => {
-          if (!value) return "La nota no puede estar vacía";
-        },
-      });
-
-      if (!result.isConfirmed) return;
-
-      const nota = (result.value ?? "").trim();
-
-      // Overlay optimista (se ve el cambio al instante)
-      setLocalEstado(prev => ({ ...prev, [canal]: next }));
-      setLocalNota(prev => ({ ...prev, [canal]: nota }));
-      onEstadoChanged?.(Number(canal), next, nota);
-
-
-      // Persistencia Firestore
-      if (clienteKey) {
-        await setDoc(
-          doc(db, "rondin-index", clienteKey, "camaras", String(canal)),
-          {
-            estado: next,
-            nota,
-            updatedAt: serverTimestamp(),
-            rondaId: rondaId || "desde-novedades",
-          },
-          { merge: true }
-        );
-      }
-
-      MySwal.fire({
-        icon: "success",
-        title: "Guardado",
-        text: `Estado ${next.toUpperCase()} y nota registrados.`,
-        timer: 1400,
-        showConfirmButton: false,
-      });
-    } catch (e) {
-      // Rollback del overlay si falla
-      setLocalEstado(prev => {
-        const p = { ...prev }; delete p[canal]; return p;
-      });
-      setLocalNota(prev => {
-        const p = { ...prev }; delete p[canal]; return p;
-      });
-
-      console.error("quickSetEstado failed:", e);
-      MySwal.fire({
-        icon: "error",
-        title: "Error",
-        text: "No se pudo guardar el estado en Firestore.",
-      });
-    }
-  }, [clienteKey, rondaId, onEstadoChanged]);
-
+  // UI
   const skeletons = Array.from({ length: 3 }).map((_, i) => (
     <Box key={`sk-${i}`}>
       {i > 0 && <Divider component="li" sx={{ my: 0.5 }} />}
@@ -230,8 +174,9 @@ export default function NovedadesCard({
         subheaderTypographyProps={{ variant: "caption" }}
         title={
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-            <span>Últimas novedades del cliente</span>
-            <Chip size="small" variant="outlined" label={`OK ${resumen.ok}`} color="success" />
+            <span>Últimas novedades: </span>
+           
+
             <Chip size="small" variant="outlined" label={`MEDIO ${resumen.medio}`} color="warning" />
             <Chip size="small" variant="outlined" label={`GRAVE ${resumen.grave}`} color="error" />
             {showPartialFlag && (
@@ -246,9 +191,7 @@ export default function NovedadesCard({
       />
 
       <CardContent sx={{ pt: 0, flex: 1 }}>
-        {loading && fromTanda.length === 0 && (
-          <List dense disablePadding sx={{ mt: 0.5 }}>{skeletons}</List>
-        )}
+        {loading && fromTanda.length === 0 && <List dense disablePadding sx={{ mt: 0.5 }}>{skeletons}</List>}
 
         {showHardError && (
           <Alert severity="error" icon={<InfoOutlinedIcon />}>
@@ -265,17 +208,13 @@ export default function NovedadesCard({
             {merged.map((n, idx) => {
               const canal = camNum(n);
 
-              
               const estadoActual =
-                localEstado[canal] ||
                 estadoMap[canal] ||
                 historicos?.[canal] ||
                 normalizarEstado(n?.evento) ||
                 null;
 
-    
               const notaFinal =
-                (localNota[canal] ?? "") ||
                 (notaMap[canal] ?? "") ||
                 (n.nota ?? "");
 
@@ -300,12 +239,14 @@ export default function NovedadesCard({
                 </Box>
               );
 
-         
               const borderColor =
-                estadoActual === "grave" ? "error.main" :
-                estadoActual === "medio" ? "warning.main" :
-                estadoActual === "ok" ? "success.main" :
-                "divider";
+                estadoActual === "grave"
+                  ? "error.main"
+                  : estadoActual === "medio"
+                  ? "warning.main"
+                  : estadoActual === "ok"
+                  ? "success.main"
+                  : "divider";
 
               return (
                 <Box key={`${n.id || idx}-${canal}`}>
@@ -341,9 +282,7 @@ export default function NovedadesCard({
                         <VideocamOutlinedIcon
                           fontSize="small"
                           color={
-                            estadoActual === "grave" ? "error" :
-                            estadoActual === "medio" ? "warning" :
-                            "action"
+                            estadoActual === "grave" ? "error" : estadoActual === "medio" ? "warning" : "action"
                           }
                         />
                       </ListItemIcon>
@@ -351,21 +290,26 @@ export default function NovedadesCard({
                       <ListItemText
                         primary={
                           <Stack spacing={0.25}>
-                            {/* Fila 1: cámara + estado */}
+                            {/* Fila 1: cámara + estado (solo lectura) */}
                             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                              <Typography variant="body2" fontWeight={700}>Cam {canal || "—"}</Typography>
+                              <Typography variant="body2" fontWeight={700}>
+                                Cam {canal || "—"}
+                              </Typography>
                               <Chip
                                 size="small"
                                 icon={
-                                  estadoActual === "grave" ? <ReportProblemOutlinedIcon /> :
-                                  estadoActual === "ok"    ? <DoneOutlinedIcon /> :
-                                                              <InfoOutlinedIcon />
+                                  estadoActual === "grave" ? (
+                                    <ReportProblemOutlinedIcon />
+                                  ) : estadoActual === "ok" ? (
+                                    <DoneOutlinedIcon />
+                                  ) : (
+                                    <InfoOutlinedIcon />
+                                  )
                                 }
                                 label={chipLabel}
                                 color={colorChip}
                                 variant={chipVariant}
-                                sx={{ height: 22, cursor: "pointer" }}
-                                onClick={() => quickSetEstado(canal, estadoActual || "ok")}
+                                sx={{ height: 22, cursor: "default" }}
                               />
                             </Stack>
 
@@ -378,38 +322,24 @@ export default function NovedadesCard({
                           </Stack>
                         }
                         secondary={
-                          <Stack spacing={0.75} sx={{ mt: notaFinal ? 0.5 : 0 }}>
-                            {!!notaFinal && (
-                              <Tooltip title={notaFinal} placement="left" arrow>
-                                <Typography
-                                  variant="body2"
-                                  sx={{
-                                    maxWidth: "100%",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    display: "-webkit-box",
-                                    WebkitLineClamp: 1,
-                                    WebkitBoxOrient: "vertical",
-                                  }}
-                                >
-                                  {notaFinal}
-                                </Typography>
-                              </Tooltip>
-                            )}
-                            <ButtonGroup size="small" variant="outlined">
-                              {ESTADOS.map((opt) => (
-                                <Button
-                                  key={opt}
-                                  onClick={() => quickSetEstado(canal, opt)}
-                                  color={estadoColor(opt)}
-                                  variant={estadoActual === opt ? "contained" : "outlined"}
-                                  sx={{ fontWeight: 700 }}
-                                >
-                                  {opt.toUpperCase()}
-                                </Button>
-                              ))}
-                            </ButtonGroup>
-                          </Stack>
+                          !!notaFinal && (
+                            <Tooltip title={notaFinal} placement="left" arrow>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  mt: 0.5,
+                                  maxWidth: "100%",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  display: "-webkit-box",
+                                  WebkitLineClamp: 1,
+                                  WebkitBoxOrient: "vertical",
+                                }}
+                              >
+                                {notaFinal}
+                              </Typography>
+                            </Tooltip>
+                          )
                         }
                         secondaryTypographyProps={{ component: "div" }}
                       />

@@ -1,91 +1,39 @@
-
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { collection, onSnapshot, doc, getDoc, updateDoc } from "firebase/firestore";
+ import React, { useEffect, useMemo, useRef, useState } from "react";
+import { collection, collectionGroup, onSnapshot, doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../services/firebase";
 
 import {
-  AppBar,
-  Toolbar,
-  Box,
-  Paper,
-  Typography,
-  Chip,
-  Stack,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Divider,
-  IconButton,
-  Tooltip,
+  AppBar, Toolbar, Box, Paper, Typography, Chip, Stack, Table, TableHead,
+  TableRow, TableCell, TableBody, Divider, IconButton
 } from "@mui/material";
 
 import {
-  FaExclamationTriangle,
-  FaShieldAlt,
-  FaVideo,
-  FaPause,
-  FaPlay,
-  FaBell,
-  FaBellSlash,
-  FaDownload,
-  FaExpand,
-  FaCompress,
-  FaBook,
-  FaPlus,
-  FaTimes,
-  FaTools,
-  FaVolumeUp,
-  FaVolumeMute,
-  FaBullhorn,
-  FaColumns,
+  FaExclamationTriangle, FaShieldAlt, FaVideo, FaPause, FaPlay, FaDownload,
+  FaExpand, FaCompress, FaBook, FaPlus, FaTimes, FaVolumeUp, FaVolumeMute, FaColumns
 } from "react-icons/fa";
 
 import "../../styles/wallboard-soc.css";
-
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import "sweetalert2/dist/sweetalert2.min.css";
-
 const MySwal = withReactContent(Swal);
 
 /* ========================= Palette ========================= */
 export const PALETTE = {
-  bg: "#0A0F1C",
-  panel: "#0D1628",
-  header: "#0B1324",
-  border: "#1E2A44",
-  track: "#1A263A",
-  text: "#E8EEF7",
-  subtext: "#A9BEDF",
-  brand: "#2A9DF4",
-  critical: "#FF3B30",
-  criticalBg: "#2A1113",
-  criticalFg: "#FFE5E7",
-  warning: "#FFC300",
-  warningBg: "#2A2208",
-  warningFg: "#FFF4D5",
-  ok: "#00D97E",
-  okBg: "#0E2318",
-  okFg: "#D4FFE9",
-  info: "#3B82F6",
-  infoBg: "#0D1A2E",
-  infoFg: "#DCEBFF",
-  offline: "#FF3B30",
-  offlineBg: "#2A1113",
-  offlineFg: "#FFE5E7",
-  tamper: "#A855F7",
-  tamperBg: "#1A0F28",
-  tamperFg: "#F3E8FF",
-  marqueeBg: "#2A1113",
-  marqueeText: "#FFE5E7",
+  bg: "#0A0F1C", panel: "#0D1628", header: "#0B1324", border: "#1E2A44", track: "#1A263A",
+  text: "#E8EEF7", subtext: "#A9BEDF", brand: "#2A9DF4",
+  critical: "#FF3B30", criticalBg: "#2A1113", criticalFg: "#FFE5E7",
+  warning: "#FFC300", warningBg: "#2A2208", warningFg: "#FFF4D5",
+  ok: "#00D97E", okBg: "#0E2318", okFg: "#D4FFE9",
+  info: "#3B82F6", infoBg: "#0D1A2E", infoFg: "#DCEBFF",
+  offline: "#FF3B30", offlineBg: "#2A1113", offlineFg: "#FFE5E7",
+  tamper: "#A855F7", tamperBg: "#1A0F28", tamperFg: "#F3E8FF",
+  marqueeBg: "#2A1113", marqueeText: "#FFE5E7",
 };
-
 export const SEVERITY = {
   critical: { fill: PALETTE.critical, bg: PALETTE.criticalBg, fg: PALETTE.criticalFg },
   warning: { fill: PALETTE.warning, bg: PALETTE.warningBg, fg: PALETTE.warningFg },
-  ok: { fill: PALETTE.ok, bg: PALETTE.okBg, fg: PALETTE.okFg },
+  ok: { fill: PALETTE.ok, bg: PALETTE.okFg, fg: PALETTE.okFg },
   info: { fill: PALETTE.info, bg: PALETTE.infoBg, fg: PALETTE.infoFg },
   offline: { fill: PALETTE.offline, bg: PALETTE.offlineBg, fg: PALETTE.offlineFg },
   tamper: { fill: PALETTE.tamper, bg: PALETTE.tamperBg, fg: PALETTE.tamperFg },
@@ -110,35 +58,23 @@ const fmtAgo = (dt) => {
   return `${h}h ${m % 60}m`;
 };
 
-// === Normalizador de severidad ===
+const STALE_MINUTES = 45;
+function normalizeText(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
 function normalizeSev(val) {
   if (typeof val === "boolean") return val ? "ok" : "grave";
-  if (typeof val === "number") {
-    if (val >= 2) return "grave";
-    if (val >= 1) return "medio";
-    return "ok";
-  }
-  let s = String(val ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .trim();
+  if (typeof val === "number") return val >= 2 ? "grave" : val >= 1 ? "medio" : "ok";
+  const s = String(val ?? "")
+    .toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").trim();
   if (["grave", "critico", "critica", "critical", "alto", "alta", "high", "severo", "severa", "offline"].includes(s)) return "grave";
   if (["medio", "media", "moderado", "moderada", "warn", "warning", "medium", "degradado", "degradada"].includes(s)) return "medio";
   if (["ok", "bien", "normal", "healthy", "verde", "green", "online"].includes(s)) return "ok";
   return "nd";
 }
 
-const STALE_MINUTES = 45;
-
-function normalizeText(s) {
-  return String(s || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "");
-}
-
 function getStatusTextFromCam(c) {
+  if (!c || typeof c !== "object") return "";
   const parts = [
     c?.estado, c?.status, c?.estadoTexto, c?.detalle, c?.mensaje,
     c?.comentario, c?.comentarios, c?.observacion, c?.observación,
@@ -149,13 +85,12 @@ function getStatusTextFromCam(c) {
 }
 
 function interpretCamStatus(c) {
+  if (!c || typeof c !== "object") return "nd";
   if (typeof c?.estado === "boolean") return c.estado ? "ok" : "grave";
+
   const asBool = (v) =>
-    v === true || v === false
-      ? v
-      : ["true", "false"].includes(String(v).toLowerCase())
-      ? String(v).toLowerCase() === "true"
-      : null;
+    v === true || v === false ? v :
+    ["true", "false"].includes(String(v).toLowerCase()) ? String(v).toLowerCase() === "true" : null;
 
   const okBool = asBool(c?.ok);
   const onlineBool = asBool(c?.online);
@@ -186,69 +121,78 @@ function interpretCamStatus(c) {
   const last =
     tsToDate(c?.lastFrame) || tsToDate(c?.ultimaCaptura) || tsToDate(c?.lastSeen) ||
     tsToDate(c?.timestamp) || tsToDate(c?.ultimaImagen) || tsToDate(c?.updatedAt);
-  if (last) {
-    const mins = (Date.now() - last.getTime()) / 60000;
-    if (mins > STALE_MINUTES) return "grave";
-  }
+  if (last && (Date.now() - last.getTime()) / 60000 > STALE_MINUTES) return "grave";
 
   const raw = c?.estado ?? c?.criticidad ?? c?.severity ?? c?.nivel;
   const norm = normalizeSev(raw);
-  if (norm !== "nd") return norm;
-  return "nd";
+  return norm !== "nd" ? norm : "nd";
 }
 
-/* ===== util: obtener cámaras como array (soporta objeto/mapa o array) ===== */
-function camsToArray(t) {
+/* === Canal / ID legible === */
+function camChannel(c) {
+  if (!c || typeof c !== "object") return null;
+  return c?.canal ?? c?.channel ?? c?.ch ?? c?.port ?? null;
+}
+function camDisplayId(c) {
+  if (!c || typeof c !== "object") return "";
+  const name = c?.nombre || c?.name || c?.cam || c?.camera || null;
+  const ch = camChannel(c);
+  if (name && ch != null) return `Ch ${ch} · ${name}`;
+  if (ch != null) return `Ch ${ch}`;
+  return name || String(c?.__id ?? "");
+}
+
+/* ===== util: array de cams desde tanda o índice ===== */
+function camsToArrayFromTanda(t) {
   const cc = t?.camaras;
-  if (Array.isArray(cc)) return cc.map((cam, i) => ({ __id: String(cam?.id ?? i + 1), ...cam }));
-  if (cc && typeof cc === "object") return Object.entries(cc).map(([k, v]) => ({ __id: String(k), ...v }));
+  if (Array.isArray(cc)) {
+    return cc.map((cam, i) =>
+      cam && typeof cam === "object"
+        ? { __id: String(cam?.id ?? cam?.canal ?? i + 1), ...cam }
+        : { __id: String(i + 1), nombre: cam != null ? String(cam) : "", estado: "nd" }
+    );
+  }
+  if (cc && typeof cc === "object") {
+    return Object.entries(cc).map(([k, v]) =>
+      v && typeof v === "object"
+        ? { __id: String(k), ...v }
+        : { __id: String(k), nombre: v != null ? String(v) : "", estado: "nd" }
+    );
+  }
+  return [];
+}
+function camsToArrayFromIndex(raw) {
+  // `raw` puede venir como array o como objetos por canal
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((cam, i) =>
+      cam && typeof cam === "object"
+        ? { __id: String(cam?.id ?? cam?.canal ?? i + 1), ...cam }
+        : { __id: String(i + 1), nombre: cam != null ? String(cam) : "", estado: "nd" }
+    );
+  }
+  if (typeof raw === "object") {
+    return Object.entries(raw).map(([k, v]) =>
+      v && typeof v === "object"
+        ? { __id: String(k), ...v }
+        : { __id: String(k), nombre: v != null ? String(v) : "", estado: "nd" }
+    );
+  }
   return [];
 }
 
-/* Cam summary robusto (por tanda) */
-const camSummaryFromTanda = (t) => {
-  const cams = camsToArray(t);
+/* Cam summary */
+const camSummary = (cams) => {
   const counts = { ok: 0, medio: 0, grave: 0, nd: 0 };
   for (const cam of cams) {
-    const sev = interpretCamStatus(cam);
-    if (counts[sev] !== undefined) counts[sev] += 1;
-    else counts.nd += 1;
+    try {
+      const sev = interpretCamStatus(cam);
+      if (counts[sev] !== undefined) counts[sev] += 1; else counts.nd += 1;
+    } catch { counts.nd += 1; }
   }
-  if (Array.isArray(t?.camarasOffline) && t.camarasOffline.length > 0 && cams.length === 0 && counts.grave === 0) {
-    counts.grave += t.camarasOffline.length;
-  }
-  return { total: cams.length || (Array.isArray(t?.camarasOffline) ? t.camarasOffline.length : 0), ...counts };
+  return { total: cams.length, ...counts };
 };
 
-const deriveIssuesFromChecklist = (t) => {
-  const issues = [];
-  const c = t?.checklist || {};
-  if (t?.checklist?.alarmaMonitoreada === true) {
-    if (c.alarmaComunicacionOK === false) issues.push({ sev: "critical", label: "SIN COMMS" });
-    if (c.alarmaTamper === true) issues.push({ sev: "critical", label: "Tamper" });
-    if (c.alarmaPanelArmado === false) issues.push({ sev: "warning", label: "DESARMADO" });
-    if (c.alarmaZonasAbiertas === true) issues.push({ sev: "warning", label: "Zonas abiertas" });
-    if (c.alarmaBateriaBaja === true) issues.push({ sev: "warning", label: "Batería baja" });
-  }
-  if (c.equipoOffline === true) issues.push({ sev: "offline", label: "OFFLINE" });
-  if (c.grabacionesOK === false) issues.push({ sev: "warning", label: "Falla grabaciones" });
-  if (c.cortes220v === true) issues.push({ sev: "critical", label: "Cortes 220V" });
-  if (c.equipoHora === true) issues.push({ sev: "warning", label: "Hora desfasada" });
-  return issues;
-};
-
-const deriveIssuesFromCams = (t) => {
-  const sum = camSummaryFromTanda(t);
-  const out = [];
-  if (sum.grave > 0) out.push({ sev: "critical", label: `Cáms GRAVE: ${sum.grave}` });
-  if (sum.medio > 0) out.push({ sev: "warning", label: `Cáms MEDIO: ${sum.medio}` });
-  return out;
-};
-
-const rankSev = { critical: 0, offline: 0, warning: 1, info: 2, ok: 3 };
-const worstSev = (issues) => issues.reduce((w, i) => (rankSev[i.sev] < rankSev[w] ? i.sev : w), "ok");
-
-/* ========================= Pills (con blink) ========================= */
 const PILL_COLORS = {
   ok: { bg: PALETTE.okBg, fg: PALETTE.okFg, bd: PALETTE.ok },
   warning: { bg: PALETTE.warningBg, fg: PALETTE.warningFg, bd: PALETTE.warning },
@@ -256,56 +200,24 @@ const PILL_COLORS = {
   offline: { bg: PALETTE.offlineBg, fg: PALETTE.offlineFg, bd: PALETTE.offline },
   info: { bg: PALETTE.infoBg, fg: PALETTE.infoFg, bd: PALETTE.info },
 };
-
 const GLOW = {
-  offline: "rgba(220, 38, 38, 0.65)",
-  critical: "rgba(220, 38, 38, 0.65)",
-  warning: "rgba(138, 43, 226, 0.60)",
-  ok: "rgba(16, 185, 129, 0.55)",
-  info: "rgba(37, 99, 235, 0.55)",
+  offline: "rgba(220, 38, 38, 0.65)", critical: "rgba(220, 38, 38, 0.65)",
+  warning: "rgba(138, 43, 226, 0.60)", ok: "rgba(16, 185, 129, 0.55)", info: "rgba(37, 99, 235, 0.55)",
 };
-
 function Pill({ label, sev = "info", blink = false, sx }) {
   const c = PILL_COLORS[sev] || PILL_COLORS.info;
   const glow = GLOW[sev] || GLOW.info;
   return (
-    <Box
-      component="span"
-      sx={{
-        display: "inline-block",
-        padding: "2px 8px",
-        mr: 0.5,
-        mb: 0.5,
-        borderRadius: 9999,
-        fontSize: 12,
-        fontWeight: 800,
-        border: "1px solid",
-        borderColor: c.bd,
-        bgcolor: c.bg,
-        color: c.fg,
-        lineHeight: "18px",
-        whiteSpace: "nowrap",
-        ...(blink
-          ? {
-              position: "relative",
-              animation: "pulseGlow 1.2s ease-out infinite",
-              filter: "saturate(125%)",
-            }
-          : {}),
-        "@keyframes pulseGlow": {
-          "0%": { boxShadow: `0 0 0 0 ${glow}` },
-          "70%": { boxShadow: `0 0 0 8px rgba(0,0,0,0)` },
-          "100%": { boxShadow: `0 0 0 0 rgba(0,0,0,0)` },
-        },
-        ...sx,
-      }}
-    >
-      {label}
-    </Box>
+    <Box component="span" sx={{
+      display: "inline-block", padding: "2px 8px", mr: 0.5, mb: 0.5, borderRadius: 9999,
+      fontSize: 12, fontWeight: 800, border: "1px solid", borderColor: c.bd, bgcolor: c.bg, color: c.fg, lineHeight: "18px",
+      ...(blink ? { position: "relative", animation: "pulseGlow 1.2s ease-out infinite", filter: "saturate(125%)" } : {}),
+      "@keyframes pulseGlow": { "0%": { boxShadow: `0 0 0 0 ${glow}` }, "70%": { boxShadow: `0 0 0 8px rgba(0,0,0,0)` }, "100%": { boxShadow: `0 0 0 0 rgba(0,0,0,0)` } },
+      ...sx,
+    }}>{label}</Box>
   );
 }
 
-/* ========================= Playbooks (guías rápidas) ========================= */
 const PLAYBOOKS = {
   "SIN COMMS": ["Verificar WAN/4G/ISP del sitio", "Probar ping al equipo", "Reiniciar equipo remoto si es posible", "Escalar a redes si persiste"],
   OFFLINE: ["Chequear energía/UPS", "Verificar estado del NVR/DVR", "Confirmar última conexión"],
@@ -313,25 +225,25 @@ const PLAYBOOKS = {
   Tamper: ["Validar integridad de caja/sensor", "Revisar cámaras cercanas a gabinete"],
 };
 
-/* ===== Ver fallas (detalle) ===== */
 function renderFailListHTML(fails) {
   if (!fails.length) return "<i>No hay cámaras en falla</i>";
-  const rows = fails
-    .map(
-      (f) => `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid #1E2A44;border-radius:8px;margin:6px 0;background:#0D1628">
-        <span style="font-weight:900;min-width:52px">${f.id}</span>
-        <span style="font-weight:800;color:${f.sev === "grave" ? "#FFB4B8" : "#FFE08F"}">${f.sev.toUpperCase()}</span>
-        <span style="flex:1;opacity:.9">${f.nota || f.texto || "—"}</span>
-        <span style="opacity:.7;font-size:12px">${f.time ? new Date(f.time).toLocaleString("es-AR") : ""}</span>
-      </div>`
-    )
-    .join("");
+  const rows = fails.map((f) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid #1E2A44;border-radius:8px;margin:6px 0;background:#0D1628">
+      <span style="font-weight:900;min-width:72px">${f.canal != null ? `Ch ${f.canal}` : "—"}</span>
+      <span style="font-weight:800;color:${f.sev === "grave" ? "#FFB4B8" : "#FFE08F"}">${f.sev.toUpperCase()}</span>
+      <span style="flex:1;opacity:.95">${f.id}</span>
+      <span style="flex:1;opacity:.85">${f.nota || "—"}</span>
+      <span style="opacity:.7;font-size:12px">${f.time ? new Date(f.time).toLocaleString("es-AR") : ""}</span>
+    </div>
+  `).join("");
   return `<div style="text-align:left;max-height:60vh;overflow:auto">${rows}</div>`;
 }
 
 /* ========================= Row ========================= */
-const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onPlaybook, onShowFails, onManageCams }) {
+const rankSev = { critical: 0, offline: 0, warning: 1, info: 2, ok: 3 };
+const worstSev = (issues) => issues.reduce((w, i) => (rankSev[i.sev] < rankSev[w] ? i.sev : w), "ok");
+
+const ClientRow = React.memo(function ClientRow({ row, onOpen, onPlaybook, onShowFails }) {
   const color = sevColor(row.worst);
   const c = row.checklist || {};
   const now = Date.now();
@@ -345,7 +257,6 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onPl
 
   const statusPills = [];
   statusPills.push(c.equipoOffline ? <Pill key="offline" label="OFFLINE" sev="offline" blink={!ackActive && !mantActive} /> : <Pill key="online" label="ONLINE" sev="ok" />);
-
   if (c.alarmaMonitoreada === true) {
     statusPills.push(c.alarmaComunicacionOK ? <Pill key="comm-ok" label="COMM OK" sev="ok" /> : <Pill key="comm-no" label="SIN COMMS" sev="critical" blink={!ackActive && !mantActive} />);
     statusPills.push(c.alarmaPanelArmado ? <Pill key="arm" label="ARMADO" sev="ok" /> : <Pill key="disarm" label="DESARMADO" sev="warning" />);
@@ -357,74 +268,44 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onPl
   if (c.equipoHora === true) statusPills.push(<Pill key="hora" label="Hora desfasada" sev="warning" />);
   if (ackActive) statusPills.push(<Pill key="ack" label={`ACK hasta ${row.ackUntil.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`} sev="info" />);
   if (mantActive) statusPills.push(<Pill key="mant" label="MANTENIMIENTO" sev="info" />);
-
   if (row.escalation?.to) statusPills.push(<Pill key="esc" label={`ESC → ${row.escalation.to}`} sev="warning" />);
 
   const rowBg =
-    row.worst === "critical"
-      ? PALETTE.criticalBg
-      : row.worst === "offline"
-      ? PALETTE.offlineBg
-      : row.worst === "warning"
-      ? PALETTE.warningBg
-      : PALETTE.panel;
+    row.worst === "critical" ? PALETTE.criticalBg :
+    row.worst === "offline"  ? PALETTE.offlineBg  :
+    row.worst === "warning"  ? PALETTE.warningBg  : PALETTE.panel;
 
-  const handleKey = (e) => {
-    if (e.key === "Enter" || e.key === " ") onOpen?.(row);
-  };
+  const handleKey = (e) => { if (e.key === "Enter" || e.key === " ") onOpen?.(row); };
 
   return (
-    <TableRow
-      hover
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen?.(row)}
-      onKeyDown={handleKey}
+    <TableRow hover role="button" tabIndex={0} onClick={() => onOpen?.(row)} onKeyDown={handleKey}
       sx={{
-        cursor: "pointer",
-        height: 64,
-        background: rowBg,
-        opacity: ackActive || mantActive ? 0.7 : 1,
-        borderLeft: `6px solid ${color}`,
-        outline: `1px solid ${PALETTE.border}`,
-        filter: agingFilter,
+        cursor: "pointer", height: 64, background: rowBg, opacity: ackActive || mantActive ? 0.7 : 1,
+        borderLeft: `6px solid ${color}`, outline: `1px solid ${PALETTE.border}`, filter: agingFilter,
         boxShadow:
-          row.worst === "critical"
-            ? `0 0 0 1px ${PALETTE.border}, 0 0 18px 2px rgba(255,59,48,.18)`
-            : row.worst === "offline"
-            ? `0 0 0 1px ${PALETTE.border}, 0 0 18px 2px rgba(168,85,247,.18)`
-            : "none",
+          row.worst === "critical" ? `0 0 0 1px ${PALETTE.border}, 0 0 18px 2px rgba(255,59,48,.18)` :
+          row.worst === "offline"  ? `0 0 0 1px ${PALETTE.border}, 0 0 18px 2px rgba(168,85,247,.18)` : "none",
       }}
     >
-      {/* Cliente */}
       <TableCell sx={{ fontWeight: 900, whiteSpace: "nowrap", color: PALETTE.text }}>{row.cliente}</TableCell>
-
-      {/* Resumen cámaras */}
       <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
           <FaVideo style={{ opacity: 0.9 }} />
-          <Pill label={`MEDIO ${row.camSum.medio || 0}`} sev="warning" />
-          <Pill label={`GRAVE ${row.camSum.grave || 0}`} sev="critical" />
-          {(row.camSum.grave > 0 || row.camSum.medio > 0) && (
-            <>
-              
-             
-            </>
-          )}
+          <Box component="span" onClick={(e)=>{e.stopPropagation(); onShowFails?.(row);}} sx={{cursor:"pointer", display:"inline-flex"}}>
+            <Pill label={`MEDIO ${row.camSum.medio || 0}`} sev="warning" />
+          </Box>
+          <Box component="span" onClick={(e)=>{e.stopPropagation(); onShowFails?.(row);}} sx={{cursor:"pointer", display:"inline-flex"}}>
+            <Pill label={`GRAVE ${row.camSum.grave || 0}`} sev="critical" />
+          </Box>
         </Stack>
       </TableCell>
-
-      {/* Estados / Alarma */}
       <TableCell sx={{ color: PALETTE.text }}>
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexWrap: "wrap" }}>
           <FaShieldAlt style={{ opacity: 0.9 }} />
           {statusPills.length ? statusPills : <Pill label="Sin alarma / OK" sev="ok" />}
           <IconButton
             size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPlaybook?.(row);
-            }}
+            onClick={(e) => { e.stopPropagation(); onPlaybook?.(row); }}
             sx={{ color: PALETTE.subtext, ml: 0.5 }}
             title="Guía rápida (playbook)"
           >
@@ -432,18 +313,11 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onPl
           </IconButton>
         </Stack>
       </TableCell>
-
-      {/* Operador + ACK */}
       <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="body1" sx={{ fontWeight: 800 }}>
-            {row.operador || "—"}
-          </Typography>
-          
-        </Stack>
+        <Typography variant="body1" sx={{ fontWeight: 800 }}>
+          {row.operador || "—"}
+        </Typography>
       </TableCell>
-
-      {/* Tiempo */}
       <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
         <Typography variant="body1" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
           {row.time ? fmtAgo(row.time) : "—"}
@@ -458,12 +332,8 @@ const ClientRow = React.memo(function ClientRow({ row, onOpen, onToggleAck, onPl
 
 /* ========================= Main ========================= */
 export default function MonitoringWallboardTV() {
-  const ROW_HEIGHT = 64,
-    HEADER_H = 80,
-    FOOTER_H = 44,
-    PAGE_MS = 12000,
-    REMIND_MS = 3 * 60 * 1000;
-    const SOUND_PASS = "@Grupo3T1134";
+  const ROW_HEIGHT = 64, HEADER_H = 80, FOOTER_H = 44, PAGE_MS = 12000, REMIND_MS = 3 * 60 * 1000;
+  const SOUND_PASS = "@Grupo3T1134";
 
   const [paused, setPaused] = useState(false);
   const [isFs, setIsFs] = useState(false);
@@ -471,16 +341,14 @@ export default function MonitoringWallboardTV() {
   const [soundOn, setSoundOn] = useState(true);
   const [ttsOn, setTtsOn] = useState(false);
 
-  const [docs, setDocs] = useState([]);
+  const [docs, setDocs] = useState([]); // respuestas-tareas
+  const [indexCamsByClient, setIndexCamsByClient] = useState(new Map()); // rondin-index/{cliente}/camaras/*
 
-  // Tick cada 1s para refrescar labels "hace Xm"
+  // Tick 1s para "hace Xm"
   const [, setNowTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setNowTick((t) => (t + 1) % 1_000_000), 1000);
-    return () => clearInterval(id);
-  }, []);
+  useEffect(() => { const id = setInterval(() => setNowTick((t) => (t + 1) % 1_000_000), 1000); return () => clearInterval(id); }, []);
 
-  // ====== Firestore listener ======
+  // ====== Firestore listeners ======
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "respuestas-tareas"), (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
@@ -489,7 +357,24 @@ export default function MonitoringWallboardTV() {
     return () => unsub();
   }, []);
 
-  // ====== Audio (beep) + Speech ======
+  // rondin-index: subcolección "camaras" por cliente (usamos collectionGroup)
+  useEffect(() => {
+    const unsub = onSnapshot(collectionGroup(db, "camaras"), (snap) => {
+      const m = new Map();
+      snap.forEach((d) => {
+        // parent => .../rondin-index/{CLIENTE}/camaras/{doc}
+        const clientId = d.ref?.parent?.parent?.id || "UNKNOWN";
+        const cam = { __id: d.id, ...d.data() };
+        const arr = m.get(clientId) || [];
+        arr.push(cam);
+        m.set(clientId, arr);
+      });
+      setIndexCamsByClient(m);
+    });
+    return () => unsub();
+  }, []);
+
+  // ====== Audio ======
   const audioCtxRef = useRef(null);
   function ensureAudioCtx() {
     try {
@@ -498,113 +383,56 @@ export default function MonitoringWallboardTV() {
       if (!Ctx) return null;
       audioCtxRef.current = new Ctx();
       return audioCtxRef.current;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }
-
   const handleToggleSound = async () => {
-    // Si está ON y querés silenciar, pedimos contraseña
     if (soundOn) {
       const res = await MySwal.fire({
         title: "Contraseña requerida",
         input: "password",
         inputLabel: "Ingresá la contraseña para silenciar",
         inputPlaceholder: "Contraseña",
-        inputAttributes: {
-          autocapitalize: "off",
-          autocomplete: "current-password",
-        },
-        showCancelButton: true,
-        confirmButtonText: "Silenciar",
-        cancelButtonText: "Cancelar",
-        preConfirm: (val) => {
-          if (val !== SOUND_PASS) {
-            MySwal.showValidationMessage("Contraseña incorrecta");
-            return false;
-          }
-          return true;
-        },
+        inputAttributes: { autocapitalize: "off", autocomplete: "current-password" },
+        showCancelButton: true, confirmButtonText: "Silenciar", cancelButtonText: "Cancelar",
+        preConfirm: (val) => { if (val !== SOUND_PASS) { MySwal.showValidationMessage("Contraseña incorrecta"); return false; } return true; },
       });
       if (res.isConfirmed) setSoundOn(false);
       return;
     }
-    // Si está OFF, volver a ON no requiere contraseña
     setSoundOn(true);
   };
-  
   function resumeAudioCtx() {
-    try {
-      const ctx = ensureAudioCtx();
-      if (ctx && ctx.state === "suspended") ctx.resume();
-    } catch {}
+    try { const ctx = ensureAudioCtx(); if (ctx && ctx.state === "suspended") ctx.resume(); } catch {}
   }
   useEffect(() => {
     const h = () => resumeAudioCtx();
     window.addEventListener("click", h, { passive: true });
     window.addEventListener("keydown", h);
-    return () => {
-      window.removeEventListener("click", h);
-      window.removeEventListener("keydown", h);
-    };
+    return () => { window.removeEventListener("click", h); window.removeEventListener("keydown", h); };
   }, []);
   function playBeep(kind = "critical") {
     try {
-      const ctx = ensureAudioCtx();
-      if (!ctx) return;
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      const now = ctx.currentTime;
+      const ctx = ensureAudioCtx(); if (!ctx) return;
+      const o = ctx.createOscillator(); const g = ctx.createGain(); const now = ctx.currentTime;
       const freq = kind === "critical" ? 880 : kind === "offline" ? 660 : kind === "warning" ? 520 : 600;
-      o.frequency.setValueAtTime(freq, now);
-      o.type = "sine";
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.linearRampToValueAtTime(0.25, now + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
-      o.connect(g);
-      g.connect(ctx.destination);
-      o.start(now);
-      o.stop(now + 0.42);
+      o.frequency.setValueAtTime(freq, now); o.type = "sine";
+      g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.25, now + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+      o.connect(g); g.connect(ctx.destination); o.start(now); o.stop(now + 0.42);
     } catch {}
   }
   function speak(text) {
-    try {
-      if (!("speechSynthesis" in window)) return;
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "es-AR";
-      u.rate = 1;
-      window.speechSynthesis.speak(u);
-    } catch {}
+    try { if (!("speechSynthesis" in window)) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = "es-AR"; u.rate = 1; window.speechSynthesis.speak(u); } catch {}
   }
 
-  // ====== Ticker manual (persistente) ======
-  const [tickerItems, setTickerItems] = useState([]); // { text, time }
+  // ====== Ticker y mini-cards (igual que antes, omitido por brevedad si querés) ======
+  const [tickerItems, setTickerItems] = useState([]);
   const [tickerInput, setTickerInput] = useState("");
-  const addTickerItem = () => {
-    const t = tickerInput?.trim();
-    if (!t) return;
-    setTickerItems((prev) => [{ text: t, time: new Date() }, ...prev].slice(0, 50));
-    setTickerInput("");
-  };
+  const addTickerItem = () => { const t = tickerInput?.trim(); if (!t) return; setTickerItems((prev) => [{ text: t, time: new Date() }, ...prev].slice(0, 50)); setTickerInput(""); };
   const clearTickerItems = () => setTickerItems([]);
-
-  // ====== Mini cards de novedades (zócalo inferior) ======
   const [miniCards, setMiniCards] = useState(() => {
-    try {
-      const raw = localStorage.getItem("wallboard_mini_cards");
-      if (!raw) return [];
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr.map((c) => ({ ...c, at: c.at ? new Date(c.at) : new Date() })) : [];
-    } catch {
-      return [];
-    }
+    try { const raw = localStorage.getItem("wallboard_mini_cards"); if (!raw) return []; const arr = JSON.parse(raw); return Array.isArray(arr) ? arr.map((c) => ({ ...c, at: c.at ? new Date(c.at) : new Date() })) : []; } catch { return []; }
   });
-  useEffect(() => {
-    try {
-      localStorage.setItem("wallboard_mini_cards", JSON.stringify(miniCards));
-    } catch {}
-  }, [miniCards]);
+  useEffect(() => { try { localStorage.setItem("wallboard_mini_cards", JSON.stringify(miniCards)); } catch {} }, [miniCards]);
 
   function addMiniCard() {
     MySwal.fire({
@@ -623,16 +451,11 @@ export default function MonitoringWallboardTV() {
           </select>
         </div>
       `,
-      showCancelButton: true,
-      confirmButtonText: "Agregar",
-      cancelButtonText: "Cancelar",
+      showCancelButton: true, confirmButtonText: "Agregar", cancelButtonText: "Cancelar",
       preConfirm: () => {
         const text = document.getElementById("swal-card-text")?.value?.trim();
         const sev = document.getElementById("swal-card-sev")?.value || "info";
-        if (!text) {
-          MySwal.showValidationMessage("Escribe un texto");
-          return false;
-        }
+        if (!text) { MySwal.showValidationMessage("Escribe un texto"); return false; }
         return { text, sev };
       },
     }).then((res) => {
@@ -644,7 +467,7 @@ export default function MonitoringWallboardTV() {
   }
   const removeMiniCard = (id) => setMiniCards((prev) => prev.filter((c) => c.id !== id));
 
-  // Cargar/guardar preferencias (pausa + ticker + audio/voz + split)
+  // prefs
   useEffect(() => {
     try {
       const s = JSON.parse(localStorage.getItem("wallboard_prefs") || "{}");
@@ -656,15 +479,13 @@ export default function MonitoringWallboardTV() {
     } catch {}
   }, []);
   useEffect(() => {
-    try {
-      const data = { paused, tickerItems, soundOn, ttsOn, splitView };
-      localStorage.setItem("wallboard_prefs", JSON.stringify(data));
-    } catch {}
+    try { const data = { paused, tickerItems, soundOn, ttsOn, splitView }; localStorage.setItem("wallboard_prefs", JSON.stringify(data)); } catch {}
   }, [paused, tickerItems, soundOn, ttsOn, splitView]);
 
-  // ====== Datos por cliente (SOLO último rondín) ======
+  /* ====== Datos por cliente (último rondín + merge con índice) ====== */
   const byClient = useMemo(() => {
     const map = new Map();
+
     for (const { id, data } of docs) {
       const baseTime = preferDate(data);
       const turno = data?.respuestas?.turno || data?.turno || "";
@@ -673,27 +494,99 @@ export default function MonitoringWallboardTV() {
 
       for (const t of tandas) {
         const cliente = t?.cliente || "Sin cliente";
-        const sum = camSummaryFromTanda(t);
-        const checklistIssues = deriveIssuesFromChecklist(t);
+
+        // 1) Cams desde la tanda
+        const camsTanda = camsToArrayFromTanda(t);
+
+        // 2) Cams desde índice (rondin-index/{cliente}/camaras/*)
+        const camsIndex = indexCamsByClient.get(cliente) || [];
+
+        // 3) Merge: primero las de la tanda; si una del índice no existe en tanda, la agregamos
+       // 3) Merge: SOLO enriquecer las de la tanda con datos del índice (sin agregar nuevas)
+const byKey = new Map();
+for (const c of camsTanda) {
+  const key = String(c?.__id ?? camChannel(c) ?? c?.id ?? c?.canal ?? "");
+  byKey.set(key, { ...c });
+}
+
+if (camsIndex?.length) {
+  // indexByKey para lookup rápido
+  const idxMap = new Map(
+    camsIndex.map((ci) => {
+      const k = String(ci?.__id ?? camChannel(ci) ?? ci?.id ?? ci?.canal ?? "");
+      return [k, ci];
+    })
+  );
+
+  // enriquecer solo campos "seguros" (nunca estado/updatedAt del índice)
+  for (const [k, base] of byKey.entries()) {
+    const idx = idxMap.get(k);
+    if (!idx) continue;
+
+    const enriched = { ...base };
+
+    // Nombre/canal legible
+    const idxName = idx?.nombre || idx?.name || idx?.cam || idx?.camera;
+    if (!enriched.nombre && idxName) enriched.nombre = String(idxName);
+    // Canal (si no viene en tanda)
+    if (enriched.canal == null) {
+      const idxCh = camChannel(idx);
+      if (idxCh != null) enriched.canal = idxCh;
+    }
+
+    // JAMÁS copiar: estado/ok/online/updatedAt/lastSeen/ultimaCaptura/etc. del índice
+    byKey.set(k, enriched);
+  }
+}
+
+const camsMerged = Array.from(byKey.values());
+
+
+        // Resumen + issues por cámaras
+        const sum = camSummary(camsMerged);
+
+        const checklist = t?.checklist || {};
+        const checklistIssues = [];
+        if (checklist?.alarmaMonitoreada === true) {
+          if (checklist.alarmaComunicacionOK === false) checklistIssues.push({ sev: "critical", label: "SIN COMMS" });
+          if (checklist.alarmaTamper === true)        checklistIssues.push({ sev: "critical", label: "Tamper" });
+          if (checklist.alarmaPanelArmado === false)  checklistIssues.push({ sev: "warning",  label: "DESARMADO" });
+          if (checklist.alarmaZonasAbiertas === true) checklistIssues.push({ sev: "warning",  label: "Zonas abiertas" });
+          if (checklist.alarmaBateriaBaja === true)   checklistIssues.push({ sev: "warning",  label: "Batería baja" });
+        }
+        if (checklist.equipoOffline === true) checklistIssues.push({ sev: "offline", label: "OFFLINE" });
+        if (checklist.grabacionesOK === false) checklistIssues.push({ sev: "warning", label: "Falla grabaciones" });
+        if (checklist.cortes220v === true)     checklistIssues.push({ sev: "critical", label: "Cortes 220V" });
+        if (checklist.equipoHora === true)     checklistIssues.push({ sev: "warning",  label: "Hora desfasada" });
+
+        const camIssues = [];
+        if (sum.grave > 0) camIssues.push({ sev: "critical", label: `Cáms GRAVE: ${sum.grave}` });
+        if (sum.medio > 0) camIssues.push({ sev: "warning",  label: `Cáms MEDIO: ${sum.medio}` });
+
         const ackUntil = tsToDate(t?.ackUntil);
         const maintenanceFrom = tsToDate(t?.maintenanceFrom);
         const maintenanceTo = tsToDate(t?.maintenanceTo);
         const escalation = t?.escalation || null;
-        const prev = map.get(cliente);
 
-        const cams = camsToArray(t);
-        const camFails = cams
+        const prev = map.get(cliente);
+        const shouldSet = !prev || (baseTime && prev.time && baseTime > prev.time) || (!prev?.time && baseTime);
+
+        // Listado de fallas por cam (para popup)
+        const camFails = camsMerged
           .map((cam) => ({ ...cam, __sev: interpretCamStatus(cam) }))
           .filter((cam) => cam.__sev === "grave" || cam.__sev === "medio")
           .map((cam) => ({
-            id: cam?.nombre || cam?.name || cam?.cam || cam?.camera || cam.__id,
+            id: camDisplayId(cam),
+            canal: camChannel(cam),
             sev: cam.__sev,
             nota: cam?.nota || cam?.novedad || cam?.detalle || "",
-            time: tsToDate(cam?.updatedAt)?.getTime?.() || tsToDate(cam?.lastSeen)?.getTime?.() || tsToDate(cam?.ultimaCaptura)?.getTime?.() || null,
+            time:
+              tsToDate(cam?.updatedAt)?.getTime?.() ||
+              tsToDate(cam?.lastSeen)?.getTime?.() ||
+              tsToDate(cam?.ultimaCaptura)?.getTime?.() || null,
             raw: cam,
           }));
 
-        const shouldSet = !prev || (baseTime && prev.time && baseTime > prev.time) || (!prev?.time && baseTime);
         if (shouldSet) {
           map.set(cliente, {
             docId: id,
@@ -702,7 +595,7 @@ export default function MonitoringWallboardTV() {
             turno,
             time: baseTime || prev?.time || null,
             camSum: { ok: sum.ok, medio: sum.medio, grave: sum.grave, nd: sum.nd, total: sum.total },
-            checklist: t?.checklist || {},
+            checklist,
             checklistIssues: [...checklistIssues],
             notas: t?.notas || "",
             ackUntil,
@@ -711,14 +604,16 @@ export default function MonitoringWallboardTV() {
             escalation,
             lastTanda: t,
             camFails,
+            camsMerged,
           });
         }
       }
     }
 
     const arr = Array.from(map.values()).map((v) => {
-      const camIssues = deriveIssuesFromCams(v.lastTanda);
-      const allIssues = [...v.checklistIssues, ...camIssues];
+      const allIssues = [...v.checklistIssues];
+      if (v.camSum.grave > 0) allIssues.push({ sev: "critical", label: `Cáms GRAVE: ${v.camSum.grave}` });
+      if (v.camSum.medio > 0) allIssues.push({ sev: "warning",  label: `Cáms MEDIO: ${v.camSum.medio}` });
       const worst = worstSev(allIssues);
       return { ...v, issues: allIssues, worst };
     });
@@ -731,9 +626,9 @@ export default function MonitoringWallboardTV() {
     });
 
     return arr;
-  }, [docs]);
+  }, [docs, indexCamsByClient]);
 
-  // === util: críticos/offline activos (sin ACK/Mantenimiento) ===
+  // === Activos críticos/offline (para recordatorios) ===
   const activeCriticals = useMemo(() => {
     const now = Date.now();
     const list = [];
@@ -749,7 +644,7 @@ export default function MonitoringWallboardTV() {
     return list;
   }, [byClient]);
 
-  // ====== Detección de NUEVOS críticos/offline (sonidos + toast + voz opcional) ======
+  // === Beeps / TTS (igual que antes; si querés, lo podés quitar) ===
   const prevSevSet = useRef(new Set());
   useEffect(() => {
     const now = Date.now();
@@ -760,34 +655,18 @@ export default function MonitoringWallboardTV() {
       const mTo = r.maintenanceTo?.getTime?.();
       const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
       if (ackActive || mantActive) continue;
-      for (const it of r.issues) {
-        if (it.sev === "critical" || it.sev === "offline") {
-          cur.add(`${r.cliente}|${it.label}`);
-        }
-      }
+      for (const it of r.issues) if (it.sev === "critical" || it.sev === "offline") cur.add(`${r.cliente}|${it.label}`);
     }
-    let newCount = 0;
-    for (const k of cur) if (!prevSevSet.current.has(k)) newCount++;
+    let newCount = 0; for (const k of cur) if (!prevSevSet.current.has(k)) newCount++;
     prevSevSet.current = cur;
     if (newCount > 0) {
-      MySwal.fire({
-        toast: true,
-        icon: "warning",
-        position: "top-end",
-        title: `${newCount} nuevo(s) evento(s) crítico/offline`,
-        showConfirmButton: false,
-        timer: 2000,
-      });
+      MySwal.fire({ toast: true, icon: "warning", position: "top-end", title: `${newCount} nuevo(s) evento(s) crítico/offline`, showConfirmButton: false, timer: 2000 });
       if (soundOn) playBeep("critical");
-      if (ttsOn) {
-        const names = activeCriticals.slice(0, 3).map((x) => x.cliente).join(", ");
-        speak(`${newCount} eventos críticos u offline nuevos. Ejemplo: ${names}.`);
-      }
+      if (ttsOn) { const names = activeCriticals.slice(0, 3).map((x) => x.cliente).join(", "); speak(`${newCount} eventos críticos u offline nuevos. Ejemplo: ${names}.`); }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byClient, soundOn, ttsOn]);
 
-  // ====== Recordatorio periódico por sonido/voz ======
   useEffect(() => {
     if (!soundOn && !ttsOn) return;
     if (paused) return;
@@ -795,16 +674,13 @@ export default function MonitoringWallboardTV() {
       const n = activeCriticals.length;
       if (n > 0) {
         if (soundOn) playBeep("warning");
-        if (ttsOn) {
-          const names = activeCriticals.slice(0, 3).map((x) => x.cliente).join(", ");
-          speak(`${n} sitios con críticos u offline activos. Ejemplo: ${names}.`);
-        }
+        if (ttsOn) { const names = activeCriticals.slice(0, 3).map((x) => x.cliente).join(", "); speak(`${n} sitios con críticos u offline activos. Ejemplo: ${names}.`); }
       }
     }, REMIND_MS);
     return () => clearInterval(id);
   }, [activeCriticals, soundOn, ttsOn, paused]);
 
-  // ====== KPIs ======
+  // KPIs
   const kpis = useMemo(() => {
     const total = byClient.length;
     const critOrOff = byClient.filter((x) => x.worst === "critical" || x.worst === "offline").length;
@@ -813,82 +689,32 @@ export default function MonitoringWallboardTV() {
     return { total, critOrOff, warn, ok };
   }, [byClient]);
 
-  // ====== Top críticos ======
-  const topCrits = useMemo(() => {
-    const now = Date.now();
-    const isActive = (r) => {
-      const ack = r.ackUntil && r.ackUntil.getTime() > now;
-      const mFrom = r.maintenanceFrom?.getTime?.();
-      const mTo = r.maintenanceTo?.getTime?.();
-      const mant = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
-      return !ack && !mant && (r.worst === "critical" || r.worst === "offline");
-    };
-    return byClient
-      .filter(isActive)
-      .sort((a, b) => (b.time?.getTime?.() || 0) - (a.time?.getTime?.() || 0))
-      .slice(0, 3);
-  }, [byClient]);
-
-  // ====== Layout / paginación automática ======
+  // Layout / paginación
   const containerRef = useRef(null);
   const [containerH, setContainerH] = useState(0);
   useEffect(() => {
-    const measure = () => {
-      const h = containerRef.current?.offsetHeight || window.innerHeight - HEADER_H;
-      setContainerH(h);
-    };
+    const measure = () => { const h = containerRef.current?.offsetHeight || window.innerHeight - HEADER_H; setContainerH(h); };
     measure();
     let r = null;
-    if (typeof ResizeObserver !== "undefined") {
-      r = new ResizeObserver(measure);
-      if (containerRef.current) r.observe(containerRef.current);
-    }
+    if (typeof ResizeObserver !== "undefined") { r = new ResizeObserver(measure); if (containerRef.current) r.observe(containerRef.current); }
     window.addEventListener("resize", measure);
-    return () => {
-      try {
-        r?.disconnect();
-      } catch {}
-      window.removeEventListener("resize", measure);
-    };
+    return () => { try { r?.disconnect(); } catch {} window.removeEventListener("resize", measure); };
   }, []);
-
   const rowsPerPane = Math.max(6, Math.floor((containerH - FOOTER_H) / ROW_HEIGHT));
   const totalPages = Math.max(1, Math.ceil((byClient.length || 1) / rowsPerPane));
   const [page, setPage] = useState(0);
-
-  useEffect(() => {
-    if (page > totalPages - 1) setPage(0);
-  }, [totalPages, page]);
-
+  useEffect(() => { if (page > totalPages - 1) setPage(0); }, [totalPages, page]);
   useEffect(() => {
     if (paused) return;
     const step = splitView ? 2 : 1;
     const id = setInterval(() => setPage((p) => (p + step) % totalPages), PAGE_MS);
     return () => clearInterval(id);
   }, [totalPages, paused, splitView]);
-
-  const pageRowsLeft = useMemo(
-    () => byClient.slice(page * rowsPerPane, page * rowsPerPane + rowsPerPane),
-    [byClient, page, rowsPerPane]
-  );
-
-  // si hay solo 1 página, la derecha muestra la otra mitad; si hay >=2, muestra la siguiente página
+  const pageRowsLeft  = useMemo(() => byClient.slice(page * rowsPerPane, page * rowsPerPane + rowsPerPane), [byClient, page, rowsPerPane]);
   const nextPage = (page + 1) % totalPages;
-  const pageRowsRight = useMemo(() => {
-    if (totalPages > 1) {
-      return byClient.slice(nextPage * rowsPerPane, nextPage * rowsPerPane + rowsPerPane);
-    }
-    const half = Math.ceil(pageRowsLeft.length / 2);
-    return pageRowsLeft.slice(half);
-  }, [byClient, nextPage, rowsPerPane, totalPages, pageRowsLeft]);
+  const pageRowsRight = useMemo(() => (totalPages > 1 ? byClient.slice(nextPage * rowsPerPane, nextPage * rowsPerPane + rowsPerPane) : pageRowsLeft.slice(Math.ceil(pageRowsLeft.length / 2))), [byClient, nextPage, rowsPerPane, totalPages, pageRowsLeft]);
+  const leftForSplit = useMemo(() => (totalPages > 1 ? pageRowsLeft : pageRowsLeft.slice(0, Math.ceil(pageRowsLeft.length / 2))), [pageRowsLeft, totalPages]);
 
-  const leftForSplit = useMemo(() => {
-    if (totalPages > 1) return pageRowsLeft;
-    const half = Math.ceil(pageRowsLeft.length / 2);
-    return pageRowsLeft.slice(0, half);
-  }, [pageRowsLeft, totalPages]);
-
-  // ====== Marquee (manual + auto, omite ACK y Mantenimiento) ======
   const marquee = useMemo(() => {
     const auto = [];
     const now = Date.now();
@@ -898,42 +724,16 @@ export default function MonitoringWallboardTV() {
       const mTo = x.maintenanceTo?.getTime?.();
       const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
       if (ackActive || mantActive) continue;
-      for (const it of x.issues) {
-        if (it.sev === "critical" || it.sev === "offline") {
-          auto.push({ text: `${x.cliente}: ${it.label}`, time: x.time });
-        }
-      }
+      for (const it of x.issues) if (it.sev === "critical" || it.sev === "offline") auto.push({ text: `${x.cliente}: ${it.label}`, time: x.time });
     }
     auto.sort((a, b) => (b.time?.getTime?.() || 0) - (a.time?.getTime?.() || 0));
-    const autoStr = auto
-      .slice(0, 40)
-      .map((ev) => `${ev.text} (${ev.time ? fmtAgo(ev.time) : "—"})`)
-      .join("   •   ");
-
+    const autoStr = auto.slice(0, 40).map((ev) => `${ev.text} (${ev.time ? fmtAgo(ev.time) : "—"})`).join("   •   ");
     const manualStr = tickerItems.map((ev) => `${ev.text}`).join("   •   ");
     const both = [manualStr, autoStr].filter(Boolean).join("   •   ");
     return both || "";
   }, [byClient, tickerItems]);
 
-  /* ====== Fullscreen helpers ====== */
-  useEffect(() => {
-    const onFs = () => setIsFs(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
-  const toggleFs = async () => {
-    try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // ====== Helpers/Acciones Firestore ======
+  // ==== Firestore updates (igual que antes, sin cambios de comportamiento) ====
   async function updateClienteInDoc(docId, cliente, patch) {
     const ref = doc(db, "respuestas-tareas", docId);
     const snap = await getDoc(ref);
@@ -946,47 +746,23 @@ export default function MonitoringWallboardTV() {
 
     const t = { ...(tandas[idx] || {}) };
 
-    if (typeof patch.operador === "string") {
-      data.operador = patch.operador;
-    }
-    if (patch.checklist) {
-      t.checklist = { ...(t.checklist || {}), ...(patch.checklist || {}) };
-    }
-    if (typeof patch.notas === "string") {
-      t.notas = patch.notas;
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, "ackUntil")) {
-      t.ackUntil = patch.ackUntil ? patch.ackUntil : null;
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, "maintenanceFrom")) {
-      t.maintenanceFrom = patch.maintenanceFrom ? patch.maintenanceFrom : null;
-    }
-    if (Object.prototype.hasOwnProperty.call(patch, "maintenanceTo")) {
-      t.maintenanceTo = patch.maintenanceTo ? patch.maintenanceTo : null;
-    }
+    if (typeof patch.operador === "string") data.operador = patch.operador;
+    if (patch.checklist) t.checklist = { ...(t.checklist || {}), ...(patch.checklist || {}) };
+    if (typeof patch.notas === "string") t.notas = patch.notas;
+    if (Object.prototype.hasOwnProperty.call(patch, "ackUntil")) t.ackUntil = patch.ackUntil ? patch.ackUntil : null;
+    if (Object.prototype.hasOwnProperty.call(patch, "maintenanceFrom")) t.maintenanceFrom = patch.maintenanceFrom ? patch.maintenanceFrom : null;
+    if (Object.prototype.hasOwnProperty.call(patch, "maintenanceTo")) t.maintenanceTo = patch.maintenanceTo ? patch.maintenanceTo : null;
     if (Object.prototype.hasOwnProperty.call(patch, "escalation")) {
-      if (patch.escalation === null) {
-        t.escalation = null;
-      } else if (patch.escalation) {
-        t.escalation = {
-          to: patch.escalation.to || "",
-          reason: patch.escalation.reason || "",
-          at: new Date(),
-        };
-      }
+      if (patch.escalation === null) t.escalation = null;
+      else if (patch.escalation) t.escalation = { to: patch.escalation.to || "", reason: patch.escalation.reason || "", at: new Date() };
     }
 
-    // === Actualización de cámaras (robusta: array u objeto) ===
     if (patch.camaras && typeof patch.camaras === "object") {
       const cur = t.camaras;
       const isArray = Array.isArray(cur);
-      if (isArray) {
-        t.camaras = [...cur];
-      } else if (cur && typeof cur === "object") {
-        t.camaras = { ...cur };
-      } else {
-        t.camaras = {};
-      }
+      if (isArray) t.camaras = [...cur];
+      else if (cur && typeof cur === "object") t.camaras = { ...cur };
+      else t.camaras = {};
 
       for (const [camId, upd] of Object.entries(patch.camaras)) {
         const now = new Date();
@@ -1017,7 +793,6 @@ export default function MonitoringWallboardTV() {
     t.log = Array.isArray(t.log) ? [...t.log, entry] : [entry];
 
     tandas[idx] = t;
-
     await updateDoc(ref, {
       operador: data.operador || null,
       "respuestas.tandas": tandas,
@@ -1025,11 +800,6 @@ export default function MonitoringWallboardTV() {
     });
   }
 
-  async function setAck(row, until) {
-    await updateClienteInDoc(row.docId, row.cliente, { ackUntil: until });
-  }
-
-  // ====== Editores / Vistas ======
   async function openEditor(row) {
     try {
       setPaused(true);
@@ -1038,9 +808,8 @@ export default function MonitoringWallboardTV() {
         <div style="text-align:left">
           <div style="font-weight:800;margin-bottom:8px">Cliente</div>
           <input class="swal2-input" style="width:100%" value="${row.cliente || ""}" disabled />
-
           <div style="font-weight:800;margin:6px 0 2px">Operador</div>
-          <input id="swal-operador" class="swal2-input" style="width:100%" value="${row.operador || ""}" />
+          <input id="swal-operador" class="swal2-input" style="width          :100%" value="${row.operador || ""}" placeholder="Nombre del operador" />
 
           <div style="font-weight:800;margin:6px 0 8px">Checklist</div>
           <label style="display:block;margin:2px 0"><input type="checkbox" id="swal-offline" ${c.equipoOffline ? "checked" : ""}/> OFFLINE</label>
@@ -1055,7 +824,7 @@ export default function MonitoringWallboardTV() {
           <div style="font-weight:800;margin:10px 0 2px">Notas</div>
           <textarea id="swal-notas" class="swal2-textarea" style="width:100%;height:90px">${row?.notas || ""}</textarea>
 
-          <div style="margin-top:10px;opacity:.8"><i>Para editar cámaras, usa el botón “Gestionar cámaras” en la columna Cámaras.</i></div>
+          <div style="margin-top:10px;opacity:.8"><i>Para editar cámaras, usá “Gestionar cámaras” desde la columna Cámaras.</i></div>
         </div>
       `;
 
@@ -1102,28 +871,92 @@ export default function MonitoringWallboardTV() {
     }
   }
 
-  // Detalle de fallas (solo ver)
-  function openFails(row) {
-    const grave = row.camFails.filter((c) => c.sev === "grave");
-    const medio = row.camFails.filter((c) => c.sev === "medio");
-    const html = `
-      <div style="text-align:left">
-        <div style="font-weight:900;margin:4px 0">GRAVE (${grave.length})</div>
-        ${renderFailListHTML(grave)}
-        <div style="font-weight:900;margin:10px 0 4px">MEDIO (${medio.length})</div>
-        ${renderFailListHTML(medio)}
-      </div>
-    `;
-    MySwal.fire({ title: `Cámaras con falla · ${row.cliente}`, html, width: 700 });
+  // Detalle de fallas (popup de solo lectura + alta rápida)
+  async function openFails(row) {
+    try {
+      setPaused(true);
+      const grave = row.camFails.filter((c) => c.sev === "grave");
+      const medio = row.camFails.filter((c) => c.sev === "medio");
+
+      const html = `
+        <div style="text-align:left">
+          <div style="font-weight:900;margin:4px 0">GRAVE (${grave.length})</div>
+          ${renderFailListHTML(grave)}
+          <div style="font-weight:900;margin:10px 0 4px">MEDIO (${medio.length})</div>
+          ${renderFailListHTML(medio)}
+
+          <hr style="border:none;border-top:1px solid ${PALETTE.border};margin:14px 0"/>
+
+          <div style="font-weight:900;margin:6px 0 8px">Agregar nueva cámara en falla</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div>
+              <label style="display:block;font-weight:800;margin-bottom:4px">Canal</label>
+              <input id="swal-new-canal" class="swal2-input" style="width:100%" placeholder="Ej: 3" />
+            </div>
+            <div>
+              <label style="display:block;font-weight:800;margin-bottom:4px">Severidad</label>
+              <select id="swal-new-sev" class="swal2-select" style="width:100%">
+                <option value="grave">GRAVE</option>
+                <option value="medio">MEDIO</option>
+              </select>
+            </div>
+            <div style="grid-column:1 / -1">
+              <label style="display:block;font-weight:800;margin-bottom:4px">Nombre (opcional)</label>
+              <input id="swal-new-name" class="swal2-input" style="width:100%" placeholder="Frente ingreso, Patio, etc." />
+            </div>
+            <div style="grid-column:1 / -1">
+              <label style="display:block;font-weight:800;margin-bottom:4px">Nota / detalle</label>
+              <textarea id="swal-new-note" class="swal2-textarea" style="width:100%;height:80px" placeholder="Describe el problema"></textarea>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const res = await MySwal.fire({
+        title: `Cámaras con falla · ${row.cliente}`,
+        html,
+        width: 800,
+        showCancelButton: true,
+        confirmButtonText: "Guardar nueva falla",
+        cancelButtonText: "Cerrar",
+        focusConfirm: false,
+        preConfirm: () => {
+          const canalRaw = document.getElementById("swal-new-canal")?.value?.trim();
+          const sev = document.getElementById("swal-new-sev")?.value || "grave";
+          const name = document.getElementById("swal-new-name")?.value?.trim() || "";
+          const nota = document.getElementById("swal-new-note")?.value?.trim() || "";
+          if (!canalRaw) return null;
+          const canal = String(canalRaw);
+          return { canal, sev, name, nota };
+        },
+      });
+
+      if (res.isConfirmed && res.value && res.value.canal) {
+        const { canal, sev, name, nota } = res.value;
+        const camPatch = {
+          [canal]: {
+            estado: sev,
+            nota,
+            nombre: name || undefined,
+            canal,
+          },
+        };
+        await updateClienteInDoc(row.docId, row.cliente, { camaras: camPatch });
+        MySwal.fire({ icon: "success", title: "Falla agregada", timer: 1100, showConfirmButton: false });
+      }
+    } catch (e) {
+      console.error(e);
+      MySwal.fire({ icon: "error", title: "Error", text: String(e?.message || e) });
+    } finally {
+      setPaused(false);
+    }
   }
 
   // Gestor de cámaras (editar y guardar)
   async function openCamsManager(row) {
     try {
       setPaused(true);
-      const cams = camsToArray(row.lastTanda);
-      const enriched = cams
-        .map((c) => ({ ...c, __sev: interpretCamStatus(c) }))
+      const cams = (row.camsMerged || []).map((c) => ({ ...c, __sev: interpretCamStatus(c) }))
         .sort((a, b) => {
           const rank = { grave: 0, medio: 1, ok: 2, nd: 3 };
           const ra = rank[a.__sev] ?? 3;
@@ -1132,30 +965,28 @@ export default function MonitoringWallboardTV() {
           return String(a.__id).localeCompare(String(b.__id), "es");
         });
 
-      const rowsHTML = enriched
-        .map((c) => {
-          const id = c?.nombre || c?.name || c?.cam || c?.camera || c.__id;
-          const nota = c?.nota || c?.novedad || c?.detalle || "";
-          const last = tsToDate(c?.updatedAt) || tsToDate(c?.lastSeen) || tsToDate(c?.ultimaCaptura) || null;
-          const sev = c.__sev;
-          return `
-            <tr>
-              <td style="padding:4px 6px;font-weight:800">${id}</td>
-              <td style="padding:4px 6px">
-                <select data-k="sev" data-id="${c.__id}" class="swal2-select">
-                  <option value="ok" ${sev === "ok" ? "selected" : ""}>OK</option>
-                  <option value="medio" ${sev === "medio" ? "selected" : ""}>MEDIO</option>
-                  <option value="grave" ${sev === "grave" ? "selected" : ""}>GRAVE</option>
-                </select>
-              </td>
-              <td style="padding:4px 6px;width:55%">
-                <input data-k="nota" data-id="${c.__id}" class="swal2-input" style="width:100%" value="${String(nota).replace(/"/g, "&quot;")}" />
-              </td>
-              <td style="padding:4px 6px;opacity:.75;font-size:12px">${last ? last.toLocaleString("es-AR") : "—"}</td>
-            </tr>
-          `;
-        })
-        .join("");
+      const rowsHTML = cams.map((c) => {
+        const id = c?.nombre || c?.name || c?.cam || c?.camera || camDisplayId(c) || c.__id;
+        const nota = c?.nota || c?.novedad || c?.detalle || "";
+        const last = tsToDate(c?.updatedAt) || tsToDate(c?.lastSeen) || tsToDate(c?.ultimaCaptura) || null;
+        const sev = c.__sev;
+        return `
+          <tr>
+            <td style="padding:4px 6px;font-weight:800">${id}</td>
+            <td style="padding:4px 6px">
+              <select data-k="sev" data-id="${c.__id}" class="swal2-select">
+                <option value="ok" ${sev === "ok" ? "selected" : ""}>OK</option>
+                <option value="medio" ${sev === "medio" ? "selected" : ""}>MEDIO</option>
+                <option value="grave" ${sev === "grave" ? "selected" : ""}>GRAVE</option>
+              </select>
+            </td>
+            <td style="padding:4px 6px;width:55%">
+              <input data-k="nota" data-id="${c.__id}" class="swal2-input" style="width:100%" value="${String(nota).replace(/"/g, "&quot;")}" />
+            </td>
+            <td style="padding:4px 6px;opacity:.75;font-size:12px">${last ? last.toLocaleString("es-AR") : "—"}</td>
+          </tr>
+        `;
+      }).join("");
 
       const html = `
         <div style="text-align:left;max-height:60vh;overflow:auto">
@@ -1208,23 +1039,22 @@ export default function MonitoringWallboardTV() {
     }
   }
 
-  // Guía rápida por issues críticos
   function openRowPlaybook(row) {
-    const crits = row.issues.filter((i) => PLAYBOOKS[i.label]);
-    if (!crits.length) {
-      MySwal.fire({ toast: true, icon: "info", title: "Sin guía disponible", timer: 900, showConfirmButton: false });
-      return;
-    }
-    const blocks = crits
+    const blocks = row.issues
+      .filter((i) => PLAYBOOKS[i.label])
       .map((i) => {
         const steps = PLAYBOOKS[i.label].map((s) => `• ${s}`).join("\n");
         return `<div style="margin:8px 0"><b>${i.label}</b><pre style="white-space:pre-wrap;margin:6px 0 0">${steps}</pre></div>`;
       })
       .join("");
+    if (!blocks) {
+      MySwal.fire({ toast: true, icon: "info", title: "Sin guía disponible", timer: 900, showConfirmButton: false });
+      return;
+    }
     MySwal.fire({ title: `Guía · ${row.cliente}`, html: `<div style="text-align:left">${blocks}</div>`, width: 600 });
   }
 
-  // ====== Export CSV (todo) ======
+  // ====== Export CSV ======
   function exportCSV() {
     const headers = ["Cliente", "Severidad", "Operador", "Turno", "UltimoRondin", "CamsMedio", "CamsGrave", "Issues", "ACKHasta", "MantDesde", "MantHasta", "Notas"];
     const lines = [headers.join(",")];
@@ -1257,59 +1087,42 @@ export default function MonitoringWallboardTV() {
     URL.revokeObjectURL(url);
   }
 
-  // ====== Atajos de teclado ======
+  /* ===== Atajos de teclado ===== */
+  const toggleFs = async () => {
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      else await document.exitFullscreen();
+    } catch (e) { console.error(e); }
+  };
   useEffect(() => {
     const onKey = (e) => {
       if (e.target && ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
-      if (e.code === "Space") {
-        e.preventDefault();
-        setPaused((p) => !p);
-      } else if (e.key?.toLowerCase() === "f") {
-        toggleFs();
-      } else if (e.key === "ArrowRight") {
-        setPage((p) => (p + 1) % Math.max(1, totalPages));
-      } else if (e.key === "ArrowLeft") {
-        setPage((p) => (p - 1 + Math.max(1, totalPages)) % Math.max(1, totalPages));
-      }
+      if (e.code === "Space") { e.preventDefault(); setPaused((p) => !p); }
+      else if (e.key?.toLowerCase() === "f") { toggleFs(); }
+      else if (e.key === "ArrowRight") { setPage((p) => (p + 1) % Math.max(1, totalPages)); }
+      else if (e.key === "ArrowLeft") { setPage((p) => (p - 1 + Math.max(1, totalPages)) % Math.max(1, totalPages)); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [totalPages]);
 
-  // ====== Gestos táctiles: swipe para paginar, doble-tap para dividir pantalla ======
+  /* ===== Gestos táctiles ===== */
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-
     let sx = 0, sy = 0, st = 0, lastTap = 0;
-    const onStart = (e) => {
-      const t = e.touches?.[0];
-      if (!t) return;
-      sx = t.clientX;
-      sy = t.clientY;
-      st = Date.now();
-    };
+    const onStart = (e) => { const t = e.touches?.[0]; if (!t) return; sx = t.clientX; sy = t.clientY; st = Date.now(); };
     const onEnd = (e) => {
-      const t = e.changedTouches?.[0];
-      if (!t) return;
-      const dx = t.clientX - sx;
-      const dy = t.clientY - sy;
-      const dt = Date.now() - st;
-
-      // tap / double-tap
+      const t = e.changedTouches?.[0]; if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy, dt = Date.now() - st;
       if (dt < 250 && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-        const now = Date.now();
-        if (now - lastTap < 350) setSplitView((v) => !v);
-        lastTap = now;
-        return;
+        const now = Date.now(); if (now - lastTap < 350) setSplitView((v) => !v); lastTap = now; return;
       }
-      // swipe horizontal (ignora scroll vertical)
       if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
         if (dx < 0) setPage((p) => (p + 1) % totalPages);
         else setPage((p) => (p - 1 + totalPages) % totalPages);
       }
     };
-
     el.addEventListener("touchstart", onStart, { passive: true });
     el.addEventListener("touchend", onEnd);
     return () => {
@@ -1318,7 +1131,14 @@ export default function MonitoringWallboardTV() {
     };
   }, [totalPages]);
 
-  // ====== Render ======
+  /* ====== Fullscreen state ====== */
+  useEffect(() => {
+    const onFs = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  /* ===== Tabla ===== */
   const TablePane = ({ rows }) => (
     <Paper elevation={0} sx={{ border: `1px solid ${PALETTE.border}`, bgcolor: PALETTE.panel }}>
       <Table
@@ -1352,16 +1172,12 @@ export default function MonitoringWallboardTV() {
               key={row.cliente}
               row={row}
               onOpen={openEditor}
-              onToggleAck={async (r, until) => {
-                try {
-                  await setAck(r, until);
-                } catch (e) {
-                  MySwal.fire({ icon: "error", title: "Error", text: String(e?.message || e) });
-                }
-              }}
               onPlaybook={openRowPlaybook}
-              onShowFails={openFails}
-              onManageCams={openCamsManager}
+              onShowFails={(r) => {
+                // Abrir popup rápido de fallas
+                openFails(r);
+                // O si querés: openCamsManager(r);
+              }}
             />
           ))}
           {Array.from({ length: Math.max(0, rowsPerPane - rows.length) }).map((_, i) => (
@@ -1374,12 +1190,13 @@ export default function MonitoringWallboardTV() {
     </Paper>
   );
 
+  /* ===== Render ===== */
   return (
     <Box
       sx={{
         height: "100vh",
         display: "grid",
-        gridTemplateRows: "auto auto auto 1fr auto auto",
+        gridTemplateRows: "auto auto auto 1fr auto",
         bgcolor: PALETTE.bg,
         color: PALETTE.text,
         fontSize: 16,
@@ -1405,16 +1222,13 @@ export default function MonitoringWallboardTV() {
 
             {/* Sonido (beep) */}
             <IconButton
-  onClick={handleToggleSound}
-  sx={{ color: soundOn ? PALETTE.brand : PALETTE.subtext }}
-  title={soundOn ? "Sonido ON" : "Sonido OFF"}
->
-  {soundOn ? <FaVolumeUp /> : <FaVolumeMute />}
-</IconButton>
+              onClick={handleToggleSound}
+              sx={{ color: soundOn ? PALETTE.brand : PALETTE.subtext }}
+              title={soundOn ? "Sonido ON" : "Sonido OFF"}
+            >
+              {soundOn ? <FaVolumeUp /> : <FaVolumeMute />}
+            </IconButton>
 
-
-            {/* Voz TTS */}
-         
             {/* Split view */}
             <IconButton onClick={() => setSplitView((v) => !v)} sx={{ color: splitView ? PALETTE.brand : PALETTE.subtext }} title={splitView ? "Salir de pantalla dividida" : "Pantalla dividida"}>
               <FaColumns />
@@ -1423,15 +1237,17 @@ export default function MonitoringWallboardTV() {
             <IconButton onClick={() => setPaused((p) => !p)} sx={{ color: PALETTE.subtext }} title={paused ? "Reanudar rotación [Space]" : "Pausar rotación [Space]"}>
               {paused ? <FaPlay /> : <FaPause />}
             </IconButton>
+
             <IconButton onClick={addMiniCard} sx={{ color: PALETTE.subtext }} title="Agregar mini-card de novedad">
               <FaPlus />
             </IconButton>
+
             <IconButton onClick={toggleFs} sx={{ color: PALETTE.subtext }} title={isFs ? "Salir de pantalla completa [F]" : "Pantalla completa [F]"}>
               {isFs ? <FaCompress /> : <FaExpand />}
             </IconButton>
           </Stack>
 
-          {/* Controles del ticker manual */}
+          {/* Ticker manual */}
           <Divider orientation="vertical" flexItem sx={{ mx: 1, borderColor: PALETTE.border }} />
           <Stack direction="row" spacing={1} alignItems="center" sx={{ maxWidth: 520 }}>
             <Box
@@ -1494,10 +1310,10 @@ export default function MonitoringWallboardTV() {
       <Box
         ref={containerRef}
         sx={{
-          overflow: "auto",                 // <-- permite desplazamiento táctil vertical
-          WebkitOverflowScrolling: "touch", // <-- scroll suave en iOS
+          overflow: "auto",
+          WebkitOverflowScrolling: "touch",
           p: 1.5,
-          touchAction: "pan-y",             // <-- habilita scroll vertical; swipe horizontal sigue funcionando
+          touchAction: "pan-y",
         }}
       >
         {splitView ? (
@@ -1510,7 +1326,7 @@ export default function MonitoringWallboardTV() {
         )}
       </Box>
 
-      {/* Zócalo de mini-cards de novedades */}
+      {/* Zócalo de mini-cards */}
       <Box
         sx={{
           px: 1.5,
@@ -1524,83 +1340,48 @@ export default function MonitoringWallboardTV() {
         }}
       >
         {miniCards.length === 0 ? (
-          <Typography sx={{ color: PALETTE.subtext, fontStyle: "italic" }}>Sin novedades. Usa el botón “+” para agregar una mini-card.</Typography>
+          <Typography sx={{ color: PALETTE.subtext, fontStyle: "italic" }}>
+            Sin novedades. Usá el botón “+” para agregar.
+          </Typography>
         ) : (
-          <Stack direction="row" spacing={1.2} sx={{ alignItems: "stretch" }}>
-            {miniCards.map((c) => {
-              const col = PILL_COLORS[c.sev] || PILL_COLORS.info;
-              return (
-                <Box
-                key={c.id}
+          miniCards.map((card) => {
+            const c =
+              card.sev === "critical" ? PILL_COLORS.critical :
+              card.sev === "offline"  ? PILL_COLORS.offline  :
+              card.sev === "warning"  ? PILL_COLORS.warning  :
+              card.sev === "ok"       ? PILL_COLORS.ok       : PILL_COLORS.info;
+            return (
+              <Box
+                key={card.id}
                 sx={{
-                  minWidth: 160,
-                  maxWidth: 260,
-                  px: 1,
-                  py: 0.5,
-                  border: `1px solid ${PALETTE.border}`,
-                  bgcolor: col.bg,
-                  color: col.fg,
-                  borderLeft: `4px solid ${col.bd}`,
-                  borderRadius: 1.5,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.75,
+                  minWidth: 260,
+                  maxWidth: 420,
+                  p: 1,
+                  pr: 4.5,
+                  borderRadius: 2,
+                  border: `1px solid ${c.bd}`,
+                  bgcolor: c.bg,
+                  color: c.fg,
+                  position: "relative",
+                  boxShadow: "0 2px 10px rgba(0,0,0,.25)",
                 }}
               >
-                <Typography
-                  title={c.text}
-                  sx={{
-                    fontSize: 12,
-                    fontWeight: 800,
-                    lineHeight: 1.2,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    maxWidth: "100%",
-                  }}
-                >
-                  {c.text}
+                <Typography sx={{ fontWeight: 900, mb: 0.5, fontSize: 12, opacity: 0.9 }}>
+                  {String(card.sev).toUpperCase()} · {card.at ? new Date(card.at).toLocaleString("es-AR") : ""}
                 </Typography>
-              
-                <Box sx={{ flex: 1 }} />
-              
+                <Typography sx={{ fontWeight: 700, lineHeight: 1.25 }}>{card.text}</Typography>
                 <IconButton
                   size="small"
-                  onClick={() => removeMiniCard(c.id)}
-                  sx={{ color: col.fg, opacity: 0.85, p: 0.25, ml: 0.25, lineHeight: 0 }}
-                  aria-label="Cerrar"
+                  onClick={() => removeMiniCard(card.id)}
+                  sx={{ position: "absolute", right: 4, top: 4, color: c.fg, opacity: 0.85 }}
+                  title="Eliminar"
                 >
-                  <FaTimes style={{ fontSize: 12 }} />
+                  <FaTimes />
                 </IconButton>
               </Box>
-              
-              );
-            })}
-          </Stack>
+            );
+          })
         )}
-      </Box>
-
-      {/* Footer / página */}
-      <Box
-        sx={{
-          height: 44,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: PALETTE.subtext,
-          borderTop: `1px solid ${PALETTE.border}`,
-          background: PALETTE.header,
-        }}
-      >
-        <Typography variant="caption" sx={{ letterSpacing: 0.5 }}>
-          Página {totalPages ? page + 1 : 1}/{Math.max(1, totalPages)}
-          {splitView
-            ? ` · (mostrando ${page + 1}${
-                totalPages > 1 ? ` y ${((page + 1) % totalPages) + 1}` : ""
-              })`
-            : ""}
-          · {new Date().toLocaleString("es-AR")}
-        </Typography>
       </Box>
     </Box>
   );

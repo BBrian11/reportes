@@ -12,6 +12,7 @@ import TopFields from "./TopFields";
 import TandaCard from "./TandaCard";
 import FooterActions from "./FooterActions";
 import Swal, { toast, confirm } from "./swal";
+import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import {
   OPERARIOS_DEFAULT, MAX_TANDAS,
   RISK_SET, norm, nuevaTanda, shuffle, hh, mm, ss
@@ -962,6 +963,31 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
           >
             Ver pendientes
           </Button>
+          <Button
+  size="small"
+  variant="outlined"
+  sx={{
+    mt: 1,
+    px: 2.5,
+    py: 0.75,
+    borderRadius: 2,
+    fontSize: 13,
+    fontWeight: "bold",
+    textTransform: "none",
+    mr: 1,
+  }}
+  startIcon={<ArrowBackIosNewIcon />} // ← si importaste el icono
+  disabled={activeTandaIdx === 0}
+  onClick={() => {
+    if (activeTandaIdx === 0) return;
+    const prev = Math.max(0, activeTandaIdx - 1);
+    setActiveTandaIdx(prev);
+    const prevEl = document.getElementById(tandas[prev]?.id);
+    if (prevEl) prevEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  }}
+>
+  Volver al cliente anterior
+</Button>
 
           <Button
             size="small"
