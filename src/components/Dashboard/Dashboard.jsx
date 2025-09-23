@@ -31,13 +31,27 @@ export default function Dashboard() {
     grupo: "",
     fechaInicio: "",
     fechaFin: "",
-    q: "", // búsqueda libre
+    q: "",
   });
   const [vista, setVista] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Cargar eventos desde Firestore
+  // ------------ Cargar eventos ------------
   const loadEventos = () => {
+    const toDate = (v) => {
+      if (!v) return null;
+      if (v instanceof Date && !isNaN(v)) return v;
+      if (typeof v === "object" && (v.seconds || v._seconds)) {
+        const s = v.seconds ?? v._seconds;
+        return new Date(s * 1000);
+      }
+      if (typeof v === "string") {
+        const d = new Date(v);
+        return isNaN(d) ? null : d;
+      }
+      return null;
+    };
+
     const collections = [
       { path: "novedades/tgs/eventos", cliente: "TGS", eventoKey: "evento-tgs", ubicacionKey: "locaciones-tgs" },
       { path: "novedades/edificios/eventos", cliente: "Edificios", eventoKey: "evento-edificio" },
@@ -53,6 +67,7 @@ export default function Dashboard() {
 
           const edificio = d["edificio"] || "";
           const unidad = d["unidad"] || "";
+
           const proveedorTgs =
             d["proveedor-personal"] ??
             d.proveedor_personal ??
@@ -64,31 +79,25 @@ export default function Dashboard() {
           const ubicacion =
             cliente === "Edificios"
               ? (edificio ? edificio + (unidad ? ` - ${unidad}` : "") : "Sin Ubicación")
-              : (d[ubicacionKey] || "Sin Ubicación");
+              : (d?.[ubicacionKey] || d?.ubicacion || "Sin Ubicación");
 
-          // ⏱️ Fecha/hora de envío (común)
-          const fechaEnvioObj = d.fechaHoraEnvio
-            ? new Date((d.fechaHoraEnvio.seconds ?? d.fechaHoraEnvio._seconds) * 1000)
-            : null;
-
-          // ⏱️ Fecha/hora REAL del evento (solo Edificios)
+          // Fechas
+          const fechaObj = toDate(d.fechaHoraEnvio) || toDate(d.fecha) || null;
           const fechaEventoObj =
-            cliente === "Edificios" && d.fechaHoraEvento
-              ? new Date((d.fechaHoraEvento.seconds ?? d.fechaHoraEvento._seconds) * 1000)
+            cliente === "Edificios"
+              ? (toDate(d.fechaHoraEvento) || toDate(d.fechaHoraEventoISO) || toDate(d.fechaHoraEventoLocal))
               : null;
 
-          // Texto de fecha visible (no crítico: usamos envío, y en tabla mostramos columnas separadas)
-          const fecha = (fechaEnvioObj || fechaEventoObj)
-            ? (fechaEnvioObj || fechaEventoObj).toLocaleString("es-AR", {
-                hour12: false,
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })
-            : "Sin Fecha";
+          const fechaTxt =
+            (fechaObj || fechaEventoObj)?.toLocaleString("es-AR", {
+              hour12: false,
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            }) || "Sin Fecha";
 
           const observacion =
             d[`observaciones-${cliente.toLowerCase()}`] ??
@@ -120,17 +129,12 @@ export default function Dashboard() {
             grupo:
               cliente === "Edificios"
                 ? edificio || "General"
-                : (d[ubicacionKey]?.split(" ")[0] || "General"),
+                : (d?.[ubicacionKey]?.split(" ")[0] || "General"),
             evento: d[eventoKey] || "Sin Evento",
             ubicacion,
-
-            // Texto simple (por compatibilidad)
-            fecha,
-
-            // Fechas en Date para orden/filtrado/tabla
-            fechaObj: fechaEnvioObj,      // ← envío
-            fechaEventoObj,               // ← evento (solo Edificios)
-
+            fecha: fechaTxt,
+            fechaObj,
+            fechaEventoObj,
             observacion,
             ["resolusion-evento"]: d["resolusion-evento"] ?? null,
             resolucion: resolucionValue,
@@ -141,7 +145,7 @@ export default function Dashboard() {
             ["respuesta-residente"]: respuestaResidente,
             edificio,
             unidad,
-            linkDrive, 
+            linkDrive,
             ...(cliente === "TGS"
               ? {
                   ["proveedor-personal"]: proveedorTgs,
@@ -166,7 +170,7 @@ export default function Dashboard() {
     return unsubscribe;
   }, []);
 
-  // Helpers de búsqueda (ignora tildes, AND por términos)
+  // ------------ Buscador ------------
   const normalize = (s) =>
     (s ?? "")
       .toString()
@@ -203,26 +207,27 @@ export default function Dashboard() {
     return terms.every((t) => haystack.includes(t));
   };
 
-  // Filtrado final — en Edificios usa fechaEventoObj; otros usan fechaObj
+  // ------------ Filtrado final ------------
   const eventosFiltrados = eventos.filter((e) => {
-    const fechaBase =
+    const base =
       e.cliente === "Edificios"
         ? (e.fechaEventoObj || e.fechaObj || (e.fecha ? new Date(e.fecha) : null))
         : (e.fechaObj || (e.fecha ? new Date(e.fecha) : null));
 
-    const fechaInicio = filtros.fechaInicio ? new Date(`${filtros.fechaInicio}T00:00:00`) : null;
-    const fechaFin    = filtros.fechaFin    ? new Date(`${filtros.fechaFin}T23:59:59`)   : null;
+    const inicio = filtros.fechaInicio ? new Date(`${filtros.fechaInicio}T00:00:00`) : null;
+    const fin    = filtros.fechaFin    ? new Date(`${filtros.fechaFin}T23:59:59`)   : null;
 
     return (
       (!filtros.cliente || filtros.cliente === "Todos" || e.cliente === filtros.cliente) &&
       (!filtros.grupo || e.grupo === filtros.grupo) &&
       (!filtros.ubicacion || e.ubicacion === filtros.ubicacion) &&
-      (!fechaInicio || (fechaBase && fechaBase >= fechaInicio)) &&
-      (!fechaFin    || (fechaBase && fechaBase <= fechaFin)) &&
+      (!inicio || (base && base >= inicio)) &&
+      (!fin    || (base && base <= fin)) &&
       matchesQuery(e, filtros.q)
     );
   });
 
+  // ------------ UI ------------
   return (
     <div className="dashboard-layout">
       <div className="floating-controls">
@@ -293,6 +298,13 @@ export default function Dashboard() {
 
               <Filters filtros={filtros} setFiltros={setFiltros} eventos={eventos} />
 
+              {/* 🔸 Barra de impresión/descarga SIEMPRE visible con los eventos filtrados */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, margin: "8px 0 12px" }}>
+                <ExportPDF eventos={eventosFiltrados} />
+               
+       
+              </div>
+
               {!filtros.cliente ? (
                 <>
                   <div className="grid-layout">
@@ -353,7 +365,7 @@ export default function Dashboard() {
                   </div>
 
                   <div className="table-section">
-                    <ExportPDF eventos={eventosFiltrados} />
+                    {/* ExportPDF ya está arriba y recibe lo filtrado */}
                     <EventsTable eventos={eventosFiltrados} filtros={filtros} />
                   </div>
                 </>

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Document, Page, Text, View, StyleSheet, Image, pdf } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Image, pdf, Link } from "@react-pdf/renderer";
 import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import Swal from "sweetalert2";
@@ -30,6 +30,11 @@ const getObservacion = (row) =>
   row?.["observaciones-edificios"] ??
   row?.[`observaciones-${getClienteLower(row)}`] ??
   "";
+const safeUrl = (u) => {
+  if (!u || typeof u !== "string") return null;
+  try { const url = new URL(u); return (url.protocol === "http:" || url.protocol === "https:") ? url.href : null; }
+  catch { return null; }
+};
 const getResolucion = (row) =>
   row?.["resolusion-evento"] ??
   row?.["resolucion-evento"] ??
@@ -72,10 +77,7 @@ async function captureAsImage(selector, opts = {}) {
     scale, backgroundColor: bg, useCORS: true, allowTaint: true, foreignObjectRendering: false,
   });
   return canvas
-    ? {
-        src: (format === "jpeg") ? canvas.toDataURL("image/jpeg", quality) : canvas.toDataURL("image/png"),
-        w: canvas.width, h: canvas.height
-      }
+    ? { src: (format === "jpeg") ? canvas.toDataURL("image/jpeg", quality) : canvas.toDataURL("image/png"), w: canvas.width, h: canvas.height }
     : null;
 }
 async function captureAll(selectors, opts = {}) {
@@ -89,7 +91,7 @@ const fit = (img, maxW = 520, maxH = 300) => {
   const r = img.h / img.w; let w = maxW, h = w * r; if (h > maxH) { h = maxH; w = h / r; } return { w, h };
 };
 
-/* ===== Documento PDF (usa EXACTAMENTE el dataset final) ===== */
+/* ===== Documento PDF ===== */
 const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
   const onlyEdificio = eventos.length > 0 && eventos.every(isEdificioRow);
   const totalEventos = eventos.length;
@@ -108,6 +110,7 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
     ubicacion: safe(getUbicacionDisplay(e)),
     fecha: safe(formatDateValue(e)),
     observacion: safe(getObservacion(e)),
+    linkDrive: safeUrl(e.linkDrive) || "",
   });
   const extraRow = (e) => ({
     razones: safe(getRazones(e)),
@@ -207,90 +210,79 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
         ))
       }
 
-{chunk(rows, 30).map((pageRows, idx) => (
-  <Page key={idx} size="A4" style={styles.page}>
-    <Text style={styles.sectionTitle}>Tabla de eventos (pág. {idx + 1})</Text>
+      {chunk(rows, 30).map((pageRows, idx) => (
+        <Page key={idx} size="A4" style={styles.page}>
+          <Text style={styles.sectionTitle}>Tabla de eventos (pág. {idx + 1})</Text>
 
-    {/* 👇 Leyenda SOLO para Edificios y SOLO en la primera página de la tabla */}
-    {onlyEdificio && idx === 0 && (
-      <View
-        style={{
-          backgroundColor: "#f1f5f9",
-          borderRadius: 6,
-          borderWidth: 1,
-          borderColor: "#e5e7eb",
-          padding: 8,
-          marginBottom: 8,
-        }}
-      >
-        <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>
-          Leyenda de eventos 
-        </Text>
+          {/* Leyenda SOLO para Edificios y SOLO en la primera página de la tabla */}
+          {onlyEdificio && idx === 0 && (
+            <View style={{ backgroundColor: "#f1f5f9", borderRadius: 6, borderWidth: 1, borderColor: "#e5e7eb", padding: 8, marginBottom: 8 }}>
+              <Text style={{ fontSize: 10, fontWeight: "bold", marginBottom: 4 }}>Leyenda de eventos</Text>
+              <Text style={{ fontSize: 9, marginBottom: 2 }}>
+                <Text style={{ fontWeight: "bold" }}>Puertas Mantenidas Abiertas:</Text> la puerta permaneció abierta más tiempo del permitido.
+              </Text>
+              <Text style={{ fontSize: 9, marginBottom: 2 }}>
+                <Text style={{ fontWeight: "bold" }}>Puertas Forzadas:</Text> apertura sin autorización/lectura válida; el sistema detecta apertura sin evento de acceso.
+              </Text>
+              <Text style={{ fontSize: 9, marginBottom: 2 }}>
+                <Text style={{ fontWeight: "bold" }}>Evento - Encargado:</Text> Evento registrado por el personal del edificio (Puertas Mantenidas Abiertas).
+              </Text>
+              <Text style={{ fontSize: 9 }}>
+                <Text style={{ fontWeight: "bold" }}>CCTV fuera de línea:</Text> cámara o NVR sin comunicación (posible corte de energía/red o falla de equipo).
+              </Text>
+            </View>
+          )}
 
-        <Text style={{ fontSize: 9, marginBottom: 2 }}>
-          <Text style={{ fontWeight: "bold" }}>Puertas Mantenidas Abiertas:</Text>{" "}
-          la puerta permaneció abierta más tiempo del permitido.
-        </Text>
+          {/* Header de la tabla (SOLO títulos, sin usar r) */}
+          <View style={styles.tableHeader}>
+            <Text style={[styles.col, { flex: 0.7 }]}>Cliente</Text>
+            <Text style={[styles.col, { flex: 1.1 }]}>Evento</Text>
+            <Text style={[styles.col, { flex: 1.1 }]}>Ubicación</Text>
+            <Text style={[styles.col, { flex: 0.9 }]}>Fecha</Text>
+            <Text style={[styles.col, { flex: 1.2 }]}>Observación</Text>
+            {onlyEdificio && (
+              <>
+                <Text style={[styles.col, { flex: 1.1 }]}>Razones</Text>
+                <Text style={[styles.col, { flex: 1.1 }]}>Resolución</Text>
+                <Text style={[styles.col, { flex: 1.1 }]}>Respuesta</Text>
+              </>
+            )}
+          </View>
 
-        <Text style={{ fontSize: 9, marginBottom: 2 }}>
-          <Text style={{ fontWeight: "bold" }}>Puertas Forzadas:</Text>{" "}
-          apertura sin autorización/lectura válida; el sistema detecta apertura sin evento de acceso.
-        </Text>
+          {/* Filas */}
+          {pageRows.map((r, i) => (
+            <View key={i} style={styles.tableRow}>
+              <Text style={[styles.col, { flex: 0.7 }]}>{r.cliente}</Text>
+              <Text style={[styles.col, { flex: 1.1 }]}>{r.evento}</Text>
+              <Text style={[styles.col, { flex: 1.1 }]}>{r.ubicacion}</Text>
+              <Text style={[styles.col, { flex: 0.9 }]}>{r.fecha}</Text>
 
-        <Text style={{ fontSize: 9, marginBottom: 2 }}>
-          <Text style={{ fontWeight: "bold" }}>Evento - Encargado:</Text>{" "}
-          Evento registrado por el personal del edificio (Puertas Mantenidas Abiertas).
-        </Text>
+              {/* Observación + link (solo Edificios y si hay link) */}
+              <View style={[styles.col, { flex: 1.2 }]}>
+                <Text>{r.observacion}</Text>
+                {onlyEdificio && r.linkDrive ? (
+                  <Link
+                    src={r.linkDrive}
+                    style={{ color: "#2563eb", textDecoration: "underline", marginTop: 2 }}
+                  >
+                    Imágenes (Drive)
+                  </Link>
+                ) : null}
+              </View>
 
-        <Text style={{ fontSize: 9 }}>
-          <Text style={{ fontWeight: "bold" }}>CCTV fuera de línea:</Text>{" "}
-          cámara o NVR sin comunicación (posible corte de energía/red o falla de equipo).
-        </Text>
-      </View>
-    )}
+              {onlyEdificio && (
+                <>
+                  <Text style={[styles.col, { flex: 1.1 }]}>{r.razones}</Text>
+                  <Text style={[styles.col, { flex: 1.1 }]}>{r.resolucion}</Text>
+                  <Text style={[styles.col, { flex: 1.1 }]}>{r.respuesta}</Text>
+                </>
+              )}
+            </View>
+          ))}
 
-    {/* Header de la tabla */}
-    <View style={styles.tableHeader}>
-      <Text style={[styles.col, { flex: 0.7 }]}>Cliente</Text>
-      <Text style={[styles.col, { flex: 1.1 }]}>Evento</Text>
-      <Text style={[styles.col, { flex: 1.1 }]}>Ubicación</Text>
-      <Text style={[styles.col, { flex: 0.9 }]}>Fecha</Text>
-      <Text style={[styles.col, { flex: 1.2 }]}>Observación</Text>
-      {onlyEdificio && (
-        <>
-          <Text style={[styles.col, { flex: 1.1 }]}>Razones</Text>
-          <Text style={[styles.col, { flex: 1.1 }]}>Resolución</Text>
-          <Text style={[styles.col, { flex: 1.1 }]}>Respuesta</Text>
-        </>
-      )}
-    </View>
-
-    {/* Filas */}
-    {pageRows.map((r, i) => (
-      <View key={i} style={styles.tableRow}>
-        <Text style={[styles.col, { flex: 0.7 }]}>{r.cliente}</Text>
-        <Text style={[styles.col, { flex: 1.1 }]}>{r.evento}</Text>
-        <Text style={[styles.col, { flex: 1.1 }]}>{r.ubicacion}</Text>
-        <Text style={[styles.col, { flex: 0.9 }]}>{r.fecha}</Text>
-        <Text style={[styles.col, { flex: 1.2 }]}>{r.observacion}</Text>
-        {onlyEdificio && (
-          <>
-            <Text style={[styles.col, { flex: 1.1 }]}>{r.razones}</Text>
-            <Text style={[styles.col, { flex: 1.1 }]}>{r.resolucion}</Text>
-            <Text style={[styles.col, { flex: 1.1 }]}>{r.respuesta}</Text>
-          </>
-        )}
-      </View>
-    ))}
-
-    <Text
-      style={styles.footer}
-      render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
-      fixed
-    />
-  </Page>
-))}
-
+          <Text style={styles.footer} render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} fixed />
+        </Page>
+      ))}
     </Document>
   );
 };
@@ -301,7 +293,7 @@ const generateExcel = (eventos) => {
   const onlyEdificio = eventos.length > 0 && eventos.every(isEdificioRow);
 
   const headerBase = ["Cliente","Evento","Ubicación","Fecha","Observación"];
-  const headerExtra = ["Razones","Resolución","Respuesta"];
+  const headerExtra = ["Razones","Resolución","Respuesta","Link (Drive)"];
   const header = onlyEdificio ? [...headerBase, ...headerExtra] : headerBase;
 
   const rowBase = (e) => ([
@@ -315,6 +307,7 @@ const generateExcel = (eventos) => {
     getRazones(e) || "",
     getResolucion(e) || "",
     getRespuestaResidente(e) || "",
+    safeUrl(e.linkDrive) || "",
   ]);
 
   const rows = eventos.map(e => onlyEdificio ? [...rowBase(e), ...rowExtra(e)] : rowBase(e));
@@ -330,7 +323,7 @@ const generateExcel = (eventos) => {
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws["!cols"] = [
     { wch: 18 }, { wch: 28 }, { wch: 26 }, { wch: 20 }, { wch: 40 },
-    ...(onlyEdificio ? [{ wch: 30 }, { wch: 30 }, { wch: 30 }] : [])
+    ...(onlyEdificio ? [{ wch: 24 }, { wch: 24 }, { wch: 24 }, { wch: 40 }] : [])
   ];
   XLSX.utils.book_append_sheet(wb, ws, "Reporte");
   XLSX.writeFile(wb, `REPORTE_MONITOREO_${Date.now()}.xlsx`);
@@ -349,11 +342,9 @@ export default function ExportPDF({ eventos }) {
     if (!fromWindow.length) {
       return propArray.slice().sort((a,b) => dateMs(b) - dateMs(a));
     }
-    // Intersección por id/firma
     const winIds = new Set(fromWindow.map(sig));
     const filtered = propArray.filter(e => winIds.has(sig(e)));
     const base = filtered.length ? filtered : fromWindow;
-    // orden igual que la tabla (desc por fecha)
     return base.slice().sort((a,b) => dateMs(b) - dateMs(a));
   }, [propArray]);
 
