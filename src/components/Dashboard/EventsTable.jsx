@@ -288,7 +288,39 @@ export default function EventsTable({
       }
     }
   };
+ // ===== Helpers =====
+const norm = (s) =>
+   (s ?? "")
+     .toString()
+    .normalize("NFD")
+     .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
 
+ const highlight = (text, q) => {
+   if (!q) return text || "—";
+  const raw = text ?? "";
+ const needle = norm(q);
+  if (!needle) return raw || "—";
+ // Resaltar cada término (AND): dividimos q en palabras
+  const terms = needle.split(/\s+/).filter(Boolean);
+ if (terms.length === 0) return raw || "—";
+
+ // Para mantener simple y robusto, hacemos un reemplazo iterativo por término.
+  let out = raw.toString();
+   terms.forEach((t) => {
+     if (!t) return;
+   // Regex que ignora acentos: reemplazamos letras por clases que admiten acentos comunes
+     const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const accent = (c) => {
+      const m = { a: "[aáàäâ]", e: "[eéèëê]", i: "[iíìïî]", o: "[oóòöô]", u: "[uúùüû]", n: "[nñ]" };
+    return m[c] || c;
+     };
+     const patt = new RegExp(esc.split("").map(accent).join(""), "gi");
+   out = out.replace(patt, (m) => `<mark>${m}</mark>`);
+  });
+  return <span dangerouslySetInnerHTML={{ __html: out || "—" }} />;
+};
+ 
   const handleDeleteEvent = async (event) => {
     const confirm = await MySwal.fire({
       title: "¿Eliminar este evento?",
