@@ -112,6 +112,7 @@ export default function Dashboard() {
             "";
 
           const respuestaResidente = d["respuesta-residente"] ?? d.respuesta ?? "";
+          const linkDrive = (d.linkDrive || "").toString().trim() || null;
 
           return {
             id: docSnap.id,
@@ -140,6 +141,7 @@ export default function Dashboard() {
             ["respuesta-residente"]: respuestaResidente,
             edificio,
             unidad,
+            linkDrive, 
             ...(cliente === "TGS"
               ? {
                   ["proveedor-personal"]: proveedorTgs,
