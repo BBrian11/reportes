@@ -66,12 +66,20 @@ export default function Dashboard() {
               ? (edificio ? edificio + (unidad ? ` - ${unidad}` : "") : "Sin Ubicación")
               : (d[ubicacionKey] || "Sin Ubicación");
 
-          const fechaObj = d.fechaHoraEnvio
+          // ⏱️ Fecha/hora de envío (común)
+          const fechaEnvioObj = d.fechaHoraEnvio
             ? new Date((d.fechaHoraEnvio.seconds ?? d.fechaHoraEnvio._seconds) * 1000)
             : null;
 
-          const fecha = fechaObj
-            ? fechaObj.toLocaleString("es-AR", {
+          // ⏱️ Fecha/hora REAL del evento (solo Edificios)
+          const fechaEventoObj =
+            cliente === "Edificios" && d.fechaHoraEvento
+              ? new Date((d.fechaHoraEvento.seconds ?? d.fechaHoraEvento._seconds) * 1000)
+              : null;
+
+          // Texto de fecha visible (no crítico: usamos envío, y en tabla mostramos columnas separadas)
+          const fecha = (fechaEnvioObj || fechaEventoObj)
+            ? (fechaEnvioObj || fechaEventoObj).toLocaleString("es-AR", {
                 hour12: false,
                 year: "numeric",
                 month: "2-digit",
@@ -114,8 +122,14 @@ export default function Dashboard() {
                 : (d[ubicacionKey]?.split(" ")[0] || "General"),
             evento: d[eventoKey] || "Sin Evento",
             ubicacion,
+
+            // Texto simple (por compatibilidad)
             fecha,
-            fechaObj,
+
+            // Fechas en Date para orden/filtrado/tabla
+            fechaObj: fechaEnvioObj,      // ← envío
+            fechaEventoObj,               // ← evento (solo Edificios)
+
             observacion,
             ["resolusion-evento"]: d["resolusion-evento"] ?? null,
             resolucion: resolucionValue,
@@ -187,18 +201,22 @@ export default function Dashboard() {
     return terms.every((t) => haystack.includes(t));
   };
 
-  // Filtrado final
+  // Filtrado final — en Edificios usa fechaEventoObj; otros usan fechaObj
   const eventosFiltrados = eventos.filter((e) => {
-    const fechaEvento = e.fechaObj || new Date(e.fecha);
-    const fechaInicio = filtros.fechaInicio ? new Date(filtros.fechaInicio) : null;
-    const fechaFin = filtros.fechaFin ? new Date(filtros.fechaFin) : null;
+    const fechaBase =
+      e.cliente === "Edificios"
+        ? (e.fechaEventoObj || e.fechaObj || (e.fecha ? new Date(e.fecha) : null))
+        : (e.fechaObj || (e.fecha ? new Date(e.fecha) : null));
+
+    const fechaInicio = filtros.fechaInicio ? new Date(`${filtros.fechaInicio}T00:00:00`) : null;
+    const fechaFin    = filtros.fechaFin    ? new Date(`${filtros.fechaFin}T23:59:59`)   : null;
 
     return (
       (!filtros.cliente || filtros.cliente === "Todos" || e.cliente === filtros.cliente) &&
       (!filtros.grupo || e.grupo === filtros.grupo) &&
       (!filtros.ubicacion || e.ubicacion === filtros.ubicacion) &&
-      (!fechaInicio || fechaEvento >= fechaInicio) &&
-      (!fechaFin || fechaEvento <= fechaFin) &&
+      (!fechaInicio || (fechaBase && fechaBase >= fechaInicio)) &&
+      (!fechaFin    || (fechaBase && fechaBase <= fechaFin)) &&
       matchesQuery(e, filtros.q)
     );
   });

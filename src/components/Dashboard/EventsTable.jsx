@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef } from "react";
+import React, { useMemo, useEffect, useRef, useState } from "react";
 import DataTable, { createTheme } from "react-data-table-component";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -8,9 +8,9 @@ import "../../styles/eventstable.css";
 
 const MySwal = withReactContent(Swal);
 
-// ===== Tema (mejor contraste/legibilidad) =====
+// ===== Tema =====
 createTheme("g3tTheme", {
-  text: { primary: "#111827", secondary: "#4b5563" },
+  text: { primary: "#0f172a", secondary: "#475569" },
   background: { default: "#ffffff" },
   context: { background: "#2563eb", text: "#FFFFFF" },
   divider: { default: "#e5e7eb" },
@@ -38,7 +38,6 @@ const getResolucion = (row) =>
   "";
 
 const getRespuestaResidente = (row) => row?.["respuesta-residente"] ?? row?.respuesta ?? "";
-
 const getRazones = (row) =>
   row?.["razones-pma"] ?? row?.["razones_pma"] ?? row?.["razonesPma"] ?? row?.razones ?? "";
 
@@ -64,62 +63,117 @@ const isTGSRow = (row) => {
   return cl.includes("TGS");
 };
 
-const formatDate = (row) => {
-  const value =
-    row?.fechaObj ||
-    (row?.fecha instanceof Date ? row.fecha : new Date(row?.fecha ?? row?.fechaHoraEnvio));
-  if (!(value instanceof Date) || isNaN(value)) return "—";
-  return value.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+const fmt = (d) =>
+  d instanceof Date && !isNaN(d)
+    ? d.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+    : "—";
+
+const formatFechaEnvio = (row) => fmt(row?.fechaObj);
+const formatFechaEvento = (row) => fmt(row?.fechaEventoObj);
+
+// --- Sanitizar URL segura http/https
+const safeUrl = (u) => {
+  if (!u || typeof u !== "string") return null;
+  try {
+    const url = new URL(u);
+    if (url.protocol === "http:" || url.protocol === "https:") return url.href;
+    return null;
+  } catch {
+    return null;
+  }
 };
 
-// Ellipsis + tooltip
-// ⚠️ QUITA Ellipsis de uso en columnas textuales
-const Multi = ({ text }) => (
-  <span className="cell-multiline">{text || "—"}</span>
-);
-
-
 // ===== Panel expandible =====
-const ExpandedRow = ({ data }) => (
-  <div className="expanded-panel">
-    <div className="expanded-grid">
-      <div>
-        <h4>Observación</h4>
-        <p>{getObservacion(data) || "—"}</p>
-      </div>
-
-      {isEdificioRow(data) && (
-        <>
-          <div>
-            <h4>Razones</h4>
-            <p>{getRazones(data) || "—"}</p>
-          </div>
-          <div>
-            <h4>Resolución</h4>
-            <p>{getResolucion(data) || "—"}</p>
-          </div>
-          <div>
-            <h4>Respuesta Residente</h4>
-            <p>{getRespuestaResidente(data) || "—"}</p>
-          </div>
-        </>
-      )}
-
-      {isTGSRow(data) && (
+const ExpandedRow = ({ data }) => {
+  const link = safeUrl(data?.linkDrive);
+  return (
+    <div className="expanded-panel">
+      <div className="expanded-grid">
         <div>
-          <h4>Proveedor</h4>
-          <p>{getProveedorTGS(data) || "—"}</p>
+          <h4>Observación</h4>
+          <p style={{ marginBottom: 8 }}>{getObservacion(data) || "—"}</p>
+          {link && (
+            <a
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="obs-link"
+            >
+              Enlace a imágenes (Drive)
+            </a>
+          )}
         </div>
-      )}
+
+        {isEdificioRow(data) && (
+          <>
+            <div>
+              <h4>Razones</h4>
+              <p>{getRazones(data) || "—"}</p>
+            </div>
+            <div>
+              <h4>Resolución</h4>
+              <p>{getResolucion(data) || "—"}</p>
+            </div>
+            <div>
+              <h4>Respuesta Residente</h4>
+              <p>{getRespuestaResidente(data) || "—"}</p>
+            </div>
+          </>
+        )}
+
+        {isTGSRow(data) && (
+          <div>
+            <h4>Proveedor</h4>
+            <p>{getProveedorTGS(data) || "—"}</p>
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function EventsTable({
   eventos = [],
   filtros = { cliente: "", evento: "", ubicacion: "", fechaInicio: "", fechaFin: "" },
   onFilteredChange,
 }) {
+  // ===== UI controls (diseño) =====
+  const [dense, setDense] = useState(true);
+  const [wrapCells, setWrapCells] = useState(true);
+  const [freezeFirst, setFreezeFirst] = useState(true);
+  const [isFull, setIsFull] = useState(false);
+  const fullRef = useRef(null);
+
+  // Column visibility
+  const [visible, setVisible] = useState({
+    cliente: true,
+    evento: true,
+    ubicacion: true,
+    fechaEnvio: true,
+    fechaEvento: true, // solo cuando todo es Edificios
+    observacion: true,
+    razones: true,
+    resolucion: true,
+    respuesta: true,
+    proveedor: true,
+    acciones: true,
+  });
+
+  // Fullscreen
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await fullRef.current?.requestFullscreen();
+        setIsFull(true);
+      } else {
+        await document.exitFullscreen();
+        setIsFull(false);
+      }
+    } catch {
+      setIsFull((v) => !v);
+    }
+  };
+
   // ===== Handlers edición =====
   const handleEditObservation = async (event) => {
     const { value } = await MySwal.fire({
@@ -128,7 +182,7 @@ export default function EventsTable({
       showCancelButton: true,
       confirmButtonText: "Guardar",
       cancelButtonText: "Cancelar",
-      width: "520px",
+      width: "560px",
       preConfirm: () => document.getElementById("swal-obs").value ?? "",
     });
     if (value === undefined) return;
@@ -151,17 +205,14 @@ export default function EventsTable({
       showCancelButton: true,
       confirmButtonText: "Guardar",
       cancelButtonText: "Cancelar",
-      width: "520px",
+      width: "560px",
       preConfirm: () => document.getElementById("swal-res").value ?? "",
     });
     if (value === undefined) return;
     try {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
-      await updateDoc(doc(db, path), {
-        ["resolusion-evento"]: value,
-        resolucion: value,
-      });
+      await updateDoc(doc(db, path), { ["resolusion-evento"]: value, resolucion: value });
       MySwal.fire("✅ Guardado", "Resolución actualizada", "success");
     } catch {
       MySwal.fire("❌ Error", "No se pudo actualizar la resolución", "error");
@@ -175,17 +226,14 @@ export default function EventsTable({
       showCancelButton: true,
       confirmButtonText: "Guardar",
       cancelButtonText: "Cancelar",
-      width: "520px",
+      width: "560px",
       preConfirm: () => document.getElementById("swal-resp").value ?? "",
     });
     if (value === undefined) return;
     try {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
-      await updateDoc(doc(db, path), {
-        ["respuesta-residente"]: value,
-        respuesta: value,
-      });
+      await updateDoc(doc(db, path), { ["respuesta-residente"]: value, respuesta: value });
       MySwal.fire("✅ Guardado", "Respuesta actualizada", "success");
     } catch {
       MySwal.fire("❌ Error", "No se pudo actualizar la respuesta", "error");
@@ -193,18 +241,17 @@ export default function EventsTable({
   };
 
   const handleEditFechaHora = async (event) => {
-    const d =
-      event?.fechaObj ||
-      (event?.fecha instanceof Date ? event.fecha : new Date(event?.fecha ?? event?.fechaHoraEnvio));
+    const baseDate = isEdificioRow(event) ? (event?.fechaEventoObj || event?.fechaObj) : (event?.fechaObj);
     const pad = (n) => String(n).padStart(2, "0");
     const initial =
-      d instanceof Date && !isNaN(d)
-        ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-            d.getMinutes()
-          )}`
+      baseDate instanceof Date && !isNaN(baseDate)
+        ? `${baseDate.getFullYear()}-${pad(baseDate.getMonth() + 1)}-${pad(baseDate.getDate())}T${pad(
+            baseDate.getHours()
+          )}:${pad(baseDate.getMinutes())}`
         : "";
+
     const { value } = await MySwal.fire({
-      title: "Editar fecha y hora",
+      title: isEdificioRow(event) ? "Editar FECHA DEL EVENTO" : "Editar fecha de envío",
       html: `
         <div style="text-align:left">
           <label style="font-size:12px;color:#374151">Fecha y hora</label>
@@ -214,11 +261,12 @@ export default function EventsTable({
       showCancelButton: true,
       confirmButtonText: "Guardar",
       cancelButtonText: "Cancelar",
-      width: "420px",
+      width: "440px",
       focusConfirm: false,
       preConfirm: () => document.getElementById("swal-dt").value || "",
     });
     if (!value) return;
+
     const newDate = new Date(value);
     if (Number.isNaN(newDate.getTime())) {
       MySwal.fire("❌ Error", "Fecha/hora inválida.", "error");
@@ -227,7 +275,11 @@ export default function EventsTable({
     try {
       const clienteLower = getClienteLower(event);
       const path = `novedades/${clienteLower}/eventos/${event.id}`;
-      await updateDoc(doc(db, path), { fechaHoraEnvio: Timestamp.fromDate(newDate) });
+      if (isEdificioRow(event)) {
+        await updateDoc(doc(db, path), { fechaHoraEvento: Timestamp.fromDate(newDate) });
+      } else {
+        await updateDoc(doc(db, path), { fechaHoraEnvio: Timestamp.fromDate(newDate) });
+      }
       MySwal.fire("✅ Guardado", "Fecha y hora actualizadas", "success");
     } catch {
       MySwal.fire("❌ Error", "No se pudo actualizar la fecha y hora", "error");
@@ -253,7 +305,7 @@ export default function EventsTable({
         showCancelButton: true,
         confirmButtonText: "Guardar",
         cancelButtonText: "Cancelar",
-        width: "520px",
+        width: "560px",
         preConfirm: () => ({
           edificio: document.getElementById("swal-edificio").value ?? "",
           unidad: document.getElementById("swal-unidad").value ?? "",
@@ -288,39 +340,7 @@ export default function EventsTable({
       }
     }
   };
- // ===== Helpers =====
-const norm = (s) =>
-   (s ?? "")
-     .toString()
-    .normalize("NFD")
-     .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
 
- const highlight = (text, q) => {
-   if (!q) return text || "—";
-  const raw = text ?? "";
- const needle = norm(q);
-  if (!needle) return raw || "—";
- // Resaltar cada término (AND): dividimos q en palabras
-  const terms = needle.split(/\s+/).filter(Boolean);
- if (terms.length === 0) return raw || "—";
-
- // Para mantener simple y robusto, hacemos un reemplazo iterativo por término.
-  let out = raw.toString();
-   terms.forEach((t) => {
-     if (!t) return;
-   // Regex que ignora acentos: reemplazamos letras por clases que admiten acentos comunes
-     const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const accent = (c) => {
-      const m = { a: "[aáàäâ]", e: "[eéèëê]", i: "[iíìïî]", o: "[oóòöô]", u: "[uúùüû]", n: "[nñ]" };
-    return m[c] || c;
-     };
-     const patt = new RegExp(esc.split("").map(accent).join(""), "gi");
-   out = out.replace(patt, (m) => `<mark>${m}</mark>`);
-  });
-  return <span dangerouslySetInnerHTML={{ __html: out || "—" }} />;
-};
- 
   const handleDeleteEvent = async (event) => {
     const confirm = await MySwal.fire({
       title: "¿Eliminar este evento?",
@@ -342,14 +362,19 @@ const norm = (s) =>
     }
   };
 
-  // ===== Filtrado/orden (usa SOLO props.filtros) =====
+  // ===== Filtrado/orden =====
   const filteredData = useMemo(() => {
+    const getSortDate = (row) =>
+      isEdificioRow(row)
+        ? (row?.fechaEventoObj || row?.fechaObj)
+        : (row?.fechaObj || row?.fechaEventoObj);
+
     const base = (eventos || [])
       .slice()
       .sort((a, b) => {
-        const da = a?.fechaObj?.getTime?.() || 0;
-        const db = b?.fechaObj?.getTime?.() || 0;
-        return db - da;
+        const da = getSortDate(a)?.getTime?.() || 0;
+        const db = getSortDate(b)?.getTime?.() || 0;
+        return db - da; // desc
       });
 
     const desde = filtros.fechaInicio ? new Date(`${filtros.fechaInicio}T00:00:00`) : null;
@@ -360,259 +385,439 @@ const norm = (s) =>
       const eventoOk    = !filtros.evento    || getEventoTitulo(item) === filtros.evento;
       const ubicacionOk = !filtros.ubicacion || getUbicacionDisplay(item) === filtros.ubicacion;
 
-      const fechaEvento =
-        item?.fechaObj ||
-        (item?.fecha instanceof Date ? item.fecha : new Date(item?.fecha ?? item?.fechaHoraEnvio));
+      const fechaBase =
+        isEdificioRow(item)
+          ? (item?.fechaEventoObj || item?.fechaObj)
+          : (item?.fechaObj);
+
       const fechaOk =
-        (!desde || (fechaEvento && fechaEvento >= desde)) &&
-        (!hasta || (fechaEvento && fechaEvento <= hasta));
+        (!desde || (fechaBase && fechaBase >= desde)) &&
+        (!hasta || (fechaBase && fechaBase <= hasta));
 
       return clienteOk && eventoOk && ubicacionOk && fechaOk;
     });
   }, [eventos, filtros]);
 
-  // ===== Notificar al padre SOLO si cambia de verdad (anti-loop) =====
+  // ===== Notificar al padre =====
   const lastSigRef = useRef("");
   useEffect(() => {
-    // Firma barata: largo + ids o combinación estable
     const sig = `${filteredData.length}:${filteredData
-      .map((e) => e.id ?? `${e.cliente}|${getEventoTitulo(e)}|${e.fecha ?? e.fechaHoraEnvio ?? ""}`)
+      .map((e) => e.id ?? `${e.cliente}|${getEventoTitulo(e)}|${e.fecha || ""}`)
       .join("|")}`;
-
     if (sig !== lastSigRef.current) {
       lastSigRef.current = sig;
       onFilteredChange?.(filteredData);
-      window.__FILTERED_EVENTOS__ = filteredData; // por si el export lo usa de backup
+      window.__FILTERED_EVENTOS__ = filteredData;
     }
   }, [filteredData, onFilteredChange]);
 
-  // ===== Detectores de tipo (RESTABLECIDO) =====
-  const onlyEdificio = useMemo(
-    () => filteredData.length > 0 && filteredData.every(isEdificioRow),
-    [filteredData]
-  );
-  const onlyTGS = useMemo(
-    () => filteredData.length > 0 && filteredData.every(isTGSRow),
-    [filteredData]
-  );
-// 🔹 columnas extra solo para edificio
-const edificioOnlyColumns = useMemo(() => [
-  {
-    name: "Razones",
-    selector: (r) => getRazones(r) || "—",
-    minWidth: "220px",
-    wrap: true,
-    style: { minWidth: 0 },
-    cell: (r) => <span style={cellTextStyle}>{getRazones(r) || "—"}</span>,
-  },
-  {
-    name: "Resolución",
-    selector: (r) => getResolucion(r) || "—",
-    minWidth: "220px",
-    wrap: true,
-    style: { minWidth: 0 },
-    cell: (r) => <span style={cellTextStyle}>{getResolucion(r) || "—"}</span>,
-  },
-  {
-    name: "Respuesta Residente",
-    selector: (r) => getRespuestaResidente(r) || "—",
-    minWidth: "220px",
-    wrap: true,
-    style: { minWidth: 0 },
-    cell: (r) => <span style={cellTextStyle}>{getRespuestaResidente(r) || "—"}</span>,
-  },
-], []);
-
-// 🔹 columnas extra solo para TGS
-const tgsOnlyColumns = useMemo(() => [
-  {
-    name: "Proveedor",
-    selector: (r) => getProveedorTGS(r) || "—",
-    minWidth: "180px",
-    wrap: true,
-    style: { minWidth: 0 },
-    cell: (r) => <span style={cellTextStyle}>{getProveedorTGS(r) || "—"}</span>,
-  },
-], []);
-
-// 🔧 estilos para spans de celda
-const cellTextStyle = {
-  display: "block",
-  minWidth: 0,
-  whiteSpace: "normal",
-  wordBreak: "break-word",
-  overflowWrap: "anywhere",
-  overflow: "hidden",           // ← antes estaba 'visible'
-  lineHeight: 1.35,
-};
-
-const cellNowrapMono = {
-  whiteSpace: "nowrap",
-  fontVariantNumeric: "tabular-nums",
-  fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-  lineHeight: 1.2,
-  overflow: "hidden",           // ← evita bleed
-  textOverflow: "ellipsis",
-};
-
-// 🔧 estilos del DataTable
-const customStyles = {
-  tableWrapper: {                // ← agrega wrapper con scroll
-    style: { display: "block", width: "100%", overflowX: "auto" },
-  },
-  table: {
-    style: {
-      border: "1px solid #e5e7eb",
-      borderRadius: 12,
-      overflow: "hidden",
-      tableLayout: "fixed",      // ← clave para que no “rompa”
-      backgroundColor: "#ffffff"
-    },
-  },
-  headRow: {
-    style: { minHeight: 44, backgroundColor: "#f8fafc", position: "sticky", top: 0, zIndex: 2 },
-  },
-  headCells: {
-    style: {
-      fontWeight: 800,
-      fontSize: 13.5,
-      letterSpacing: ".02em",
-      textTransform: "uppercase",
-      color: "#0f172a",
-      paddingTop: 8,
-      paddingBottom: 8,
-      borderBottom: "1px solid #e5e7eb",
-      backgroundColor: "#f8fafc", // ← evita transparencia
-    },
-  },
-  rows: {
-    style: {
-      minHeight: "auto",
-      backgroundColor: "#ffffff", // ← asegura fondo sólido
-      "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" },
-    },
-  },
-  cells: {
-    style: {
+  // ===== Estilos de celdas =====
+  const cellTextStyle = useMemo(
+    () => ({
+      display: "block",
       minWidth: 0,
-      whiteSpace: "normal",
-      overflow: "hidden",         // ← NO visible
+      whiteSpace: wrapCells ? "normal" : "nowrap",
+      wordBreak: wrapCells ? "break-word" : "normal",
+      overflowWrap: wrapCells ? "anywhere" : "normal",
+      overflow: "hidden",
       textOverflow: "ellipsis",
-      alignItems: "flex-start",
-      fontSize: 13.5,
-      color: "#111827",
       lineHeight: 1.35,
-      paddingTop: 6,
-      paddingBottom: 6,
-      backgroundColor: "#ffffff",
-    },
-  },
-  pagination: { style: { borderTop: "1px solid #e5e7eb" } },
-};
+    }),
+    [wrapCells]
+  );
 
-// 🔧 columnas: ajustes finos
-const baseColumns = useMemo(() => [
-  {
-    name: "Cliente",
-    selector: (row) => row.cliente,
-    sortable: true,
-    minWidth: "140px",
-    grow: 1,
-    wrap: true,
-    cell: (row) => <span style={cellTextStyle}>{row.cliente || "—"}</span>,
-  },
-  {
-    name: "Evento",
-    selector: (row) => getEventoTitulo(row),
-    sortable: true,
-    minWidth: "220px",
-    grow: 2,
-    wrap: true,
-    cell: (row) => <span style={cellTextStyle}>{getEventoTitulo(row) || "—"}</span>,
-  },
-  {
-    name: "Ubicación",
-    selector: (row) => row.ubicacion || row.edificio,
-    minWidth: "180px",
-    grow: 1,
-    wrap: true,
-    cell: (row) => <span style={cellTextStyle}>{getUbicacionDisplay(row) || "—"}</span>,
-  },
-  {
-    name: "Fecha",
-    selector: (row) => row.fecha || row.fechaHoraEnvio,
-    sortable: true,
-    minWidth: "150px",
-    right: true,
-    cell: (row) => <span style={cellNowrapMono}>{formatDate(row)}</span>,
-  },
-  {
-    name: "Observación",
-    selector: (row) => getObservacion(row),
-    grow: 2,
-    minWidth: "260px",
-    wrap: true,
-    cell: (row) => <span style={cellTextStyle}>{getObservacion(row) || "—"}</span>,
-  },
-], []);
+  const cellNowrapMono = {
+    whiteSpace: "nowrap",
+    fontVariantNumeric: "tabular-nums",
+    fontFamily:
+      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    lineHeight: 1.2,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  };
 
-// … tus columnas condicionales igual
+  // ===== Estilos DataTable =====
+  const customStyles = useMemo(
+    () => ({
+      // ⚠️ Forzamos scroll horizontal visible abajo
+      tableWrapper: { style: { display: "block", width: "100%", overflowX: "auto", overflowY: "hidden" } },
+      table: {
+        style: {
+          border: "1px solid #e5e7eb",
+          borderRadius: 14,
+          overflow: "auto", // asegura barras internas si hace falta
+          tableLayout: "fixed",
+          backgroundColor: "#ffffff",
+          minWidth: "980px", // evita que colapse y desaparezca el scroll
+        },
+      },
+      headRow: {
+        style: {
+          minHeight: 44,
+          backgroundColor: "#f8fafc",
+          position: "sticky",
+          top: 0,
+          zIndex: 2,
+        },
+      },
+      headCells: {
+        style: {
+          fontWeight: 800,
+          fontSize: 13,
+          letterSpacing: ".02em",
+          textTransform: "uppercase",
+          color: "#0f172a",
+          paddingTop: dense ? 6 : 10,
+          paddingBottom: dense ? 6 : 10,
+          borderBottom: "1px solid #e5e7eb",
+          backgroundColor: "#f8fafc",
+        },
+      },
+      rows: {
+        style: {
+          minHeight: "auto",
+          backgroundColor: "#ffffff",
+          "&:hover": { backgroundColor: "#f3f4f6", transition: "0.15s" },
+        },
+      },
+      cells: {
+        style: {
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          alignItems: "flex-start",
+          fontSize: dense ? 13 : 14.5,
+          color: "#111827",
+          lineHeight: dense ? 1.25 : 1.4,
+          paddingTop: dense ? 6 : 10,
+          paddingBottom: dense ? 6 : 10,
+          paddingLeft: 12,
+          paddingRight: 12,
+          backgroundColor: "#ffffff",
+        },
+      },
+      pagination: { style: { borderTop: "1px solid #e5e7eb" } },
+    }),
+    [dense]
+  );
 
-const columns = useMemo(() => {
-  const cols = [...baseColumns];
-  if (onlyEdificio) cols.push(...edificioOnlyColumns);
-  else if (onlyTGS) cols.push(...tgsOnlyColumns);
-
-  cols.push({
-    name: "Acciones",
-    minWidth: "220px",             // ← fija base
-    maxWidth: "260px",
-    grow: 0,                       // ← no se estira
-    center: false,
-    cell: (row) => (
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        <button onClick={() => handleEditObservation(row)} className="btn -indigo" style={{ padding: "4px 8px" }}>Obs</button>
-        <button onClick={() => handleEditFechaHora(row)} className="btn -violet" style={{ padding: "4px 8px" }}>Fecha</button>
-        {isEdificioRow(row) && (
-          <>
-            <button onClick={() => handleEditResolucion(row)} className="btn -emerald" style={{ padding: "4px 8px" }}>Resolv</button>
-            <button onClick={() => handleEditRespuesta(row)} className="btn -sky" style={{ padding: "4px 8px" }}>Resp</button>
-          </>
+  // ===== Cell renderers =====
+  const ObservacionCell = (row) => {
+    const text = getObservacion(row) || "—";
+    const link = safeUrl(row?.linkDrive);
+    return (
+      <div className="obs-cell" title={text}>
+        <span style={cellTextStyle}>{text}</span>
+        {link && (
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="obs-link"
+            title="Abrir imágenes en Drive"
+          >
+            Enlace a imágenes
+          </a>
         )}
-        <button onClick={() => handleEditUbicacion(row)} className="btn -amber" style={{ padding: "4px 8px" }}>Ubic</button>
-        <button onClick={() => handleDeleteEvent(row)} className="btn -red" style={{ padding: "4px 8px" }}>🗑</button>
       </div>
-    ),
-  });
-  return cols;
-}, [baseColumns, edificioOnlyColumns, tgsOnlyColumns, onlyEdificio, onlyTGS]);
+    );
+  };
 
-// 🔧 render
-return (
-  <div style={{ width: "100%" }}>
-    <DataTable
-      columns={columns}
-      data={filteredData}
-      theme="g3tTheme"
-      customStyles={customStyles}
-      dense
-      striped
-      highlightOnHover
-      responsive
-      pagination
-      paginationPerPage={50}
-      paginationRowsPerPageOptions={[10, 20, 50, 100, 150]}
-      fixedHeader
-      fixedHeaderScrollHeight="600px"
-      persistTableHead
-      noDataComponent={<div style={{ padding: 16 }}>Sin eventos para los filtros seleccionados.</div>}
-      expandableRows
-      expandableRowsComponent={ExpandedRow}
-      expandOnRowClicked
-      expandableRowsHideExpander
-    />
-  </div>
-);
+  // ===== Columnas =====
+  const baseColumns = useMemo(() => {
+    const cols = [];
 
+    if (visible.cliente) {
+      cols.push({
+        name: "Cliente",
+        selector: (row) => row.cliente || "",
+        sortable: true,
+        minWidth: "140px",
+        grow: 1,
+        wrap: wrapCells,
+        cell: (row) => <span style={cellTextStyle} title={row.cliente || ""}>{row.cliente || "—"}</span>,
+      });
+    }
+
+    if (visible.evento) {
+      cols.push({
+        name: "Evento",
+        selector: (row) => getEventoTitulo(row) || "",
+        sortable: true,
+        minWidth: "220px",
+        grow: 2,
+        wrap: wrapCells,
+        cell: (row) => {
+          const text = getEventoTitulo(row) || "—";
+          return <span style={cellTextStyle} title={text}>{text}</span>;
+        },
+      });
+    }
+
+    if (visible.ubicacion) {
+      cols.push({
+        name: "Ubicación",
+        selector: (row) => getUbicacionDisplay(row) || "",
+        minWidth: "180px",
+        grow: 1,
+        wrap: wrapCells,
+        cell: (row) => {
+          const text = getUbicacionDisplay(row) || "—";
+          return <span style={cellTextStyle} title={text}>{text}</span>;
+        },
+      });
+    }
+
+    if (visible.fechaEnvio) {
+      cols.push({
+        name: "Fecha envío",
+        selector: (row) => row?.fechaObj?.getTime?.() || 0,
+        sortable: true,
+        minWidth: "150px",
+        right: true,
+        cell: (row) => (
+          <span className="dt-cell-mono" title={formatFechaEnvio(row)} style={cellNowrapMono}>
+            {formatFechaEnvio(row)}
+          </span>
+        ),
+      });
+    }
+
+    if (visible.observacion) {
+      cols.push({
+        name: "Observación",
+        selector: (row) => getObservacion(row) || "",
+        grow: 2,
+        minWidth: "280px",
+        wrap: wrapCells,
+        cell: ObservacionCell,
+      });
+    }
+
+    return cols;
+  }, [visible, wrapCells, cellTextStyle]);
+
+  const edificioOnlyColumns = useMemo(() => {
+    const cols = [];
+
+    if (visible.fechaEvento) {
+      cols.push({
+        name: "Fecha evento",
+        selector: (r) => r?.fechaEventoObj?.getTime?.() || 0,
+        sortable: true,
+        minWidth: "150px",
+        right: true,
+        cell: (r) => (
+          <span className="dt-cell-mono" title={formatFechaEvento(r)} style={cellNowrapMono}>
+            {formatFechaEvento(r)}
+          </span>
+        ),
+      });
+    }
+    if (visible.razones) {
+      cols.push({
+        name: "Razones",
+        selector: (r) => getRazones(r) || "—",
+        minWidth: "220px",
+        wrap: wrapCells,
+        cell: (r) => {
+          const text = getRazones(r) || "—";
+          return <span style={cellTextStyle} title={text}>{text}</span>;
+        },
+      });
+    }
+    if (visible.resolucion) {
+      cols.push({
+        name: "Resolución",
+        selector: (r) => getResolucion(r) || "—",
+        minWidth: "220px",
+        wrap: wrapCells,
+        cell: (r) => {
+          const text = getResolucion(r) || "—";
+          return <span style={cellTextStyle} title={text}>{text}</span>;
+        },
+      });
+    }
+    if (visible.respuesta) {
+      cols.push({
+        name: "Respuesta Residente",
+        selector: (r) => getRespuestaResidente(r) || "—",
+        minWidth: "220px",
+        wrap: wrapCells,
+        cell: (r) => {
+          const text = getRespuestaResidente(r) || "—";
+          return <span style={cellTextStyle} title={text}>{text}</span>;
+        },
+      });
+    }
+    return cols;
+  }, [visible, wrapCells, cellTextStyle]);
+
+  const tgsOnlyColumns = useMemo(() => {
+    if (!visible.proveedor) return [];
+    return [
+      {
+        name: "Proveedor",
+        selector: (r) => getProveedorTGS(r) || "—",
+        minWidth: "180px",
+        wrap: wrapCells,
+        cell: (r) => {
+          const text = getProveedorTGS(r) || "—";
+          return <span style={cellTextStyle} title={text}>{text}</span>;
+        },
+      },
+    ];
+  }, [visible, wrapCells, cellTextStyle]);
+
+  const columns = useMemo(() => {
+    const cols = [...baseColumns];
+    if (filteredData.length > 0 && filteredData.every(isEdificioRow)) {
+      if (visible.fechaEvento) {
+        const idxUbic = cols.findIndex((c) => c.name === "Ubicación");
+        const fechaCol = edificioOnlyColumns.find((c) => c.name === "Fecha evento");
+        if (idxUbic >= 0 && fechaCol) cols.splice(idxUbic + 1, 0, fechaCol);
+      }
+      edificioOnlyColumns
+        .filter((c) => c.name !== "Fecha evento")
+        .forEach((c) => cols.push(c));
+    } else if (filteredData.length > 0 && filteredData.every(isTGSRow)) {
+      cols.push(...tgsOnlyColumns);
+    }
+
+    if (visible.acciones) {
+      cols.push({
+        name: "Acciones",
+        minWidth: "220px",
+        maxWidth: "280px",
+        grow: 0,
+        center: false,
+        cell: (row) => (
+          <div className="dt-actions">
+            <button onClick={() => handleEditObservation(row)} className="btn -indigo">
+              Obs
+            </button>
+            <button onClick={() => handleEditFechaHora(row)} className="btn -violet">
+              {isEdificioRow(row) ? "Fecha evento" : "Fecha envío"}
+            </button>
+            {isEdificioRow(row) && (
+              <>
+                <button onClick={() => handleEditResolucion(row)} className="btn -emerald">
+                  Resolv
+                </button>
+                <button onClick={() => handleEditRespuesta(row)} className="btn -sky">
+                  Resp
+                </button>
+              </>
+            )}
+            <button onClick={() => handleEditUbicacion(row)} className="btn -amber">
+              Ubic
+            </button>
+            <button onClick={() => handleDeleteEvent(row)} className="btn -red">
+              🗑
+            </button>
+          </div>
+        ),
+      });
+    }
+    return cols;
+  }, [baseColumns, edificioOnlyColumns, tgsOnlyColumns, filteredData, visible]);
+
+  // ===== Render =====
+  const onlyEdificios = filteredData.length > 0 && filteredData.every(isEdificioRow);
+  const onlyTgs = filteredData.length > 0 && filteredData.every(isTGSRow);
+
+  return (
+    <div
+      ref={fullRef}
+      className={`event-table-card ${isFull ? "is-fullscreen" : ""} ${freezeFirst ? "freeze-first-col" : ""}`}
+    >
+      <div className="table-header">
+        <div>
+          <div className="table-title">Eventos</div>
+          <div className="table-subtitle">
+            {filteredData.length} resultados · {onlyEdificios ? "Edificios" : onlyTgs ? "TGS" : "Mixto"}
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="table-toolbar">
+          <div className="toolbar-group">
+            <label className="switch">
+              <input type="checkbox" checked={dense} onChange={(e) => setDense(e.target.checked)} />
+              <span>Denso</span>
+            </label>
+            <label className="switch">
+              <input type="checkbox" checked={wrapCells} onChange={(e) => setWrapCells(e.target.checked)} />
+              <span>Multilínea</span>
+            </label>
+            <label className="switch">
+              <input type="checkbox" checked={freezeFirst} onChange={(e) => setFreezeFirst(e.target.checked)} />
+              <span>Fijar 1ª columna</span>
+            </label>
+            <button className="toolbar-btn" onClick={toggleFullscreen}>
+              {isFull ? "Salir pantalla completa" : "Pantalla completa"}
+            </button>
+          </div>
+
+          {/* Selector de columnas */}
+          <details className="columns-picker">
+            <summary>Columnas</summary>
+            <div className="columns-list">
+              {[
+                ["cliente", "Cliente"],
+                ["evento", "Evento"],
+                ["ubicacion", "Ubicación"],
+                ["fechaEnvio", "Fecha envío"],
+                ...(onlyEdificios ? [["fechaEvento", "Fecha evento"]] : []),
+                ["observacion", "Observación"],
+                ...(onlyEdificios
+                  ? [
+                      ["razones", "Razones"],
+                      ["resolucion", "Resolución"],
+                      ["respuesta", "Respuesta"],
+                    ]
+                  : []),
+                ...(onlyTgs ? [["proveedor", "Proveedor"]] : []),
+                ["acciones", "Acciones"],
+              ].map(([key, label]) => (
+                <label key={key}>
+                  <input
+                    type="checkbox"
+                    checked={!!visible[key]}
+                    onChange={() => setVisible((v) => ({ ...v, [key]: !v[key] }))}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </details>
+        </div>
+      </div>
+
+      {/* WRAPPER EXTERNO con scroll horizontal visible abajo */}
+      <div className="dt-outer-scroll">
+        <DataTable
+          columns={columns}
+          data={filteredData}
+          theme="g3tTheme"
+          customStyles={customStyles}
+          dense={dense}
+          striped
+          highlightOnHover
+          responsive
+          pagination
+          paginationPerPage={50}
+          paginationRowsPerPageOptions={[20, 50, 100, 200]}
+          fixedHeader
+          fixedHeaderScrollHeight="70vh"
+          persistTableHead
+          noDataComponent={<div style={{ padding: 16 }}>Sin eventos para los filtros seleccionados.</div>}
+          expandableRows
+          expandableRowsComponent={ExpandedRow}
+          expandOnRowClicked
+          expandableRowsHideExpander
+        />
+      </div>
+    </div>
+  );
 }

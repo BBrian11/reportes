@@ -1,416 +1,152 @@
-/* ===== Contenedor Principal de la Tabla ===== */
+/* ===== Contenedor tarjeta ===== */
 .event-table-card {
   background: #ffffff;
   border-radius: 16px;
-  box-shadow: 0 32px 28px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08);
-  padding: 28px;
-  margin-top: 24px;
-  transition: all 0.3s ease-in-out;
+  box-shadow: 0 10px 24px rgba(0,0,0,.06);
+  padding: 18px;
+  margin-top: 16px;
+  transition: box-shadow .2s ease, transform .2s ease;
+}
+.event-table-card:hover { box-shadow: 0 16px 32px rgba(0,0,0,.08); }
+
+/* Pantalla completa (fallback visual si Fullscreen API no aplica) */
+.event-table-card.is-fullscreen {
+  position: fixed;
+  inset: 12px;
+  z-index: 9999;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.15);
 }
 
-.event-table-card:hover {
-  box-shadow: 0 26px 32px rgba(0, 0, 0, 0.15), 0 10px 20px rgba(0, 0, 0, 0.10);
-  transform: translateY(-3px);
-}
-
-/* ===== Header de la Tabla ===== */
+/* ===== Header & toolbar ===== */
 .table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
-  gap: 16px;
+  display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:10px;
 }
+.table-title { font-size:1.25rem; font-weight:800; color:#0f172a; letter-spacing:-.02em; }
+.table-subtitle { font-size:.92rem; color:#64748b; }
 
-.table-title {
-  font-size: 1.4rem;
-  font-weight: 800;
-  color: #111827;
-  letter-spacing: -0.5px;
+.table-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.toolbar-group { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+
+.switch { display:flex; align-items:center; gap:6px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:6px 10px; }
+.switch input { accent-color:#2563eb; }
+
+.toolbar-btn {
+  background: linear-gradient(135deg,#2563eb,#1d4ed8);
+  color:#fff; border:none; border-radius:10px; padding:8px 12px; font-weight:600;
+  box-shadow: 0 6px 14px rgba(37,99,235,.25); cursor:pointer;
 }
+.toolbar-btn:hover { transform: translateY(-1px); }
 
-.table-subtitle {
-  font-size: 0.95rem;
-  color: #6b7280;
+/* Selector de columnas */
+.columns-picker { position: relative; }
+.columns-picker summary {
+  list-style:none; cursor:pointer; background:#ffffff; border:1px solid #e5e7eb; border-radius:10px; padding:8px 12px; font-weight:600;
 }
-
-/* ===== Estilos DataTable ===== */
-.rdt_Table {
-  border-radius: 14px;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  overflow: hidden;
-  font-size: 15px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease-in-out;
+.columns-picker[open] summary { box-shadow:0 8px 24px rgba(0,0,0,.08); }
+.columns-list {
+  position:absolute; right:0; margin-top:6px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px;
+  display:grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap:8px; box-shadow:0 16px 36px rgba(0,0,0,.12); z-index:5;
 }
+.columns-list label { display:flex; align-items:center; gap:8px; font-size:.92rem; color:#0f172a; }
 
+/* ===== DataTable base ===== */
+.rdt_Table { border-radius: 12px; border:1px solid #e5e7eb; background:#fff; overflow:hidden; }
 .rdt_TableHeadRow {
-  background: #f3f4f6;
-  font-weight: 700;
-  color: #1f2937;
-  font-size: 15px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  background:#f8fafc; font-weight:700; color:#1f2937; text-transform:uppercase; letter-spacing:.5px;
+  position:sticky; top:0; z-index:2; box-shadow:0 1px 0 #e5e7eb;
 }
+.rdt_TableRow { transition: background .15s ease; }
+.rdt_TableRow:hover { background:#f1f5f9; }
 
-.rdt_TableRow {
-  background: #ffffff;
-  transition: background 0.25s ease, transform 0.2s ease, box-shadow 0.3s ease;
-}
+/* Celdas: elipsis + tooltip via title (puesto en JSX) */
+.rdt_TableCell { min-width:0; }
 
-.rdt_TableRow:hover {
-  background: #f0f7ff;
-  transform: scale(1.002);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
-  cursor: pointer;
-}
-
-/* ===== Celdas ===== */
-.rdt_TableCell {
-  padding: 14px 16px;
-  color: #374151;
-  font-weight: 500;
-  border-bottom: 1px solid #f1f5f9;
-  transition: color 0.2s ease;
-}
-
-.rdt_TableCell:hover {
-  color: #111827;
-}
-
-/* ===== Paginación ===== */
-.rdt_Pagination {
-  border-top: 1px solid #e5e7eb;
-  padding: 16px;
-  display: flex;
-  justify-content: space-between;
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-  color: #3741513b;
-  background: #fafafa;
-  border-radius: 0 0 14px 14px;
-}
-
-.rdt_Pagination button {
-  background: linear-gradient(135deg, #2564eb25, #f3f3f3);
-  color: #fff;
-  border: none;
-  padding: 10px 18px;
-  border-radius: 5px;
-  font-weight: 400;
-  cursor: pointer;
-  
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 10px rgba(37, 100, 235, 0.158);
-}
-
-.rdt_Pagination button:hover {
-  background: linear-gradient(135deg, #1e40af8c, #6881c7);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(37, 100, 235, 0.151);
-}
-
-/* ===== Responsive Ajustes ===== */
-@media (max-width: 1024px) {
-  .rdt_TableCell {
-    font-size: 14px;
-    padding: 10px 12px;
-  }
-  .table-title {
-    font-size: 1.2rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .rdt_Table {
-    font-size: 13px;
-  }
-  .rdt_Pagination {
-    flex-direction: column;
-    gap: 10px;
-  }
-  .rdt_Pagination button {
-    width: 100%;
-  }
-}
-
-/* ===== Inputs Modernos ===== */
-.filters-container .icon-wrapper {
-  position: relative;
-  width: 100%;
-}
-
-.filters-container .icon-wrapper input {
-  width: 20%;
-  padding: 12px 14px 12px 42px; /* Espacio para ícono */
-  border-radius: 10px;
-  border: 1px solid #d1d5db;
-  background-color: #f3f4f6;
-  font-size: 14px;
-  color: #111827;
-  transition: all 0.3s ease;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.filters-container .icon-wrapper input:focus {
-  border-color: #2563eb;
-  background-color: #ffffff;
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-}
-
-/* Placeholder */
-.filters-container .icon-wrapper input::placeholder {
-  color: #9ca3af;
-  font-size: 13px;
-}
-
-/* ===== Íconos dentro de inputs ===== */
-.filters-container .icon-wrapper svg {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #9ca3af;
-  font-size: 18px;
-  pointer-events: none;
-}
-
-/* ===== Botón Reset ===== */
-.reset-wrapper {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.reset-wrapper button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: linear-gradient(135deg, #2563eb, #1e40af);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 400;
-  border: none;
-  border-radius: 12px;
-  padding: 12px 20px;
-  cursor: pointer;
-  min-width: 80px;
-  height: 46px;
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
-  transition: all 0.3s ease-in-out;
-}
-
-.reset-wrapper button:hover {
-  background: linear-gradient(135deg, #1e40af, #1d4ed8);
-  transform: translateY(-2px);
-}
-
-.reset-wrapper button:active {
-  transform: scale(0.98);
-}
-/* Contenedor principal */
-.filters-wrapper {
-  margin-bottom: 20px;
-}
-/* ===== Contenedor de Filtros ===== */
-/* ===== Contenedor de Filtros ===== */
-.filters-container {
-  display: grid;
-  grid-template-columns: 1fr 300px 300px auto; /* ✅ Ahora los inputs de fecha son más largos */
-  gap: 10px;
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 20px 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease-in-out;
-}
-
-/* Hover */
-.filters-container:hover {
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-}
-
-/* ===== Responsive ===== */
-@media (max-width: 1200px) {
-  .filters-container {
-    grid-template-columns: 1fr 1fr; /* ✅ En pantallas medianas: dos columnas */
-  }
-}
-
-@media (max-width: 768px) {
-  .filters-container {
-    grid-template-columns: 1fr; /* ✅ En móviles: una columna */
-    gap: 14px;
-  }
-}
-
-/* ===== Inputs ===== */
-.icon-wrapper {
-  position: relative;
-  width: 100%;
-}
-
-.icon-wrapper input {
-  width: 100%;
-  height: 22px; /* Altura uniforme */
-  padding: 14px 16px 14px 46px; /* Espacio para ícono */
-  border-radius: 12px;
-  border: 1px solid #d1d5db;
-  background-color: #f9fafb;
-  font-size: 15px;
-  color: #111827;
- 
-  font-weight: 500;
-  transition: all 0.3s ease;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
-  min-width: 180px; /* ✅ Forzamos ancho mínimo grande */
-}
-
-/* Hover */
-.icon-wrapper input:hover {
-  background-color: #ffffff;
-  border-color: #cbd5e1;
-}
-
-/* Focus */
-.icon-wrapper input:focus {
-  border-color: #2563eb;
-  background-color: #ffffff;
-  outline: none;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
-}
-
-/* Placeholder */
-.icon-wrapper input::placeholder {
-  color: #9ca3af;
-  font-size: 14px;
-}
-
-/* ===== Íconos ===== */
-.icon-wrapper svg {
-  position: absolute;
-  left: 50px;
-  top: 20%;
-  transform: translateY(-50%);
-  color: #6b7280;
-  font-size: 18px;
-  pointer-events: none;
-}
-
-/* ===== Botón Reset ===== */
-.reset-wrapper {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.reset-wrapper button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: linear-gradient(135deg, #2563eb, #1e40af);
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 600;
-  border: none;
-  border-radius: 12px;
-  padding: 14px 24px;
-  height: 42px;
-  min-width: 80px;
-  cursor: pointer;
-  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.3);
-  transition: all 0.3s ease-in-out;
-}
-
-/* Hover botón */
-.reset-wrapper button:hover {
-  background: linear-gradient(135deg, #1e40af, #1d4ed8);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.4);
-}
-
-/* Active */
-.reset-wrapper button:active {
-  transform: scale(0.98);
-}
-/* Permite que el contenido de la celda haga ellipsis correctamente */
-.cell-ellipsis {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Cuando haya textos sin espacios largos, que puedan partirse */
-.rdt_TableCell, .rdt_TableCell * {
-  word-break: break-word;
-}
-
-/* Acciones compactas y sin shrink */
-.dt-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+/* Acciones compactas */
+.dt-actions { display:flex; flex-wrap:wrap; gap:6px; }
 .dt-actions .btn {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  padding: 4px 8px;
-  font-size: 12px;
-  line-height: 1;
+  flex:0 0 auto; white-space:nowrap; padding:6px 10px; font-size:12px; line-height:1; border-radius:8px; border:none; cursor:pointer;
+  color:#fff; box-shadow:0 4px 10px rgba(0,0,0,.08);
+}
+.btn.-indigo  { background:#4f46e5; }
+.btn.-violet  { background:#7c3aed; }
+.btn.-emerald { background:#059669; }
+.btn.-sky     { background:#0284c7; }
+.btn.-amber   { background:#d97706; }
+.btn.-red     { background:#dc2626; }
+.dt-actions .btn:hover { filter:brightness(1.05); transform: translateY(-1px); }
+
+/* Expandible */
+.expanded-panel { background:#f8fafc; padding:16px; border-top:1px dashed #e5e7eb; }
+.expanded-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; }
+.expanded-panel h4 { margin:0 0 6px; font-size:.9rem; color:#0f172a; }
+.expanded-panel p { margin:0; color:#334155; white-space:pre-wrap; }
+@media (max-width: 900px){ .expanded-grid{ grid-template-columns:1fr; } }
+
+/* Freeze first column (opcional) */
+.freeze-first-col .rdt_TableRow > div:first-child,
+.freeze-first-col .rdt_TableHeadRow > div:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 3;                 /* arriba del resto */
+  box-shadow: 2px 0 0 #e5e7eb inset;
 }
 
-/* Tipografía mono para la fecha (no imprescindible) */
+/* Paginación */
+.rdt_Pagination { border-top:1px solid #e5e7eb; padding:14px; background:#fafafa; }
+
+/* Tipografía mono para las fechas */
 .dt-cell-mono {
   font-variant-numeric: tabular-nums;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
 }
-/* Texto multilínea legible en celdas */
-.cell-multiline {
-  display: block;
-  min-width: 0;
-  white-space: normal;      /* wrap */
-  word-break: break-word;
-  overflow-wrap: anywhere;  /* rompe cadenas largas si hace falta */
+/* Link anexado a Observación */
+.obs-cell {
+  display: grid;
+  gap: 6px;
 }
-
-/* Asegura que todas las celdas puedan encogerse en flex */
-.rdt_TableCell { min-width: 0; }
-
-/* Acciones permiten salto si no entra en ancho */
-.dt-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.dt-actions .btn { flex: 0 0 auto; white-space: nowrap; padding: 4px 8px; font-size: 12px; line-height: 1; }
-
-/* Fecha en monospace y sin wrap */
-.dt-cell-mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-.dt-nowrap { white-space: nowrap; }
-/* Multilínea legible y sin invasiones */
-.cell-multiline{
-  display:block;
-  min-width:0;
-  white-space:normal;
-  word-break:break-word;
-  overflow-wrap:anywhere;
+.obs-link {
+  display: inline-block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 4px 8px;
+  border-radius: 8px;
+  text-decoration: none;
+  width: fit-content;
+}
+.obs-link:hover {
+  color: #0b3fb5;
+  background: #e0efff;
 }
 
-/* Fecha compacta */
-.dt-nowrap{ white-space:nowrap; }
+/* Wrapper externo para asegurar barra inferior */
+.dt-outer-scroll {
+  width: 100%;
+  overflow-x: auto;     /* 👈 fuerza barra horizontal abajo */
+  overflow-y: hidden;
+}
 
-/* Evitar que columnas flex se estiren raro */
-.rdt_TableCell{ min-width:0; }
+/* Por si algún contenedor padre corta el scroll */
+.event-table-card {
+  overflow: visible;
+}
 
-/* Acciones compactas y que puedan bajar de línea si no entra */
-.dt-actions{ display:flex; flex-wrap:wrap; gap:6px; }
-.dt-actions .btn{ flex:0 0 auto; white-space:nowrap; padding:4px 8px; font-size:12px; line-height:1; }
+/* Cuando se fija primera columna, que no tape el scroll */
+.freeze-first-col .rdt_TableRow > div:first-child,
+.freeze-first-col .rdt_TableHeadRow > div:first-child {
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 3;
+  box-shadow: 2px 0 0 #e5e7eb inset;
+}
+
+/* Tweak: asegura ancho mínimo de la tabla para que aparezca el scroll si hay muchas columnas */
+.rdt_Table {
+  min-width: 980px;
+}
