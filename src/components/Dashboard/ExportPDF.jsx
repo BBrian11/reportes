@@ -35,6 +35,13 @@ const safeUrl = (u) => {
   try { const url = new URL(u); return (url.protocol === "http:" || url.protocol === "https:") ? url.href : null; }
   catch { return null; }
 };
+/* NUEVO: primera URL dentro de un texto (observación) */
+const firstUrlInText = (txt) => {
+  if (!txt) return "";
+  const m = String(txt).match(/https?:\/\/[^\s)]+/i);
+  return m ? (safeUrl(m[0]) || "") : "";
+};
+
 const getResolucion = (row) =>
   row?.["resolusion-evento"] ??
   row?.["resolucion-evento"] ??
@@ -104,14 +111,21 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
   const ubicaciones = Array.from(new Set(eventos.map(e => (getUbicacionDisplay(e) || "").trim()).filter(Boolean)));
   const listify = (arr, max = 4) => !arr.length ? "—" : (arr.length <= max ? arr.join(", ") : `${arr.slice(0,max).join(", ")} (+${arr.length-max} más)`);
 
-  const baseRow = (e) => ({
-    cliente: safe(e.cliente),
-    evento: safe(getEventoTitulo(e)),
-    ubicacion: safe(getUbicacionDisplay(e)),
-    fecha: safe(formatDateValue(e)),
-    observacion: safe(getObservacion(e)),
-    linkDrive: safeUrl(e.linkDrive) || "",
-  });
+  /* MODIFICADO: observación primero y link desde varias fuentes o desde la observación */
+  const baseRow = (e) => {
+    const observacion = safe(getObservacion(e));
+    const linkField = e.linkDrive || e.link || e["link-drive"] || e["link_drive"] || "";
+    const linkDrive = safeUrl(linkField) || firstUrlInText(observacion) || "";
+    return {
+      cliente: safe(e.cliente),
+      evento: safe(getEventoTitulo(e)),
+      ubicacion: safe(getUbicacionDisplay(e)),
+      fecha: safe(formatDateValue(e)),
+      observacion,
+      linkDrive
+    };
+  };
+
   const extraRow = (e) => ({
     razones: safe(getRazones(e)),
     resolucion: safe(getResolucion(e)),
@@ -233,7 +247,7 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
             </View>
           )}
 
-          {/* Header de la tabla (SOLO títulos, sin usar r) */}
+          {/* Header de la tabla */}
           <View style={styles.tableHeader}>
             <Text style={[styles.col, { flex: 0.7 }]}>Cliente</Text>
             <Text style={[styles.col, { flex: 1.1 }]}>Evento</Text>
@@ -257,10 +271,10 @@ const ReportDocument = ({ eventos, capturedImages, observaciones }) => {
               <Text style={[styles.col, { flex: 1.1 }]}>{r.ubicacion}</Text>
               <Text style={[styles.col, { flex: 0.9 }]}>{r.fecha}</Text>
 
-              {/* Observación + link (solo Edificios y si hay link) */}
+              {/* Observación + link (AHORA SIEMPRE muestra link si existe) */}
               <View style={[styles.col, { flex: 1.2 }]}>
                 <Text>{r.observacion}</Text>
-                {onlyEdificio && r.linkDrive ? (
+                {r.linkDrive ? (
                   <Link
                     src={r.linkDrive}
                     style={{ color: "#2563eb", textDecoration: "underline", marginTop: 2 }}
@@ -292,22 +306,28 @@ const generateExcel = (eventos) => {
   if (!eventos?.length) return Swal.fire("Aviso", "No hay datos para exportar.", "warning");
   const onlyEdificio = eventos.length > 0 && eventos.every(isEdificioRow);
 
-  const headerBase = ["Cliente","Evento","Ubicación","Fecha","Observación"];
-  const headerExtra = ["Razones","Resolución","Respuesta","Link (Drive)"];
+  /* MODIFICADO: el link va SIEMPRE en base, y extra ya no lo incluye */
+  const headerBase = ["Cliente","Evento","Ubicación","Fecha","Observación","Link (Drive)"];
+  const headerExtra = ["Razones","Resolución","Respuesta"];
   const header = onlyEdificio ? [...headerBase, ...headerExtra] : headerBase;
 
-  const rowBase = (e) => ([
-    e.cliente || "",
-    getEventoTitulo(e) || "",
-    getUbicacionDisplay(e) || "",
-    formatDateValue(e) || "",
-    getObservacion(e) || "",
-  ]);
+  const rowBase = (e) => {
+    const observacion = getObservacion(e) || "";
+    const linkField = e.linkDrive || e.link || e["link-drive"] || e["link_drive"] || "";
+    const linkDrive = safeUrl(linkField) || firstUrlInText(observacion) || "";
+    return [
+      e.cliente || "",
+      getEventoTitulo(e) || "",
+      getUbicacionDisplay(e) || "",
+      formatDateValue(e) || "",
+      observacion,
+      linkDrive,
+    ];
+  };
   const rowExtra = (e) => ([
     getRazones(e) || "",
     getResolucion(e) || "",
     getRespuestaResidente(e) || "",
-    safeUrl(e.linkDrive) || "",
   ]);
 
   const rows = eventos.map(e => onlyEdificio ? [...rowBase(e), ...rowExtra(e)] : rowBase(e));
@@ -322,8 +342,8 @@ const generateExcel = (eventos) => {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws["!cols"] = [
-    { wch: 18 }, { wch: 28 }, { wch: 26 }, { wch: 20 }, { wch: 40 },
-    ...(onlyEdificio ? [{ wch: 24 }, { wch: 24 }, { wch: 24 }, { wch: 40 }] : [])
+    { wch: 18 }, { wch: 28 }, { wch: 26 }, { wch: 20 }, { wch: 40 }, { wch: 40 },
+    ...(onlyEdificio ? [{ wch: 24 }, { wch: 24 }, { wch: 24 }] : [])
   ];
   XLSX.utils.book_append_sheet(wb, ws, "Reporte");
   XLSX.writeFile(wb, `REPORTE_MONITOREO_${Date.now()}.xlsx`);
