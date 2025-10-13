@@ -1,13 +1,13 @@
 // src/components/Dashboard/riesgoRondin/FormRiesgoRondin.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, serverTimestamp, writeBatch,
-  onSnapshot
+  collection, doc, getDoc, /* getDocs, */ setDoc, addDoc, updateDoc, serverTimestamp, writeBatch,
+  onSnapshot, query, orderBy,  where ,
 } from "firebase/firestore";
 import { db } from "../../../services/firebase";
 import { Box, Paper, TextField, Button, Container, Stack, GlobalStyles } from "@mui/material";
 import HeaderBar from "./HeaderBar";
-import ProgressRows from "./ProgressRows";
+// import ProgressRows from "./ProgressRows"; // si no lo usás, podés borrar este import
 import TopFields from "./TopFields";
 import TandaCard from "./TandaCard";
 import FooterActions from "./FooterActions";
@@ -15,9 +15,10 @@ import Swal, { toast, confirm } from "./swal";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import {
   OPERARIOS_DEFAULT, MAX_TANDAS,
-  RISK_SET, norm, nuevaTanda, shuffle, hh, mm, ss
+  norm, nuevaTanda, shuffle, hh, mm, ss
 } from "./helpers";
-
+import { useOperadorAuth } from "../../../context/OperadorAuthContext";
+import LogoutIcon from "@mui/icons-material/Logout"
 export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
   // ===== Config plan =====
   const DEFAULT_TOTAL_CLIENTES_PLAN = 2;
@@ -31,7 +32,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
   // -------- Estado superior
   const [turno, setTurno] = useState("Noche");
   const [operario, setOperario] = useState("");
-  const [clientesCat, setClientesCat] = useState([]);
+  const [clientesCat, setClientesCat] = useState([]); // [{id, nombre}]
   const [novedades, setNovedades] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const LS_RONDA_KEY = "rondin:activo";
@@ -78,6 +79,87 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     }
     return null;
   };
+// Sesión del operador logueado
+const { operador,logout  } = useOperadorAuth();
+// ===== Recordatorios de inicio/reanudación =====
+// --- DEV: tiempos cortos para probar ---
+// ===== Recordatorios de inicio/reanudación =====
+// PRODUCCIÓN
+const IDLE_FIRST_MIN    = 5; // 15 min desde login sin ronda
+const IDLE_REPEAT_MIN   = 5; // repetir cada 30 min
+const PAUSED_REMIND_MIN = 15; // recordatorio de pausa cada 10 min
+
+const IDLE_FIRST_MS    = IDLE_FIRST_MIN * 60 * 1000;
+const IDLE_REPEAT_MS   = IDLE_REPEAT_MIN * 60 * 1000;
+const PAUSED_REMIND_MS = PAUSED_REMIND_MIN * 60 * 1000;
+
+const LS_LOGIN_AT_KEY    = "rondin:loginAt";
+const LS_LAST_PROMPT_KEY = "rondin:lastPromptAt";
+
+const swalOpenRef = useRef(false); // evita múltiples Swal simultáneos
+const fmtElapsed = (ms) => {
+  if (ms < 60 * 1000) return "menos de 1 min";
+  const m = Math.ceil(ms / 60000);
+  return m === 1 ? "1 min" : `${m} min`;
+};
+
+// ---- Audio (beep) ----
+const audioCtxRef = useRef(null);
+const ensureAudioCtx = () => {
+  if (audioCtxRef.current) return audioCtxRef.current;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  audioCtxRef.current = new Ctx();
+  return audioCtxRef.current;
+};
+const playBeepOnce = (freq = 740, dur = 0.2) => {
+  try {
+    const ctx = ensureAudioCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(now); osc.stop(now + dur + 0.02);
+  } catch {}
+};
+useEffect(() => {
+  const nombreDetectado =
+    operador?.nombre?.trim() ||
+    operador?.usuario?.trim() ||
+    operador?.displayName?.trim() || "";
+
+  if (nombreDetectado && nombreDetectado !== operario) {
+    setOperario(nombreDetectado);
+    try {
+      localStorage.setItem(LS_OPERARIO_KEY, nombreDetectado);
+      localStorage.setItem(LS_LOGIN_AT_KEY, String(Date.now()));   // marca de login
+      localStorage.setItem(LS_LAST_PROMPT_KEY, "0");               // listo para 1er aviso
+    } catch {}
+  }
+}, [operador]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+
+useEffect(() => {
+  const resumeAudioIfNeeded = () => {
+    try {
+      const ctx = audioCtxRef.current;
+      if (ctx && ctx.state === "suspended") ctx.resume();
+    } catch {}
+  };
+  window.addEventListener("click", resumeAudioIfNeeded, { once: true, passive: true });
+  window.addEventListener("keydown", resumeAudioIfNeeded, { once: true });
+  return () => {
+    window.removeEventListener("click", resumeAudioIfNeeded);
+    window.removeEventListener("keydown", resumeAudioIfNeeded);
+  };
+}, []);
 
   // —— Popup de cliente completado (solo si hubo interacción)
   useEffect(() => {
@@ -165,21 +247,35 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
   );
   const overallProgress = camerasProgress;
 
-  // Cargar catálogo (whitelist riesgo)
+  // === Cargar catálogo de clientes desde Firestore (dinámico, ordenado por nombre)
   useEffect(() => {
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, "clientes"));
-        const lista = snap.docs
-          .map((d) => ({ id: d.id, nombre: (d.data()?.nombre || "").toString() }))
-          .filter((c) => RISK_SET.has(norm(c.nombre)));
+    const colRef = collection(db, "clientes");
+    const qRef = query(colRef, where("rondin", "==", true)); // 👈 SIN orderBy
+  
+    const unsub = onSnapshot(
+      qRef,
+      (snap) => {
+        const lista = [];
+        snap.forEach((d) => {
+          const data = d.data() || {};
+          const nombre = (data.nombre || data.razonSocial || data.displayName || "").toString().trim();
+          if (!nombre) return;
+          lista.push({ id: d.id, nombre });
+        });
+  
+        // ordenamos en cliente (evita índice)
+        lista.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
         setClientesCat(lista);
-      } catch (e) {
-        console.error("Error cargando clientes riesgo:", e);
-        setClientesCat([]);
+      },
+      (err) => {
+        console.error("Firestore error:", err);
+        setClientesCat([]); // para que no quede colgado
       }
-    })();
+    );
+  
+    return () => { try { unsub(); } catch {} };
   }, []);
+  
 
   // Suscripción a “rondin-index/{cliente}/camaras/*” solo para clientes seleccionados
   useEffect(() => {
@@ -250,7 +346,37 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       setElapsed(now - startedAt.getTime() - pausedMs);
     }, 500);
   };
-
+  const handleLogout = async () => {
+    const { isConfirmed } = await Swal.fire({
+      title: "Cerrar sesión",
+      text: "¿Querés salir y volver al login?",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Sí, cerrar",
+      cancelButtonText: "Cancelar",
+      reverseButtons: true,
+    });
+    if (!isConfirmed) return;
+  
+    try {
+      // Limpia estado local y Firestore listeners
+      softReset();
+      // Limpia cache local
+      try {
+        localStorage.removeItem(LS_RONDA_KEY);
+        localStorage.removeItem(LS_OPERARIO_KEY);
+      } catch {}
+  
+      // Cerrar sesión de contexto (esto debe gatillar la vista de login)
+      await logout?.();
+  
+      toast.fire({ icon: "success", title: "Sesión cerrada" });
+    } catch (e) {
+      console.error(e);
+      Swal.fire("Error", "No se pudo cerrar la sesión.", "error");
+    }
+  };
+  
   // Iniciar
   const handleIniciar = async () => {
     if (!operario) return Swal.fire("Falta operario", "Seleccioná un operario.", "warning");
@@ -276,13 +402,13 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
         slotsMap[idx % 64].push(t.id);
       });
 
-      const formId = await ensureTemplate();
+      await ensureTemplate();
       const ahora = new Date();
 
       let docId = rondaId;
       if (!docId) {
         const ref = await addDoc(collection(db, "respuestas-tareas"), {
-          formId,
+          formId: "rondin-alto-riesgo",
           nombreFormulario: "Rondín Alto Riesgo",
           operador: operario,
           estado: "En Proceso",
@@ -318,6 +444,100 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       Swal.fire("Error", "No se pudo iniciar la ronda.", "error");
     }
   };
+  // ----- Recordatorio "iniciar ronda" — chequeo cada 15 min -----
+// ----- Recordatorio "iniciar ronda" — chequeo cada 15 min -----
+// ----- Recordatorio "iniciar ronda" — chequeo cada 60s -----
+useEffect(() => {
+  if (!operario) return;
+
+  const check = () => {
+    if (document.hidden) return;
+    if (swalOpenRef.current) return;
+    if (rondaId || startTime) return;
+
+    const now = Date.now();
+    const loginAt = Number(localStorage.getItem(LS_LOGIN_AT_KEY) || now);
+    const lastPromptAt = Number(localStorage.getItem(LS_LAST_PROMPT_KEY) || 0);
+
+    const sinceLogin = now - loginAt;
+    const sincePrompt = now - lastPromptAt;
+
+    const window1 = sinceLogin >= IDLE_FIRST_MS && lastPromptAt === 0;            // primer aviso
+    const windowN = sinceLogin >= IDLE_FIRST_MS && sincePrompt >= IDLE_REPEAT_MS; // siguientes
+
+    if (!(window1 || windowN)) return;
+
+    swalOpenRef.current = true;
+    playBeepOnce(880, 0.25);
+    Swal.fire({
+      title: "¿Iniciamos la ronda?",
+      html: `<div style="text-align:left">
+               <p>Pasaron <b>${fmtElapsed(sinceLogin)}</b> desde tu ingreso y no hay una ronda activa.</p>
+               <p>Podés generar la tanda de clientes y arrancar el control.</p>
+             </div>`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Iniciar ahora",
+      cancelButtonText: "Más tarde",
+      reverseButtons: true,
+    }).then(({ isConfirmed }) => {
+      try { localStorage.setItem(LS_LAST_PROMPT_KEY, String(Date.now())); } catch {}
+      swalOpenRef.current = false;
+      if (isConfirmed) handleIniciar();
+    });
+  };
+
+  // correr ya y luego cada 60s
+  check();
+  const id = setInterval(check, 60 * 1000);
+  return () => clearInterval(id);
+}, [operario, rondaId, startTime]);
+
+
+// ----- Recordatorio "reanudar" — chequeo cada 60s -----
+useEffect(() => {
+  if (!startTime) return;
+  if (!paused) return;
+
+  const checkPause = () => {
+    if (!startTime) return;
+    if (!paused) return;
+    if (document.hidden) return;
+    if (swalOpenRef.current) return;
+
+    const last = pausasRef.current[pausasRef.current.length - 1];
+    if (!last || last.to !== null) return;
+
+    const sincePause = Date.now() - last.from;
+    if (sincePause < PAUSED_REMIND_MS) return;
+
+    swalOpenRef.current = true;
+    playBeepOnce(660, 0.25);
+    Swal.fire({
+      title: "Ronda en pausa",
+      html: `<div style="text-align:left">
+               <p>La ronda está pausada hace <b>${Math.round(sincePause/60000)} min</b>.</p>
+               <p>¿Querés reanudar?</p>
+             </div>`,
+      icon: "info",
+      showCancelButton: true,
+      confirmButtonText: "Reanudar",
+      cancelButtonText: "Seguir en pausa",
+      reverseButtons: true,
+    }).then(({ isConfirmed }) => {
+      swalOpenRef.current = false;
+      if (isConfirmed) handleReanudar();
+    });
+  };
+
+  // correr ya y luego cada 60s
+  checkPause();
+  const id = setInterval(checkPause, 60 * 1000);
+  return () => clearInterval(id);
+}, [startTime, paused]);
+
+
+
 
   const handlePausar = async () => {
     if (paused || !startTime) return;
@@ -388,7 +608,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     toast.fire({ icon: "info", title: "Listo: ronda cerrada y reseteada" });
   };
 
-  // ——— Checklist: solo avisos por campos NO respondidos; NO pedimos “qué cámaras fallan”
+  // ——— Checklist: solo avisos por campos NO respondidos
   const checklistIssues = () => {
     const issues = [];
     tandas.forEach((t) => {
@@ -411,9 +631,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
   const handleFinalizar = async () => {
     if (!rondaId || !startTime) return Swal.fire("Sin ronda activa", "Primero iniciá la ronda.", "info");
 
-    // ❌ SIN mínimo de cámaras global
-
-    // Validamos solo checklist respondido (no exigimos “qué cámaras fallan”)
+    // Validamos solo checklist respondido
     const issues = checklistIssues();
     if (issues.length) {
       return Swal.fire({
@@ -536,22 +754,30 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
   const removeCamRow = (tandaId, camId) =>
     setTandas((prev) => prev.map((t) => (t.id === tandaId ? { ...t, camaras: t.camaras.filter((c) => c.id !== camId) } : t)));
 
-  const setCamField = (tandaId, camId, key, value) => {
-    userInteractedRef.current = true;
-    setTandas((prev) =>
-      prev.map((t) =>
-        t.id === tandaId
-          ? {
-              ...t,
-              camaras: t.camaras.map((c) =>
-                c.id === camId ? { ...c, [key]: value, touched: key === "estado" ? true : c.touched } : c
-              ),
-            }
-          : t
-      )
-    );
-  };
-
+    const setCamField = (tandaId, camId, key, value) => {
+      userInteractedRef.current = true;
+    
+      const normVal =
+        key === "canal"
+          ? (value == null ? 1 : Number(value?.value ?? value)) // ← fuerza número (sirve para Select o Autocomplete)
+          : value;
+    
+      setTandas((prev) =>
+        prev.map((t) =>
+          t.id === tandaId
+            ? {
+                ...t,
+                camaras: t.camaras.map((c) =>
+                  c.id === camId
+                    ? { ...c, [key]: normVal, touched: key === "estado" ? true : c.touched }
+                    : c
+                ),
+              }
+            : t
+        )
+      );
+    };
+    
   const onCamState = async (tandaId, camId, next) => {
     userInteractedRef.current = true;
 
@@ -669,7 +895,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       const d = snap.data();
 
       setRondaId(savedId);
-      setOperario(d.operador || "");
+      setOperario(d.operario || "");
       setTurno(d?.respuestas?.turno || "Noche");
       setNovedades(d?.respuestas?.novedades || "");
       setObservaciones(d?.respuestas?.observaciones || "");
@@ -811,29 +1037,57 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       <Container maxWidth="lg" className="rondin-force" sx={{ py: 2, display: "grid", gap: 2 }}>
         {/* Header sticky */}
         <Box sx={{ position: "sticky", top: 8, zIndex: 12 }}>
-          <Paper elevation={1} sx={{ px: 1.5, py: 1, borderRadius: 2, backdropFilter: "saturate(1.2) blur(6px)" }}>
-            <HeaderBar
-              camarasCompletadas={camarasCompletadas}
-              totalCamaras={totalCamaras}
-              elapsed={displayElapsed}
-            />
-          </Paper>
+        
+          <Paper
+    elevation={1}
+    sx={{
+      px: 1.5,
+      py: 1,
+      borderRadius: 2,
+     backdropFilter: "saturate(1.2) blur(6px)",
+    }}
+  >
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <HeaderBar
+          camarasCompletadas={camarasCompletadas}
+         totalCamaras={totalCamaras}
+          elapsed={displayElapsed}
+        />
+      </Box>
+      <Button
+        onClick={handleLogout}
+        size="small"
+        variant="outlined"
+       startIcon={<LogoutIcon />}
+        sx={{
+        ml: 1,
+          borderRadius: 2,
+         textTransform: "none",
+         fontWeight: 700,
+          whiteSpace: "nowrap",
+        }}
+        title={`Cerrar sesión${operario ? ` — ${operario}` : ""}`}
+      >
+        Cerrar sesión
+     </Button>
+   </Box>
+ </Paper>
         </Box>
 
         {/* Progreso + Campos superiores */}
         <Paper sx={{ p: 2, display: "grid", gap: 1.25 }}>
-         
-          <TopFields
-            turno={turno}
-            setTurno={setTurno}
-            operario={operario}
-            setOperario={setOperario}
-            operarios={OPERARIOS_DEFAULT}
-            layout="wide"
-            size="medium"
-            required={{ turno: true, operario: true }}
-            helperText={{ turno: "Seleccioná el turno de la ronda.", operario: "Elegí el operador a cargo." }}
-          />
+        <TopFields
+  turno={turno}
+  setTurno={setTurno}
+  operario={operario}                 // 👈 FALTABA ESTA PROP
+  setOperario={setOperario}
+  operarios={operario ? [operario] : operarios}
+  layout="wide"
+  size="medium"
+  required={{ turno: true, operario: true }}
+  helperText={{ turno: "Seleccioná el turno de la ronda.", operario: "Elegí el operador a cargo." }}
+/>
 
           <TextField
             label="Novedades generales"
@@ -963,31 +1217,32 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
           >
             Ver pendientes
           </Button>
+
           <Button
-  size="small"
-  variant="outlined"
-  sx={{
-    mt: 1,
-    px: 2.5,
-    py: 0.75,
-    borderRadius: 2,
-    fontSize: 13,
-    fontWeight: "bold",
-    textTransform: "none",
-    mr: 1,
-  }}
-  startIcon={<ArrowBackIosNewIcon />} // ← si importaste el icono
-  disabled={activeTandaIdx === 0}
-  onClick={() => {
-    if (activeTandaIdx === 0) return;
-    const prev = Math.max(0, activeTandaIdx - 1);
-    setActiveTandaIdx(prev);
-    const prevEl = document.getElementById(tandas[prev]?.id);
-    if (prevEl) prevEl.scrollIntoView({ behavior: "smooth", block: "center" });
-  }}
->
-  Volver al cliente anterior
-</Button>
+            size="small"
+            variant="outlined"
+            sx={{
+              mt: 1,
+              px: 2.5,
+              py: 0.75,
+              borderRadius: 2,
+              fontSize: 13,
+              fontWeight: "bold",
+              textTransform: "none",
+              mr: 1,
+            }}
+            startIcon={<ArrowBackIosNewIcon />}
+            disabled={activeTandaIdx === 0}
+            onClick={() => {
+              if (activeTandaIdx === 0) return;
+              const prev = Math.max(0, activeTandaIdx - 1);
+              setActiveTandaIdx(prev);
+              const prevEl = document.getElementById(tandas[prev]?.id);
+              if (prevEl) prevEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          >
+            Volver al cliente anterior
+          </Button>
 
           <Button
             size="small"

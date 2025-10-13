@@ -32,6 +32,7 @@ export default function Dashboard() {
     fechaInicio: "",
     fechaFin: "",
     q: "",
+    eventosSeleccionados: [], // 👈 NUEVO: checks múltiples
   });
   const [vista, setVista] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -217,12 +218,18 @@ export default function Dashboard() {
     const inicio = filtros.fechaInicio ? new Date(`${filtros.fechaInicio}T00:00:00`) : null;
     const fin    = filtros.fechaFin    ? new Date(`${filtros.fechaFin}T23:59:59`)   : null;
 
+    // 👇 Nuevo: si hay checks marcados, el evento debe estar en esa lista
+    const pasaEventos =
+      !filtros.eventosSeleccionados?.length ||
+      filtros.eventosSeleccionados.includes(e.evento);
+
     return (
       (!filtros.cliente || filtros.cliente === "Todos" || e.cliente === filtros.cliente) &&
       (!filtros.grupo || e.grupo === filtros.grupo) &&
       (!filtros.ubicacion || e.ubicacion === filtros.ubicacion) &&
       (!inicio || (base && base >= inicio)) &&
       (!fin    || (base && base <= fin)) &&
+      pasaEventos &&
       matchesQuery(e, filtros.q)
     );
   });
@@ -259,13 +266,14 @@ export default function Dashboard() {
             cliente: cliente === "Todos" ? "" : cliente,
             ubicacion: "",
             grupo: "",
+            eventosSeleccionados: [], // reset de checks al cambiar cliente
           })
         }
         onSelectUbicacion={(cliente, ubicacion) =>
-          setFiltros({ ...filtros, cliente, ubicacion, grupo: "" })
+          setFiltros({ ...filtros, cliente, ubicacion, grupo: "", eventosSeleccionados: [] })
         }
         onSelectGrupo={(cliente, grupo) =>
-          setFiltros({ ...filtros, cliente, grupo, ubicacion: "" })
+          setFiltros({ ...filtros, cliente, grupo, ubicacion: "", eventosSeleccionados: [] })
         }
       />
 
@@ -298,11 +306,9 @@ export default function Dashboard() {
 
               <Filters filtros={filtros} setFiltros={setFiltros} eventos={eventos} />
 
-              {/* 🔸 Barra de impresión/descarga SIEMPRE visible con los eventos filtrados */}
+              {/* Barra exportación */}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, margin: "8px 0 12px" }}>
                 <ExportPDF eventos={eventosFiltrados} />
-               
-       
               </div>
 
               {!filtros.cliente ? (
@@ -365,7 +371,6 @@ export default function Dashboard() {
                   </div>
 
                   <div className="table-section">
-                    {/* ExportPDF ya está arriba y recibe lo filtrado */}
                     <EventsTable eventos={eventosFiltrados} filtros={filtros} />
                   </div>
                 </>

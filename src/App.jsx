@@ -8,11 +8,10 @@ import FormBuilder from "./components/Dashboard/FormBuilder.jsx";
 import DynamicForm from "./components/Dashboard/DynamicForm.jsx";
 import FormRondin from "./components/Dashboard/FormRondin.jsx";
 import FormRiesgoRondin from "./components/Dashboard/riesgoRondin/FormRiesgoRondin.jsx";
+import LiveOpsDashboard from "./components/Dashboard/LiveOpsDashboard.jsx";
 
-// ⬇️ nuevo: panel de monitoreo para operadores
-import LiveOpsDashboard from "./components/Dashboard/LiveOpsDashboard.jsx"; 
-// si lo guardaste en otra carpeta, ajustá el path
-// (por ejemplo: "./components/LiveOpsDashboard.jsx")
+// ✅ IMPORTAR PROTECTOR DE RUTA
+import RequireOperador from "./components/auth/RequireOperador.jsx";
 
 export default function App() {
   return (
@@ -25,9 +24,17 @@ export default function App() {
           <Route path="/form-builder" element={<FormBuilder />} />
           <Route path="/formularios/:id" element={<DynamicForm />} />
           <Route path="/rondin" element={<FormRondin />} />
-          <Route path="/rondin2" element={<FormRiesgoRondin />} />
-          
-          {/* ⬇️ nueva ruta para la vista de monitoreo */}
+
+          {/* ✅ Protegida por login de operador */}
+          <Route
+            path="/rondin2"
+            element={
+              <RequireOperador>
+                <FormRiesgoRondin />
+              </RequireOperador>
+            }
+          />
+
           <Route path="/monitor" element={<LiveOpsDashboard />} />
         </Routes>
       </Router>
