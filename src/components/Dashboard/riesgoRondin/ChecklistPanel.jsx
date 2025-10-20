@@ -222,7 +222,7 @@ export default function ChecklistPanel({ t, setChecklistVal, resetFallan }) {
   >
     {/* GRABACIONES */}
     <Typography variant="subtitle2" gutterBottom>GRABACIONES</Typography>
-    <FieldLabel>¿FUNCIONAN TODAS LAS CÁMARAS?</FieldLabel>
+    <FieldLabel>¿El equipo se encuentra grabando?</FieldLabel>
     <RadioGroup
       row
       value={cl.grabacionesOK == null ? "" : String(cl.grabacionesOK)}
