@@ -61,10 +61,10 @@ export default function Header({
           {/* IZQUIERDA */}
           <div className="header-left">
             <button className="brand" type="button" aria-label="Menú de usuario">
-              <span className="brand-mark">G3</span>
+              <span className="brand-mark">G3T</span>
               <span className="brand-text">
-                <span className="brand-title">Grupo 3T</span>
-                <span className="brand-sub">Centro de monitoreo</span>
+                <span className="brand-title">Centro de monitoreo</span>
+               
               </span>
             </button>
             <AdminUserMenu />
@@ -73,7 +73,7 @@ export default function Header({
           {/* CENTRO */}
           <div className="header-center" role="group" aria-label="Título">
             <h1>Monitoreo en tiempo real</h1>
-            <p>Panel de clientes, eventos y alertas</p>
+           
           </div>
 
           {/* DERECHA (acciones) */}

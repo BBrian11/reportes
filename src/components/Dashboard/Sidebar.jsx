@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   FaBuilding,
   FaTools,
@@ -22,11 +22,13 @@ export default function Sidebar({
   onChangeFechaInicio,
   onChangeFechaFin,
 }) {
+  // ======== Fuente de datos segura ========
   const lista = Array.isArray(eventos) ? eventos : [];
 
-  // -------- Estado controlado o interno (control fallback) ----------
+  // ======== Estado controlado o interno ========
   const [internalFiltros, setInternalFiltros] = useState({
     cliente: "",
+    grupo: "",            // ⬅️ nuevo
     ubicacion: "",
     fechaInicio: "",
     fechaFin: "",
@@ -41,16 +43,16 @@ export default function Sidebar({
   const F = filtros ?? internalFiltros;
   const setF = setFiltros ?? setInternalFiltros;
 
-  // -------- UI local ----------
-  const [expanded, setExpanded] = useState(null); // cliente expandido en árbol
-  const [openSection, setOpenSection] = useState("clientes"); // abre primero Clientes
-  const [searchTermUbic, setSearchTermUbic] = useState("");   // buscador de ubicaciones
-  const [searchTermEvento, setSearchTermEvento] = useState(""); // buscador de eventos
+  // ======== UI local ========
+  const [expanded, setExpanded] = useState(null);
+  const [openSection, setOpenSection] = useState("clientes");
+  const [searchTermUbic, setSearchTermUbic] = useState("");
+  const [searchTermEvento, setSearchTermEvento] = useState("");
 
   const toggleSection = (section) =>
     setOpenSection(openSection === section ? null : section);
 
-  // -------- Estructura Cliente → Grupo → Set(Ubicaciones) ----------
+  // ======== Estructura Cliente → Grupo → Set(Ubicaciones) ========
   const estructura = useMemo(() => {
     const map = {};
     for (const e of lista) {
@@ -64,67 +66,197 @@ export default function Sidebar({
     return map;
   }, [lista]);
 
-  // -------- Cálculos de eventos según cliente/ubicación seleccionados ----------
+  // ======== Filtros activos ========
   const effectiveCliente = F?.cliente || "";
+  const effectiveGrupo = F?.grupo || "";
   const effectiveUbicacion = F?.ubicacion || "";
 
-  const eventosDelCliente = useMemo(() => {
-    let base = lista;
-    if (effectiveCliente) base = base.filter((e) => e?.cliente === effectiveCliente);
-    if (effectiveUbicacion) base = base.filter((e) => e?.ubicacion === effectiveUbicacion);
-    return base;
-  }, [lista, effectiveCliente, effectiveUbicacion]);
-
-  const eventosUnicos = useMemo(
-    () => [...new Set(eventosDelCliente.map((e) => e?.evento).filter(Boolean))].sort(),
-    [eventosDelCliente]
+  // (Opcional) Filtrado por fechas — ajustá e.fecha si tu campo se llama distinto
+  const dentroDeRango = useCallback(
+    (e) => {
+      const fi = F?.fechaInicio ? new Date(F.fechaInicio) : null;
+      const ff = F?.fechaFin ? new Date(F.fechaFin) : null;
+      if (!e?.fecha) return true;
+      const d = new Date(e.fecha);
+      if (fi && d < fi) return false;
+      if (ff && d > ff) return false;
+      return true;
+    },
+    [F?.fechaInicio, F?.fechaFin]
   );
 
-  // selectedEvents seguros (ignora lo que no exista en el cliente actual)
+  // === helper: lista de ubicaciones del grupo seleccionado ===
+  const ubicacionesDelGrupo = useMemo(() => {
+    if (!effectiveCliente || !effectiveGrupo) return null;
+    const set = estructura[effectiveCliente]?.[effectiveGrupo];
+    return set ? new Set([...set]) : null;
+  }, [estructura, effectiveCliente, effectiveGrupo]);
+
+  // Eventos disponibles para el contexto (cliente + (ubicación | grupo) + fechas)
+  const eventosDisponibles = useMemo(() => {
+    let base = lista.filter(dentroDeRango);
+    if (effectiveCliente) base = base.filter((e) => e?.cliente === effectiveCliente);
+
+    if (effectiveUbicacion) {
+      base = base.filter((e) => e?.ubicacion === effectiveUbicacion);
+    } else if (ubicacionesDelGrupo && ubicacionesDelGrupo.size) {
+      base = base.filter((e) => ubicacionesDelGrupo.has(e?.ubicacion));
+    }
+
+    return base;
+  }, [lista, dentroDeRango, effectiveCliente, effectiveUbicacion, ubicacionesDelGrupo]);
+
+  const eventosUnicos = useMemo(
+    () => [...new Set(eventosDisponibles.map((e) => e?.evento).filter(Boolean))].sort(),
+    [eventosDisponibles]
+  );
+
+  // Selección segura: intersección con los eventos disponibles
   const selectedEventosSafe = useMemo(() => {
     const sel = new Set(F?.eventosSeleccionados || []);
     return eventosUnicos.filter((ev) => sel.has(ev));
   }, [F?.eventosSeleccionados, eventosUnicos]);
-// --- Helpers para limpiar filtros individuales / todos ---
-const clearCliente = () => setF(prev => ({ ...prev, cliente: "", ubicacion: "" }));
-const clearUbicacion = () => setF(prev => ({ ...prev, ubicacion: "" }));
-const clearFechaInicio = () => setF(prev => ({ ...prev, fechaInicio: "" }));
-const clearFechaFin = () => setF(prev => ({ ...prev, fechaFin: "" }));
-const clearEvento = (ev) => setF(prev => ({
-  ...prev,
-  eventosSeleccionados: (prev.eventosSeleccionados || []).filter(e => e !== ev)
-}));
-const clearAll = () => setF(prev => ({
-  ...prev,
-  cliente: "", ubicacion: "", fechaInicio: "", fechaFin: "", eventosSeleccionados: []
-}));
 
-  // -------- Handlers ----------
+  // ======== SANITIZADOR GLOBAL ========
+  useEffect(() => {
+    const current = new Set(F?.eventosSeleccionados || []);
+    const saneados = eventosUnicos.filter((ev) => current.has(ev));
+    if (saneados.length !== (F?.eventosSeleccionados?.length || 0)) {
+      setF((prev) => ({ ...prev, eventosSeleccionados: saneados }));
+    }
+  }, [eventosUnicos, F?.eventosSeleccionados, setF]);
+
+  // ======== Helpers clear chips ========
+  const clearCliente = () =>
+    setF((prev) => ({
+      ...prev,
+      cliente: "",
+      grupo: "",
+      ubicacion: "",
+      eventosSeleccionados: [],
+    }));
+  const clearGrupo = () =>
+    setF((prev) => ({
+      ...prev,
+      grupo: "",
+      // mantenemos cliente; limpiamos selección de eventos por seguridad
+      eventosSeleccionados: [],
+    }));
+  const clearUbicacion = () =>
+    setF((prev) => ({
+      ...prev,
+      ubicacion: "",
+      // si había grupo activo, se sigue aplicando; si no, queda solo por cliente
+      eventosSeleccionados: [],
+    }));
+  const clearFechaInicio = () => setF((prev) => ({ ...prev, fechaInicio: "" }));
+  const clearFechaFin = () => setF((prev) => ({ ...prev, fechaFin: "" }));
+  const clearEvento = (ev) =>
+    setF((prev) => ({
+      ...prev,
+      eventosSeleccionados: (prev.eventosSeleccionados || []).filter((e) => e !== ev),
+    }));
+  const clearAll = () =>
+    setF((prev) => ({
+      ...prev,
+      cliente: "",
+      grupo: "",
+      ubicacion: "",
+      fechaInicio: "",
+      fechaFin: "",
+      eventosSeleccionados: [],
+    }));
+
+  // ======== Handlers con saneo inmediato ========
   const selectCliente = (clienteUI, { close = false } = {}) => {
     const value = clienteUI === "Todos" ? "" : clienteUI;
+
+    const nextEventosUnicos = [
+      ...new Set(
+        lista
+          .filter(dentroDeRango)
+          .filter((e) => (value ? e?.cliente === value : true))
+          .map((e) => e?.evento)
+          .filter(Boolean)
+      ),
+    ].sort();
+
+    const currentSel = new Set(F?.eventosSeleccionados || []);
+    const nextSelected = nextEventosUnicos.filter((ev) => currentSel.has(ev));
+
     setF((prev) => ({
       ...prev,
       cliente: value,
-      ubicacion: "",
-      // Mantenemos eventosSeleccionados: la UI ignora los que no apliquen
-      // eventosSeleccionados: prev.eventosSeleccionados,
+      grupo: "",        // ⬅️ resetea grupo
+      ubicacion: "",    // ⬅️ resetea ubicación
+      eventosSeleccionados: nextSelected,
     }));
+
     onSelectCliente?.(value);
     setExpanded(value || null);
     setSearchTermUbic("");
-    // Al elegir cliente, abrimos automáticamente la sección de filtros (eventos)
     setOpenSection("filters");
     if (close) onClose?.();
   };
 
-  const selectUbicacion = (cliente, ubic) => {
+  const selectGrupo = (cliente, grupo) => {
+    const clienteValue = cliente === "Todos" ? "" : cliente;
+
+    // Eventos válidos para cliente + grupo
+    const ubicSet = estructura[clienteValue]?.[grupo] || new Set();
+    const nextEventosUnicos = [
+      ...new Set(
+        lista
+          .filter(dentroDeRango)
+          .filter((e) => (clienteValue ? e?.cliente === clienteValue : true))
+          .filter((e) => (ubicSet.size ? ubicSet.has(e?.ubicacion) : true))
+          .map((e) => e?.evento)
+          .filter(Boolean)
+      ),
+    ].sort();
+
+    const currentSel = new Set(F?.eventosSeleccionados || []);
+    const nextSelected = nextEventosUnicos.filter((ev) => currentSel.has(ev));
+
     setF((prev) => ({
       ...prev,
-      cliente: cliente === "Todos" ? "" : cliente,
-      ubicacion: ubic || "",
-      // eventosSeleccionados: prev.eventosSeleccionados,
+      cliente: clienteValue,
+      grupo: grupo,     // ⬅️ fija grupo
+      ubicacion: "",    // ⬅️ borra ubicación específica
+      eventosSeleccionados: nextSelected,
     }));
-    onSelectUbicacion?.(cliente, ubic);
+
+    onSelectGrupo?.(clienteValue, grupo);
+    setOpenSection("filters");
+  };
+
+  const selectUbicacion = (cliente, ubic) => {
+    const clienteValue = cliente === "Todos" ? "" : cliente;
+
+    // Eventos válidos para cliente + ubicación (overrides grupo)
+    const nextEventosUnicos = [
+      ...new Set(
+        lista
+          .filter(dentroDeRango)
+          .filter((e) => (clienteValue ? e?.cliente === clienteValue : true))
+          .filter((e) => (ubic ? e?.ubicacion === ubic : true))
+          .map((e) => e?.evento)
+          .filter(Boolean)
+      ),
+    ].sort();
+
+    const currentSel = new Set(F?.eventosSeleccionados || []);
+    const nextSelected = nextEventosUnicos.filter((ev) => currentSel.has(ev));
+
+    setF((prev) => ({
+      ...prev,
+      cliente: clienteValue,
+      grupo: "",        // ⬅️ si eligen una ubicación puntual, desactivo grupo
+      ubicacion: ubic || "",
+      eventosSeleccionados: nextSelected,
+    }));
+
+    onSelectUbicacion?.(clienteValue, ubic);
   };
 
   const toggleExpand = (cliente) => {
@@ -136,8 +268,8 @@ const clearAll = () => setF(prev => ({
 
   const toggleEvento = (evName) => {
     if (!evName) return;
-    // Seguridad: solo permitimos togglear eventos que existan en el cliente/ubicación actual
-    if (!eventosUnicos.includes(evName)) return;
+    if (!eventosUnicos.includes(evName)) return; // seguridad
+
     setF((prev) => {
       const current = new Set(prev.eventosSeleccionados || []);
       current.has(evName) ? current.delete(evName) : current.add(evName);
@@ -161,13 +293,10 @@ const clearAll = () => setF(prev => ({
     Todos: <FaTh />,
   };
 
-  // -------- Render ----------
+  // ======== Render ========
   return (
     <>
-      <div
-        className={`sidebar-overlay ${isOpen ? "active" : ""}`}
-        onClick={onClose}
-      />
+      <div className={`sidebar-overlay ${isOpen ? "active" : ""}`} onClick={onClose} />
       <aside className={`sidebar ${isOpen ? "active" : ""}`}>
         {/* Header */}
         <div className="sidebar-header">
@@ -175,59 +304,60 @@ const clearAll = () => setF(prev => ({
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
 
-        {/* =========== 1) CLIENTES Y UBICACIONES (primero) =========== */}
+        {/* =========== 1) CLIENTES Y UBICACIONES =========== */}
         <div className="section">
           <button className="section-header" onClick={() => toggleSection("clientes")}>
-            {/* ===== Resumen de filtros activos ===== */}
-<div className="filters-summary">
-  <div className="fs-row">
-    {effectiveCliente && (
-      <button className="fs-chip" onClick={clearCliente} title="Quitar cliente">
-        Cliente: <strong>{effectiveCliente}</strong> <span className="fs-x">✕</span>
-      </button>
-    )}
-
-    {effectiveUbicacion && (
-      <button className="fs-chip" onClick={clearUbicacion} title="Quitar ubicación">
-        Ubicación: <strong>{effectiveUbicacion}</strong> <span className="fs-x">✕</span>
-      </button>
-    )}
-
-    {F?.fechaInicio && (
-      <button className="fs-chip" onClick={clearFechaInicio} title="Quitar fecha desde">
-        Desde: <strong>{F.fechaInicio}</strong> <span className="fs-x">✕</span>
-      </button>
-    )}
-
-    {F?.fechaFin && (
-      <button className="fs-chip" onClick={clearFechaFin} title="Quitar fecha hasta">
-        Hasta: <strong>{F.fechaFin}</strong> <span className="fs-x">✕</span>
-      </button>
-    )}
-
-    {selectedEventosSafe.slice(0, 4).map(ev => (
-      <button key={ev} className="fs-chip" onClick={() => clearEvento(ev)} title="Quitar evento">
-        {ev} <span className="fs-x">✕</span>
-      </button>
-    ))}
-
-    {selectedEventosSafe.length > 4 && (
-      <span className="fs-more">+{selectedEventosSafe.length - 4} más</span>
-    )}
-
-    {(effectiveCliente || effectiveUbicacion || F?.fechaInicio || F?.fechaFin || selectedEventosSafe.length) ? (
-      <button className="fs-clear" onClick={clearAll} title="Limpiar todos los filtros">Limpiar todo</button>
-    ) : (
-      <span className="fs-hint">Sin filtros activos</span>
-    )}
-  </div>
-</div>
-
             <span>Clientes y ubicaciones</span>
             {openSection === "clientes" ? <FaChevronUp /> : <FaChevronDown />}
           </button>
 
           <div className={`section-content ${openSection === "clientes" ? "open" : ""}`}>
+            {/* Resumen de filtros activos */}
+            <div className="filters-summary">
+              <div className="fs-row">
+                {effectiveCliente && (
+                  <button className="fs-chip" onClick={clearCliente} title="Quitar cliente">
+                    Cliente: <strong>{effectiveCliente}</strong> <span className="fs-x">✕</span>
+                  </button>
+                )}
+                {effectiveGrupo && (
+                  <button className="fs-chip" onClick={clearGrupo} title="Quitar grupo">
+                    Grupo: <strong>{effectiveGrupo}</strong> <span className="fs-x">✕</span>
+                  </button>
+                )}
+                {effectiveUbicacion && (
+                  <button className="fs-chip" onClick={clearUbicacion} title="Quitar ubicación">
+                    Ubicación: <strong>{effectiveUbicacion}</strong> <span className="fs-x">✕</span>
+                  </button>
+                )}
+                {F?.fechaInicio && (
+                  <button className="fs-chip" onClick={clearFechaInicio} title="Quitar fecha desde">
+                    Desde: <strong>{F.fechaInicio}</strong> <span className="fs-x">✕</span>
+                  </button>
+                )}
+                {F?.fechaFin && (
+                  <button className="fs-chip" onClick={clearFechaFin} title="Quitar fecha hasta">
+                    Hasta: <strong>{F.fechaFin}</strong> <span className="fs-x">✕</span>
+                  </button>
+                )}
+                {selectedEventosSafe.slice(0, 4).map((ev) => (
+                  <button key={ev} className="fs-chip" onClick={() => clearEvento(ev)} title="Quitar evento">
+                    {ev} <span className="fs-x">✕</span>
+                  </button>
+                ))}
+                {selectedEventosSafe.length > 4 && (
+                  <span className="fs-more">+{selectedEventosSafe.length - 4} más</span>
+                )}
+                {(effectiveCliente || effectiveGrupo || effectiveUbicacion || F?.fechaInicio || F?.fechaFin || selectedEventosSafe.length) ? (
+                  <button className="fs-clear" onClick={clearAll} title="Limpiar todos los filtros">
+                    Limpiar todo
+                  </button>
+                ) : (
+                  <span className="fs-hint">Sin filtros activos</span>
+                )}
+              </div>
+            </div>
+
             <nav>
               <ul className="nav-list">
                 <li
@@ -269,7 +399,7 @@ const clearAll = () => setF(prev => ({
                             <ul>
                               <li
                                 className="sub-item all-edificio"
-                                onClick={() => onSelectGrupo?.(cliente, grupo)}
+                                onClick={() => selectGrupo(cliente, grupo)}  // ⬅️ ahora actualiza filtros
                               >
                                 ➤ Ver todo {grupo}
                               </li>
@@ -281,7 +411,7 @@ const clearAll = () => setF(prev => ({
                                   <li
                                     key={i}
                                     onClick={() => selectUbicacion(cliente, ubicacion)}
-                                    className="sub-item"
+                                    className={`sub-item ${effectiveUbicacion === ubicacion ? "active" : ""}`}
                                   >
                                     {ubicacion}
                                   </li>
@@ -298,7 +428,7 @@ const clearAll = () => setF(prev => ({
           </div>
         </div>
 
-        {/* =========== 2) FILTROS Y EVENTOS (solo tras elegir cliente) =========== */}
+        {/* =========== 2) FILTROS Y EVENTOS (contextual) =========== */}
         <div className="section">
           <button className="section-header" onClick={() => toggleSection("filters")}>
             <span>Filtros y eventos</span>
@@ -336,7 +466,7 @@ const clearAll = () => setF(prev => ({
               </div>
             </div>
 
-            {/* Si no hay cliente elegido, mostramos hint y no renderizamos lista de eventos */}
+            {/* Eventos */}
             {!effectiveCliente ? (
               <div className="events-panel">
                 <label className="sf-label">Eventos</label>
@@ -346,12 +476,13 @@ const clearAll = () => setF(prev => ({
               </div>
             ) : (
               <>
-                {/* Buscar evento (solo contextuales al cliente/ubicación actual) */}
                 <div className="sidebar-search">
                   <input
                     type="text"
                     className="sidebar-search-input"
-                    placeholder={`Buscar evento de ${effectiveCliente}…`}
+                    placeholder={`Buscar evento de ${effectiveCliente}${
+                      effectiveUbicacion ? ` / ${effectiveUbicacion}` : effectiveGrupo ? ` / ${effectiveGrupo}` : ""
+                    }…`}
                     value={searchTermEvento}
                     onChange={(e) => setSearchTermEvento(e.target.value)}
                   />
@@ -360,7 +491,8 @@ const clearAll = () => setF(prev => ({
                 <div className="events-panel">
                   <div className="panel-head">
                     <label className="sf-label">
-                      Eventos {effectiveUbicacion ? ` / ${effectiveUbicacion}` : ""}
+                      Eventos
+                      {effectiveUbicacion ? ` / ${effectiveUbicacion}` : effectiveGrupo ? ` / ${effectiveGrupo}` : ""}
                     </label>
                     {!!selectedEventosSafe.length && (
                       <span className="badge">{selectedEventosSafe.length}</span>
@@ -389,9 +521,7 @@ const clearAll = () => setF(prev => ({
                   <div className="events-list">
                     {eventosUnicos.length ? (
                       eventosUnicos
-                        .filter((ev) =>
-                          ev.toLowerCase().includes(searchTermEvento.toLowerCase())
-                        )
+                        .filter((ev) => (ev || "").toLowerCase().includes(searchTermEvento.toLowerCase()))
                         .map((ev) => (
                           <label key={ev} className="event-item">
                             <input
@@ -404,8 +534,8 @@ const clearAll = () => setF(prev => ({
                         ))
                     ) : (
                       <span className="events-empty">
-                        {effectiveUbicacion
-                          ? "Sin eventos para esta ubicación."
+                        {effectiveUbicacion || effectiveGrupo
+                          ? "Sin eventos para esta selección."
                           : "Sin eventos para este cliente."}
                       </span>
                     )}
@@ -416,8 +546,7 @@ const clearAll = () => setF(prev => ({
           </div>
         </div>
 
-        {/* =========== 3) CONFIG =========== */}
-      
+        {/* =========== 3) CONFIG (si aplica) =========== */}
       </aside>
     </>
   );
