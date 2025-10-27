@@ -1011,7 +1011,7 @@ function SOPPanel({ evento, sop, check, onCheckChange }) {
           </ul>
         </div>
 
-        {sop?.quick?.timers?.length ? (
+      {sop?.quick?.timers?.length ? (
   <div className="sop__block">
     <div className="sop__title sop__title--strong">Temporizadores</div>
     <div className="sop__timers">
