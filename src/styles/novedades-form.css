@@ -881,3 +881,77 @@
   text-decoration: line-through !important;
   opacity: 0.8 !important;
 }
+/* ===========================
+   HOTFIX VISIBILIDAD CHIPS + SOP HEADER
+   =========================== */
+
+/* Chips: texto SIEMPRE visible (claro) */
+.nf .nf__chip{
+  background: #f3f7ff !important;
+  color: #0b1220 !important;
+  border: 1px solid rgba(2,6,23,.14) !important;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 800;
+  cursor: pointer;
+  text-shadow: none !important;
+  opacity: 1 !important;
+}
+/* Asegura que hijos (span, íconos) hereden el color */
+.nf .nf__chip *, 
+.nf .nf__chip svg{
+  color: inherit !important;
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+/* Estados */
+.nf .nf__chip:hover{
+  background: #eaf1ff !important;
+  border-color: rgba(2,6,23,.20) !important;
+}
+.nf .nf__chip.active{
+  background: #1f6feb !important;
+  border-color: #1f6feb !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(31,111,235,.20);
+}
+
+/* Dark mode para chips */
+.nf.theme-dark .nf__chip{
+  background: #0f1f3a !important;
+  color: #eaf2ff !important;
+  border: 1px solid rgba(148,163,184,.28) !important;
+  text-shadow: none !important;
+  opacity: 1 !important;
+}
+.nf.theme-dark .nf__chip:hover{ background:#132548 !important; }
+.nf.theme-dark .nf__chip.active{
+  background:#2d6bff !important;
+  border-color:#2d6bff !important;
+  color:#fff !important;
+  box-shadow: 0 6px 16px rgba(45,107,255,.22);
+}
+
+/* SOP header: títulos y texto legibles */
+.nf .sop__header{ color: var(--text) !important; }
+.nf .sop__header h4,
+.nf .sop__header .sop__title{
+  color: var(--text-strong) !important;
+  font-weight: 900 !important;
+  letter-spacing: .2px;
+  text-shadow: none !important;
+  opacity: 1 !important;
+}
+/* Si por CSS anterior hay opacidad en hijos, la anulamos */
+.nf .sop__header *, 
+.nf .sop__header h4 *{
+  opacity: 1 !important;
+}
+
+/* Dark: títulos claros */
+.nf.theme-dark .sop__header{ color: #e5e7eb !important; }
+.nf.theme-dark .sop__header h4,
+.nf.theme-dark .sop__header .sop__title{
+  color: #ffffff !important;
+}
