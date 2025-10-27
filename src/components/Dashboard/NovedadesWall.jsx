@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AppBar, Toolbar, Box, Typography, Stack, IconButton, Divider, Badge, Tooltip, Chip, Menu, MenuItem, Chip as MuiChip
+  AppBar, Toolbar, Box, Typography, Stack, IconButton, Divider, Tooltip, Chip, Chip as MuiChip
 } from "@mui/material";
 import {
   FaCompress, FaExpand, FaTimes, FaListUl, FaBell, FaBellSlash,
@@ -71,6 +71,7 @@ function levelOf(card) {
   return "regular";
 }
 
+/* ====== Fila ====== */
 function ListRow({ card, onEdit, onClose, onDuplicate, onDelete, onView }) {
   const meta = PILL_COLORS[card.sev] || PILL_COLORS.info;
   const at = card.at instanceof Date ? card.at : new Date(card.at);
@@ -78,6 +79,7 @@ function ListRow({ card, onEdit, onClose, onDuplicate, onDelete, onView }) {
     <Box
       sx={{
         display: "grid",
+        // 4 columnas: Sev | Texto | Fecha | Acciones
         gridTemplateColumns: "110px 1fr 220px 120px",
         gap: 10,
         alignItems: "center",
@@ -89,34 +91,19 @@ function ListRow({ card, onEdit, onClose, onDuplicate, onDelete, onView }) {
       onDoubleClick={() => onEdit?.(card)}
     >
       <MuiChip
-        label={PILL_COLORS[card.sev]?.name || card.sev.toUpperCase()}
+        label={PILL_COLORS[card.sev]?.name || String(card.sev || "").toUpperCase()}
         size="small"
         sx={{ fontWeight: 900, color: meta.fg, bgcolor: meta.bg, border: `1px solid ${meta.bd}` }}
       />
-
-      {/* TEXTO MUY CORTO EN LA FILA */}
       <Typography
-        sx={{
-          fontWeight: 900,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          // si querés 2 líneas con “…” en vez de 1:
-          // display: "-webkit-box",
-          // WebkitLineClamp: 2,
-          // WebkitBoxOrient: "vertical",
-          // whiteSpace: "normal",
-        }}
+        sx={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
         title={card.text || "—"}
       >
         {clip(card.text || "—", 120)}
       </Typography>
-
       <Typography sx={{ fontFamily: "ui-monospace, Menlo, monospace", opacity: 0.9 }}>
         {at.toLocaleString("es-AR")}
       </Typography>
-
-      {/* ACCIONES (con “Ver”) */}
       <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
         <IconButton size="small" onClick={() => onView?.(card)} title="Ver texto completo" sx={{ color: PALETTE.subtext }}>
           <FaEye />
@@ -138,7 +125,6 @@ function ListRow({ card, onEdit, onClose, onDuplicate, onDelete, onView }) {
   );
 }
 
-
 /* ========================= PANEL LISTA ========================= */
 function PanelList({ title, color, items, rowActions }) {
   return (
@@ -148,12 +134,25 @@ function PanelList({ title, color, items, rowActions }) {
         <Typography sx={{ fontWeight: 800, color: PALETTE.subtext }}>{items.length} items</Typography>
       </Box>
 
-      {/* Encabezado */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: "110px 1fr 220px 110px 120px", gap: 10, alignItems: 'center', px: 1, py: .75, borderBottom: `1px solid ${PALETTE.border}`, color: PALETTE.subtext, fontWeight: 800, textTransform: 'uppercase', fontSize: 12 }}>
+      {/* Encabezado (4 columnas, alineado con la fila) */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: "110px 1fr 220px 120px",
+          gap: 10,
+          alignItems: 'center',
+          px: 1,
+          py: .75,
+          borderBottom: `1px solid ${PALETTE.border}`,
+          color: PALETTE.subtext,
+          fontWeight: 800,
+          textTransform: 'uppercase',
+          fontSize: 12
+        }}
+      >
         <span>Sev</span>
         <span>Texto</span>
         <span>Fecha</span>
-        <span>ID</span>
         <span style={{ textAlign: 'right' }}>Acciones</span>
       </Box>
 
@@ -176,13 +175,15 @@ export default function NovedadesWall() {
   useEffect(() => { try { localStorage.setItem(LS_TV_ID, tvId); } catch {} }, [tvId]);
   const [tvShows, setTvShows] = useState("all");
   useEffect(() => { try { localStorage.setItem(LS_TV_SHOWS, JSON.stringify(tvShows)); } catch {} }, [tvShows]);
-    // ⏱️ Reloj en vivo
-    const [now, setNow] = useState(() => new Date());
-    useEffect(() => {
-      const id = setInterval(() => setNow(new Date()), 1000);
-      return () => clearInterval(id);
-    }, []);
-  // Cards y ticker desde localStorage (formato existente)
+
+  // ⏱️ Reloj en vivo (verde)
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Cards y ticker desde localStorage
   const [miniCards, setMiniCards] = useState(() => {
     try {
       const raw = localStorage.getItem("wallboard_mini_cards");
@@ -198,22 +199,19 @@ export default function NovedadesWall() {
     } catch { return []; }
   });
 
-  // Seed demo si está vacío
-  useEffect(() => {
-    if (miniCards.length === 0) {
-      const demo = [
-        { id: "demo-crit", sev: "critical", text: "CRÍTICO: UPS sin enlace en sucursal Centro.", at: new Date() },
-        { id: "demo-alt", sev: "warning", text: "ALTO: Jitter alto en backbone.", at: new Date() },
-        { id: "demo-med", sev: "info", text: "MEDIO: Imagen borrosa en cámara Patio.", at: new Date() },
-        { id: "demo-reg", sev: "ok", text: "REGULAR: Check de rutina.", at: new Date() },
-      ];
-      try { localStorage.setItem("wallboard_mini_cards", JSON.stringify(demo)); } catch {}
-      setMiniCards(demo);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ❌ SIN SEED DEMO: eliminado para que no aparezca "info fake"
+  // Si igual querés una carga de ejemplo manual, descomentá este bloque:
+  // useEffect(() => {
+  //   if (miniCards.length === 0) {
+  //     const demo = [
+  //       { id: "demo-crit", sev: "critical", text: "CRÍTICO: UPS sin enlace en sucursal Centro.", at: new Date() },
+  //     ];
+  //     try { localStorage.setItem("wallboard_mini_cards", JSON.stringify(demo)); } catch {}
+  //     setMiniCards(demo);
+  //   }
+  // }, []); // eslint-disable-line
 
-  // Escuchar cambios en storage para sync suave (misma pestaña/otras)
+  // Sync con storage (por si se modifica desde otra pestaña)
   useEffect(() => {
     const onStorage = (ev) => {
       if (ev.key === "wallboard_mini_cards" && ev.newValue) {
@@ -235,24 +233,23 @@ export default function NovedadesWall() {
   const resetHidden = () => { saveDismissed(new Set()); MySwal.fire({ icon: "success", title: "Listo", text: "Se re-mostraron todas las novedades ocultas en esta pantalla.", timer: 1200, showConfirmButton: false, background: PALETTE.panel, color: PALETTE.text }); };
   const beep = useBeep();
 
+  // Helpers CRUD
   const setAndPersistMiniCards = (next) => { setMiniCards(next); try { localStorage.setItem("wallboard_mini_cards", JSON.stringify(next)); } catch {} };
   const updateOne = (id, patch) => setAndPersistMiniCards(miniCards.map(c => (c.id === id ? { ...c, ...patch } : c)));
   const deleteOne = (id) => { setAndPersistMiniCards(miniCards.filter(c => c.id !== id)); const d = new Set(dismissed); d.delete(id); saveDismissed(d); };
   const duplicateOne = (id) => { const card = miniCards.find(c => c.id === id); if (!card) return; const nid = Math.random().toString(36).slice(2, 9); const clone = { ...card, id: nid, at: new Date() }; setAndPersistMiniCards([clone, ...miniCards]); };
-// ✅ DENTRO de NovedadesWall (después de deleteOne/duplicateOne)
-const onViewCard = (card) => {
-  const safe = escapeHtml(card.text || "");
-  MySwal.fire({
-    icon: "info",
-    title: "Texto completo",
-    html: `<div style="text-align:left;white-space:pre-wrap">${safe || "<i>Sin texto</i>"}</div>`,
-    confirmButtonText: "Cerrar",
-    background: PALETTE.panel,
-    color: PALETTE.text,
-  });
-};
 
-// Acciones por fila (ahora sí con ámbito correcto)
+  const onViewCard = (card) => {
+    const safe = escapeHtml(card.text || "");
+    MySwal.fire({
+      icon: "info",
+      title: "Texto completo",
+      html: `<div style="text-align:left;white-space:pre-wrap">${safe || "<i>Sin texto</i>"}</div>`,
+      confirmButtonText: "Cerrar",
+      background: PALETTE.panel,
+      color: PALETTE.text,
+    });
+  };
 
   // Editor simple
   const openEditCard = (card) => {
@@ -289,7 +286,7 @@ const onViewCard = (card) => {
     });
   };
 
-  // Filtrado / orden: siempre por nivel de atención (críticos → altos → medios → regulares) y dentro por fecha desc
+  // Filtrado / orden
   const ordered = useMemo(() => {
     const base = [...miniCards].filter(c => !dismissed.has(c.id));
     const rank = { critico: 0, alto: 1, medio: 2, regular: 3 };
@@ -303,7 +300,6 @@ const onViewCard = (card) => {
     return base;
   }, [miniCards, dismissed]);
 
-  // Grupos por nivel (contenido fijo por panel → cero parpadeo al cambiar layout)
   const grupos = useMemo(() => {
     const g = { critico: [], alto: [], medio: [], regular: [] };
     for (const c of ordered) g[levelOf(c)].push(c);
@@ -312,7 +308,7 @@ const onViewCard = (card) => {
 
   const marquee = useMemo(() => tickerItems.map((t) => t.text).join("   •   "), [tickerItems]);
 
-  // fullscreen
+  // fullscreen + atajos
   const toggleFs = async () => { try { if (!document.fullscreenElement) { await document.documentElement.requestFullscreen(); } else { await document.exitFullscreen(); } } catch {} };
   useEffect(() => {
     const onFs = () => setIsFs(!!document.fullscreenElement);
@@ -326,46 +322,45 @@ const onViewCard = (card) => {
   const removeLocal = (id) => { const next = new Set(dismissed); next.add(id); saveDismissed(next); };
   const removeBySeverity = (sev) => { const ids = ordered.filter(c => c.sev === sev).map(c => c.id); const next = new Set(dismissed); ids.forEach(id => next.add(id)); saveDismissed(next); };
 
-  // UI helpers
-  const openPreferencias = () => {
-    const html = `
-      <div style="display:grid;gap:10px;text-align:left">
-        ${SEV_ORDER.map(s=>`<label style="display:flex;align-items:center;gap:8px"><input id="nf-${s}" type="checkbox" ${prefs.notify[s]?"checked":""}/> Notificar ${(PILL_COLORS[s]?.name)||s}</label>`).join("")}
-        <label style="display:flex;align-items:center;gap:8px"><input id="nf-sound" type="checkbox" ${prefs.sound?"checked":""}/> Sonido</label>
-        <label style="display:flex;align-items:center;gap:8px"><input id="nf-initial" type="checkbox" ${prefs.initialToasts?"checked":""}/> Mostrar toasts al cargar</label>
-      </div>`;
+  // Limpieza total: borra TODO lo guardado
+  const clearAll = () => {
     MySwal.fire({
-      title: 'Preferencias', html, background: PALETTE.panel, color: PALETTE.text,
-      showCancelButton: true, confirmButtonText: 'Guardar',
-      preConfirm: () => {
-        const get = id => /** @type {HTMLInputElement} */(document.getElementById(id)).checked;
-        return {
-          notify: {
-            critical: get('nf-critical'),
-            offline: get('nf-offline'),
-            warning: get('nf-warning'),
-            info: get('nf-info'),
-            ok: get('nf-ok'),
-          },
-          sound: get('nf-sound'),
-          initialToasts: get('nf-initial'),
-        };
+      icon: "warning",
+      title: "¿Borrar todas las novedades?",
+      text: "Esto vacía la lista actual.",
+      showCancelButton: true, confirmButtonText: "Sí, borrar",
+      background: PALETTE.panel, color: PALETTE.text
+    }).then(r => {
+      if (r.isConfirmed) {
+        setAndPersistMiniCards([]);
+        saveDismissed(new Set());
       }
-    }).then(r => { if (r.isConfirmed && r.value) setPrefs(r.value); });
+    });
   };
 
-  const openResumen = () => {
-    const counts = {
-      CRÍTICOS: grupos.critico.length,
-      ALTOS: grupos.alto.length,
-      MEDIOS: grupos.medio.length,
-      REGULARES: grupos.regular.length,
-    };
-    const html = `
-      <div style="display:grid;gap:10px;text-align:left">
-        ${Object.entries(counts).map(([k,v]) => `<div style="padding:8px;border:1px solid ${PALETTE.border};background:#0B1428"><b>${k}</b>: ${v}</div>`).join("")}
-      </div>`;
-    MySwal.fire({ title: 'Resumen por atención', html, background: PALETTE.panel, color: PALETTE.text, confirmButtonText: 'OK' });
+  // Nuke localStorage
+  const nukeStorage = () => {
+    MySwal.fire({
+      icon: "warning",
+      title: "Borrar datos guardados (localStorage)",
+      html: "<b>Esto elimina:</b> novedades, ticker, ocultas, preferencias, TV.<br/>Solo afecta este navegador/equipo.",
+      showCancelButton: true, confirmButtonText: "Borrar todo",
+      background: PALETTE.panel, color: PALETTE.text
+    }).then(r => {
+      if (!r.isConfirmed) return;
+      try {
+        localStorage.removeItem("wallboard_mini_cards");
+        localStorage.removeItem("wallboard_ticker_items");
+        localStorage.removeItem("novedades_dismissed");
+        localStorage.removeItem(LS_PREFS);
+        localStorage.removeItem(LS_TV_ID);
+        localStorage.removeItem(LS_TV_SHOWS);
+      } catch {}
+      setMiniCards([]);
+      setTickerItems([]);
+      saveDismissed(new Set());
+      MySwal.fire({ icon: "success", title: "Hecho", timer: 1200, showConfirmButton: false, background: PALETTE.panel, color: PALETTE.text });
+    });
   };
 
   // Acciones por fila
@@ -373,10 +368,11 @@ const onViewCard = (card) => {
     onEdit: openEditCard,
     onClose: removeLocal,
     onDuplicate: duplicateOne,
-    onDelete: deleteOne
+    onDelete: deleteOne,
+    onView: onViewCard
   };
 
-  // Vistas: 1, 2 o 4 paneles (contenido NO cambia → sin flashes)
+  // Vistas
   const renderContent = () => {
     if (ordered.length === 0) {
       return (
@@ -391,7 +387,6 @@ const onViewCard = (card) => {
     }
 
     if (layout === "1") {
-      // Lista única, orden: critico > alto > medio > regular
       return (
         <Box sx={{ p: 1 }}>
           <PanelList title="Todos (orden por nivel)" color={PALETTE.text} items={ordered} rowActions={rowActions} />
@@ -400,7 +395,6 @@ const onViewCard = (card) => {
     }
 
     if (layout === "2") {
-      // 2 columnas: izquierda (Críticos + Altos), derecha (Medios + Regulares)
       const left = [...grupos.critico, ...grupos.alto];
       const right = [...grupos.medio, ...grupos.regular];
       return (
@@ -411,7 +405,7 @@ const onViewCard = (card) => {
       );
     }
 
-    // layout === "4": 4 paneles fijos
+    // 4 paneles
     return (
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 12, p: 12 }}>
         <PanelList title={`Críticos (${grupos.critico.length})`} color={PALETTE.critical} items={grupos.critico} rowActions={rowActions} />
@@ -428,32 +422,33 @@ const onViewCard = (card) => {
         <Toolbar sx={{ minHeight: 88, gap: 1, py: 1.5 }}>
           {/* Estado + Reloj */}
           <Box sx={{ display:"flex", alignItems:"center", gap:1.5, mr:1.5 }}>
-            <Box sx={{ px: 1.4, py: .6, borderRadius: 1, border: `1px solid ${PALETTE.border}`, bgcolor: navigator.onLine ? PALETTE.okBg : PALETTE.offlineBg, color:  navigator.onLine ? PALETTE.okFg : PALETTE.offlineFg, fontWeight: 900, fontSize: 13, letterSpacing: .4 }}>{navigator.onLine ? 'ONLINE' : 'OFFLINE'}</Box>
-                   
-           <Box sx={{ lineHeight: 1 }}>
+            <Box sx={{ px: 1.4, py: .6, borderRadius: 1, border: `1px solid ${PALETTE.border}`, bgcolor: navigator.onLine ? PALETTE.okBg : PALETTE.offlineBg, color:  navigator.onLine ? PALETTE.okFg : PALETTE.offlineFg, fontWeight: 900, fontSize: 13, letterSpacing: .4 }}>
+              {navigator.onLine ? 'ONLINE' : 'OFFLINE'}
+            </Box>
+            <Box sx={{ lineHeight: 1 }}>
               <Typography
                 sx={{
                   fontFamily:"ui-monospace, Menlo, monospace",
                   fontWeight:900,
-                   fontSize: 56,
+                  fontSize: 56,
+                  letterSpacing: 1,
+                  color: PALETTE.ok,                    // ✅ verde
+                  textShadow: `0 0 8px ${PALETTE.ok}55`, // glow sutil
                   background: "#0E2318",
                   padding: "2px 8px",
                   borderRadius: 6,
-                  letterSpacing: 1,
-                  color: PALETTE.ok,                    // ✅ verde
-                  textShadow: `0 0 8px ${PALETTE.ok}55` // glow sutil
                 }}
               >
                 {now.toLocaleTimeString("es-AR", { hour12:false, timeZone: "America/Argentina/Buenos_Aires" })}
               </Typography>
-             <Typography
+              <Typography
                 sx={{
                   fontFamily:"ui-monospace, Menlo, monospace",
                   fontWeight:800,
                   fontSize: 14,
                   color: PALETTE.subtext,
                   textAlign: "right",
-                 mt: "-2px"
+                  mt: "-2px"
                 }}
               >
                 {now.toLocaleDateString("es-AR", {
@@ -461,17 +456,22 @@ const onViewCard = (card) => {
                   timeZone: "America/Argentina/Buenos_Aires"
                 })}
               </Typography>
-           </Box>
-
+            </Box>
           </Box>
 
           <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: .6, ml: 1 }}>Wall de Novedades (por nivel de atención)</Typography>
           <Box sx={{ flex: 1 }} />
 
           {/* TV actual */}
-          <Chip icon={<FaTv/>} label={`TV: ${tvId}`} onClick={() => {
-            MySwal.fire({ title: 'Nombre de este TV', input: 'text', inputValue: tvId, background: PALETTE.panel, color: PALETTE.text, confirmButtonText: 'Guardar', showCancelButton: true }).then(r => { if (r.isConfirmed && r.value) { const v = String(r.value).trim(); setTvId(v); } });
-          }} sx={{ fontWeight: 900, bgcolor: '#112048', color: PALETTE.text, border: `1px solid ${PALETTE.border}` }} />
+          <Chip
+            icon={<FaTv/>}
+            label={`TV: ${tvId}`}
+            onClick={() => {
+              MySwal.fire({ title: 'Nombre de este TV', input: 'text', inputValue: tvId, background: PALETTE.panel, color: PALETTE.text, confirmButtonText: 'Guardar', showCancelButton: true })
+              .then(r => { if (r.isConfirmed && r.value) { const v = String(r.value).trim(); setTvId(v); } });
+            }}
+            sx={{ fontWeight: 900, bgcolor: '#112048', color: PALETTE.text, border: `1px solid ${PALETTE.border}` }}
+          />
 
           {/* Selector de layout */}
           <Tooltip title={`Layout: ${layout === '1' ? '1 panel' : layout === '2' ? '2 paneles' : '4 paneles'}`}>
@@ -489,11 +489,21 @@ const onViewCard = (card) => {
             </IconButton>
           </Tooltip>
 
+          {/* Limpieza / Preferencias / FS */}
           <Stack direction="row" spacing={1} alignItems="center">
+            <Tooltip title="Borrar todas las novedades"><IconButton onClick={clearAll} sx={{ color: PALETTE.subtext }}><FaTrash /></IconButton></Tooltip>
+            <Tooltip title="Borrar datos guardados (localStorage)"><IconButton onClick={nukeStorage} sx={{ color: PALETTE.subtext }}><FaTimes /></IconButton></Tooltip>
             <Tooltip title="Resumen por atención"><IconButton onClick={() => openResumen()} sx={{ color: PALETTE.subtext }}><FaChartBar /></IconButton></Tooltip>
             <Tooltip title="Preferencias de notificaciones"><IconButton onClick={() => openPreferencias()} sx={{ color: PALETTE.subtext }}><FaFilter /></IconButton></Tooltip>
             <Tooltip title={Object.values(prefs.notify).some(Boolean) ? "Notificaciones ON" : "Notificaciones OFF"}>
-              <IconButton onClick={() => { const anyOn = Object.values(prefs.notify).some(Boolean); if (anyOn) setPrefs((p) => ({ ...p, notify: { critical:false, offline:false, warning:false, info:false, ok:false } })); else setPrefs((p) => ({ ...p, notify: { ...defaultPrefs.notify } })); }} sx={{ color: PALETTE.subtext }}>
+              <IconButton
+                onClick={() => {
+                  const anyOn = Object.values(prefs.notify).some(Boolean);
+                  if (anyOn) setPrefs((p) => ({ ...p, notify: { critical:false, offline:false, warning:false, info:false, ok:false } }));
+                  else setPrefs((p) => ({ ...p, notify: { ...defaultPrefs.notify } }));
+                }}
+                sx={{ color: PALETTE.subtext }}
+              >
                 {Object.values(prefs.notify).some(Boolean) ? <FaBell/> : <FaBellSlash/>}
               </IconButton>
             </Tooltip>
@@ -504,7 +514,9 @@ const onViewCard = (card) => {
 
       {/* Marquee del ticker */}
       <Box sx={{ height: 40, display: "flex", alignItems: "center", color: PALETTE.marqueeText, bgcolor: PALETTE.marqueeBg, px: 2, borderBottom: `1px solid ${PALETTE.border}`, overflow: "hidden", whiteSpace: "nowrap" }}>
-        <Typography sx={{ display: "inline-block", animation: marquee ? "scroll 40s linear infinite" : "none", "@keyframes scroll": { "0%": { transform: "translateX(100%)" }, "100%": { transform: "translateX(-100%)" } }, fontWeight: 800, letterSpacing: .4, textShadow: `0 1px 0 ${PALETTE.border}` }}>{marquee || "Cargá mensajes en el ticker desde la pantalla principal"}</Typography>
+        <Typography sx={{ display: "inline-block", animation: marquee ? "scroll 40s linear infinite" : "none", "@keyframes scroll": { "0%": { transform: "translateX(100%)" }, "100%": { transform: "translateX(-100%)" } }, fontWeight: 800, letterSpacing: .4, textShadow: `0 1px 0 ${PALETTE.border}` }}>
+          {marquee || "Cargá mensajes en el ticker desde la pantalla principal"}
+        </Typography>
       </Box>
 
       {/* Contenido */}
