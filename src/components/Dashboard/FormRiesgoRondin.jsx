@@ -48,6 +48,7 @@ import {
   Add,
   Delete,
 } from "@mui/icons-material";
+import { CANALES_OPCIONES, ESTADOS, toChannelNumber } from "./helpers";
 
 import "../../styles/formRiesgoRondin.css";
 import { motion } from "framer-motion";
@@ -521,6 +522,19 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     );
   };
   const setCamField = (tandaId, camId, key, value) => {
+    userInteractedRef.current = true;
+  
+    const normVal =
+      key === "canal"
+        ? Number(
+            value == null
+              ? 1
+              : typeof value === "object"
+                ? (value.value ?? value.id ?? value.canal ?? 1)
+                : value
+          )
+        : value;
+  
     setTandas(prev =>
       prev.map(t =>
         t.id === tandaId
@@ -528,7 +542,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
               ...t,
               camaras: t.camaras.map(c =>
                 c.id === camId
-                  ? { ...c, [key]: value, touched: key === "estado" ? true : c.touched }
+                  ? { ...c, [key]: normVal, touched: key === "estado" ? true : c.touched }
                   : c
               ),
             }
@@ -536,7 +550,21 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       )
     );
   };
-
+  useEffect(() => {
+    setTandas(prev =>
+      prev.map(t => ({
+        ...t,
+        camaras: (t.camaras || []).map(c => ({
+          ...c,
+          canal:
+            typeof c.canal === "object"
+              ? Number(c.canal?.value ?? c.canal?.id ?? c.canal?.canal ?? 1)
+              : Number(c.canal ?? 1),
+        })),
+      }))
+    );
+  }, []); // una sola vez
+    
   const onCameraState = (tandaId, camId, next) => {
     setTandas(prev =>
       prev.map(t =>
@@ -748,15 +776,20 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
                       {t.camaras.map((cam) => (
                         <div className={`tabla-row estado-${cam.estado}`} key={cam.id}>
                           <div className="cell canal">
-                            <Select
-                              size="small"
-                              value={cam.canal}
-                              onChange={(e) => setCamField(t.id, cam.id, "canal", e.target.value)}
-                            >
-                              {CANALES_OPCIONES.map((n) => (
-                                <MenuItem key={n} value={n}>Cámara {n}</MenuItem>
-                              ))}
-                            </Select>
+                          <Select
+  size="small"
+  value={toChannelNumber(cam.canal)}
+  onChange={(e) => setCamField(t.id, cam.id, "canal", toChannelNumber(e.target.value))}
+>
+  {CANALES_OPCIONES.map((opt) => {
+    const n = toChannelNumber(opt);
+    return (
+      <MenuItem key={n} value={n}>
+        Cámara {n}
+      </MenuItem>
+    );
+  })}
+</Select>
                           </div>
 
                           <div className="cell estado">

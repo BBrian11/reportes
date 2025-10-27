@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Sidebar from "./Sidebar.jsx";
 import Header from "./Header.jsx";
 import Filters from "./Filters.jsx";
@@ -16,10 +16,11 @@ import TareasPanel from "./TareasPanel.jsx";
 import TgsKpi from "./TgsKpi.jsx";
 import TgsProviders from "./TgsProviders.jsx";
 import AnaliticaDetalladaPMA from "./AnaliticaDetalladaPMA.jsx";
-
+import NotificationBubbles from "./NotificationBubbles.jsx";
+import useNotifications from "./hooks/useNotifications.js";
 import { Link } from "react-router-dom";
 import { FaTasks, FaBars, FaWpforms } from "react-icons/fa";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, query, limit } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import "../../styles/dashboard.css";
 
@@ -32,13 +33,35 @@ export default function Dashboard() {
     fechaInicio: "",
     fechaFin: "",
     q: "",
-    eventosSeleccionados: [], // 👈 NUEVO: checks múltiples
+    eventosSeleccionados: [],
   });
   const [vista, setVista] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // ------------ Cargar eventos ------------
-  const loadEventos = () => {
+  // === NUEVO: lógica de carga 100 -> full ===
+  const unsubRef = useRef(null);
+  const isLimitedRef = useRef(true);   // arranca limitado
+  const fullLoadedRef = useRef(false); // ya hicimos la carga completa
+
+  // criterio “hay filtro”
+  const hasUsefulFilter = useMemo(() => {
+    if (filtros.cliente || filtros.ubicacion || filtros.grupo) return true;
+    if (filtros.fechaInicio || filtros.fechaFin) return true;
+    if ((filtros.q || "").trim().length >= 2) return true;
+    return false;
+  }, [filtros]);
+  // ▶ handlers para los botones de notificaciones
+
+  // ------------ suscripción ------------
+  const loadEventos = (opts = {}) => {
+    const { limitCount = null } = opts; // null = sin límite (full), número = limitado
+
+    // limpiar subs anterior
+    if (typeof unsubRef.current === "function") {
+      unsubRef.current();
+      unsubRef.current = null;
+    }
+
     const toDate = (v) => {
       if (!v) return null;
       if (v instanceof Date && !isNaN(v)) return v;
@@ -61,8 +84,11 @@ export default function Dashboard() {
       { path: "novedades/otros/eventos", cliente: "Otros", eventoKey: "evento-otros", ubicacionKey: "otro" },
     ];
 
-    const unsubscribes = collections.map(({ path, cliente, eventoKey, ubicacionKey }) =>
-      onSnapshot(collection(db, path), (snapshot) => {
+    const unsubs = collections.map(({ path, cliente, eventoKey, ubicacionKey }) => {
+      const base = collection(db, path);
+      const qRef = limitCount ? query(base, limit(limitCount)) : base; // 👈 limitado o full
+
+      return onSnapshot(qRef, (snapshot) => {
         const nuevos = snapshot.docs.map((docSnap) => {
           const d = docSnap.data();
 
@@ -159,17 +185,38 @@ export default function Dashboard() {
           };
         });
 
-        setEventos((prev) => [...prev.filter((e) => e.cliente !== cliente), ...nuevos]);
-      })
-    );
+        setEventos((prev) => {
+          const otros = prev.filter((e) => e.cliente !== cliente);
+          return [...otros, ...nuevos];
+        });
+      });
+    });
 
-    return () => unsubscribes.forEach((unsub) => unsub());
+    unsubRef.current = () => unsubs.forEach((u) => u && u());
+    isLimitedRef.current = !!limitCount;
+    if (!limitCount) fullLoadedRef.current = true;
   };
-
   useEffect(() => {
-    const unsubscribe = loadEventos();
-    return unsubscribe;
+    document.body.classList.remove("modal-open");
+    document.body.style.paddingRight = "";
+    delete document.body.dataset.modalCount;
   }, []);
+  
+  // 1) Al montar: carga rápida (100)
+  useEffect(() => {
+    loadEventos({ limitCount: 100 });
+    return () => {
+      if (typeof unsubRef.current === "function") unsubRef.current();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 2) Cuando el usuario FILTRA: pasar a carga completa (una sola vez)
+  useEffect(() => {
+    if (hasUsefulFilter && !fullLoadedRef.current) {
+      loadEventos({ limitCount: null }); // full
+    }
+  }, [hasUsefulFilter]);
 
   // ------------ Buscador ------------
   const normalize = (s) =>
@@ -207,36 +254,108 @@ export default function Dashboard() {
     const terms = normalize(q).split(/\s+/).filter(Boolean);
     return terms.every((t) => haystack.includes(t));
   };
-
+   const {
+      notificaciones,
+     alertas,
+      unreadCount,
+      alertCount,
+       markAllRead,
+     } = useNotifications();
+    
+     const [showNotifModal, setShowNotifModal] = useState(false);
+     const [showAlertModal, setShowAlertModal] = useState(false);
+    
+     const abrirInfo = () => {
+      setShowNotifModal(true);
+       markAllRead();
+     };
+    const abrirAlertas = () => setShowAlertModal(true);
   // ------------ Filtrado final ------------
-  const eventosFiltrados = eventos.filter((e) => {
+// ...imports y estado
+
+// ⬇️ Helpers robustos (ponelos una sola vez, arriba del useMemo)
+const parseSafeDate = (val, endOfDay = false) => {
+  if (!val) return null;
+  const s = endOfDay ? "T23:59:59" : "T00:00:00";
+  const d = new Date(`${val}${s}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+const eq = (a, b) => (a ?? "").toString().trim() === (b ?? "").toString().trim();
+const includesAllTerms = (haystack, q) => {
+  const norm = (s) =>
+    (s ?? "")
+      .toString()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .trim();
+  if (!q) return true;
+  const text = norm(haystack);
+  const terms = norm(q).split(/\s+/).filter(Boolean);
+  return terms.every((t) => text.includes(t));
+};
+
+// ⬇️ REEMPLAZÁ tu useMemo de eventosFiltrados por este:
+const eventosFiltrados = useMemo(() => {
+  let inicio = parseSafeDate(filtros.fechaInicio);
+  let fin = parseSafeDate(filtros.fechaFin, true);
+  if (inicio && fin && inicio > fin) [inicio, fin] = [fin, inicio];
+
+  const haySeleccionEventos =
+    Array.isArray(filtros.eventosSeleccionados) && filtros.eventosSeleccionados.length > 0;
+
+  return (eventos || []).filter((e) => {
     const base =
       e.cliente === "Edificios"
-        ? (e.fechaEventoObj || e.fechaObj || (e.fecha ? new Date(e.fecha) : null))
-        : (e.fechaObj || (e.fecha ? new Date(e.fecha) : null));
+        ? (e.fechaEventoObj || e.fechaObj || null)
+        : (e.fechaObj || null);
 
-    const inicio = filtros.fechaInicio ? new Date(`${filtros.fechaInicio}T00:00:00`) : null;
-    const fin    = filtros.fechaFin    ? new Date(`${filtros.fechaFin}T23:59:59`)   : null;
+    if (inicio && (!base || base < inicio)) return false;
+    if (fin && (!base || base > fin)) return false;
 
-    // 👇 Nuevo: si hay checks marcados, el evento debe estar en esa lista
-    const pasaEventos =
-      !filtros.eventosSeleccionados?.length ||
-      filtros.eventosSeleccionados.includes(e.evento);
+    if (filtros.cliente && filtros.cliente !== "Todos" && !eq(e.cliente, filtros.cliente)) return false;
+    if (filtros.grupo && !eq(e.grupo, filtros.grupo)) return false;
+    if (filtros.ubicacion && !eq(e.ubicacion, filtros.ubicacion)) return false;
 
-    return (
-      (!filtros.cliente || filtros.cliente === "Todos" || e.cliente === filtros.cliente) &&
-      (!filtros.grupo || e.grupo === filtros.grupo) &&
-      (!filtros.ubicacion || e.ubicacion === filtros.ubicacion) &&
-      (!inicio || (base && base >= inicio)) &&
-      (!fin    || (base && base <= fin)) &&
-      pasaEventos &&
-      matchesQuery(e, filtros.q)
-    );
+    if (haySeleccionEventos && !filtros.eventosSeleccionados.includes(e.evento)) return false;
+
+    const haystack = [
+      e.cliente,
+      e.evento,
+      e.ubicacion,
+      e.grupo,
+      e.observacion,
+      e.resolucion,
+      e["resolusion-evento"],
+      e["razones-pma"],
+      e.razonesPma,
+      e["respuesta-residente"],
+      e.edificio,
+      e.unidad,
+      e.proveedor,
+      e["proveedor-personal"],
+      e.proveedor_personal,
+      e.proveedorPersonal,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    if (!includesAllTerms(haystack, filtros.q)) return false;
+
+    return true;
   });
+}, [eventos, filtros]);
 
   // ------------ UI ------------
   return (
     <div className="dashboard-layout">
+       <NotificationBubbles
+       onOpenInfo={abrirInfo}
+       onOpenAlert={abrirAlertas}
+       infoCount={unreadCount}
+       alertCount={alertCount}
+     />
+
       <div className="floating-controls">
         <button className="icon-btn dark" onClick={() => setSidebarOpen(true)}>
           <FaBars size={20} />
@@ -255,30 +374,55 @@ export default function Dashboard() {
           </button>
         </Link>
       </div>
+    
+<Sidebar
+  eventos={eventos}
+  isOpen={sidebarOpen}
+  onClose={() => setSidebarOpen(false)}
 
-      <Sidebar
-        eventos={eventos}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        onSelectCliente={(cliente) =>
-          setFiltros({
-            ...filtros,
-            cliente: cliente === "Todos" ? "" : cliente,
-            ubicacion: "",
-            grupo: "",
-            eventosSeleccionados: [], // reset de checks al cambiar cliente
-          })
-        }
-        onSelectUbicacion={(cliente, ubicacion) =>
-          setFiltros({ ...filtros, cliente, ubicacion, grupo: "", eventosSeleccionados: [] })
-        }
-        onSelectGrupo={(cliente, grupo) =>
-          setFiltros({ ...filtros, cliente, grupo, ubicacion: "", eventosSeleccionados: [] })
-        }
-      />
+  // 🔴 FALTABAN ESTOS:
+  filtros={filtros}
+  setFiltros={setFiltros}
+  onChangeFechaInicio={(v) => setFiltros({ ...filtros, fechaInicio: v })}
+  onChangeFechaFin={(v) => setFiltros({ ...filtros, fechaFin: v })}
+
+  onSelectCliente={(cliente) =>
+    setFiltros({
+      ...filtros,
+      cliente: cliente === "Todos" ? "" : cliente,
+      ubicacion: "",
+      grupo: "",
+      eventosSeleccionados: [],
+    })
+  }
+  onSelectUbicacion={(cliente, ubicacion) =>
+    setFiltros({ ...filtros, cliente, ubicacion, grupo: "", eventosSeleccionados: [] })
+  }
+  onSelectGrupo={(cliente, grupo) =>
+    setFiltros({ ...filtros, cliente, grupo, ubicacion: "", eventosSeleccionados: [] })
+  }
+/>
+
 
       <main className="dashboard-main">
-        <Header />
+ 
+      <Header
+  notificaciones={notificaciones}
+  alertas={alertas}
+  showNotifModal={showNotifModal}
+  showAlertModal={showAlertModal}
+  onCloseNotif={() => setShowNotifModal(false)}
+  onCloseAlert={() => setShowAlertModal(false)}
+  onOpenSearch={() => {/* abrir tu command palette o input global */}}
+  onOpenNotifications={() => setShowNotifModal(true)}
+  rightActions={
+    <button className="ghost-btn" onClick={() => {/* export / ayuda */}}>
+      {/* cualquier icono */}
+      <span className="ghost-btn__label">Exportar</span>
+    </button>
+  }
+/>
+
         <div className="dashboard-content">
           {vista === "dashboard" ? (
             <>
@@ -302,9 +446,13 @@ export default function Dashboard() {
                     outline: "none",
                   }}
                 />
+                {/* Indicador de modo */}
+                <small style={{ opacity: 0.7, marginLeft: 8 }}>
+                  {fullLoadedRef.current ? "" : isLimitedRef.current ? "Modo: 100 por colección" : ""}
+                </small>
               </div>
 
-              <Filters filtros={filtros} setFiltros={setFiltros} eventos={eventos} />
+        
 
               {/* Barra exportación */}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, margin: "8px 0 12px" }}>

@@ -1,41 +1,40 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import "../../styles/filters.css";
 
 export default function Filters({ filtros, setFiltros, eventos }) {
-  // Filtrar dinámicamente por cliente
-  const eventosPorCliente = filtros.cliente
-    ? eventos.filter((e) => e.cliente === filtros.cliente)
-    : eventos;
+  const lista = Array.isArray(eventos) ? eventos : [];
 
-  const clientes = [...new Set(eventos.map((e) => e.cliente))];
+  const isTodos = !filtros?.cliente || filtros?.cliente === "Todos";
+  const eventosPorCliente = isTodos
+    ? lista
+    : lista.filter((e) => e?.cliente === filtros?.cliente);
 
-  // 🔒 Lista de eventos del cliente/ubicación actual, limpia de vacíos
-  const eventosUnicos = useMemo(() => {
-    return [...new Set(eventosPorCliente.map((e) => e?.evento).filter(Boolean))].sort();
-  }, [eventosPorCliente]);
+  const clientes = useMemo(() => (
+    [...new Set(lista.map((e) => e?.cliente).filter(Boolean))].sort()
+  ), [lista]);
 
-  const ubicaciones = useMemo(() => {
-    return [...new Set(eventosPorCliente.map((e) => e.ubicacion).filter(Boolean))].sort();
-  }, [eventosPorCliente]);
+  const eventosUnicos = useMemo(() => (
+    [...new Set(eventosPorCliente.map((e) => e?.evento).filter(Boolean))].sort()
+  ), [eventosPorCliente]);
 
-  const selected = new Set(filtros.eventosSeleccionados || []);
+  const ubicaciones = useMemo(() => (
+    [...new Set(eventosPorCliente.map((e) => e?.ubicacion).filter(Boolean))].sort()
+  ), [eventosPorCliente]);
 
-  // 🧹 Podar selección inválida cuando cambia el universo de eventos
-  useEffect(() => {
-    if (!filtros.eventosSeleccionados?.length) return;
-    const valid = filtros.eventosSeleccionados.filter((ev) => eventosUnicos.includes(ev));
-    if (valid.length !== filtros.eventosSeleccionados.length) {
-      setFiltros({ ...filtros, eventosSeleccionados: valid });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.cliente, filtros.ubicacion, JSON.stringify(eventosUnicos)]);
+  // ✅ Intersección: solo consideramos seleccionados válidos para el cliente/ubicación actual
+  const selectedValid = useMemo(() => {
+    const sel = new Set(filtros?.eventosSeleccionados || []);
+    return eventosUnicos.filter((ev) => sel.has(ev));
+  }, [filtros?.eventosSeleccionados, eventosUnicos]);
 
   const toggleEvento = (evName) => {
-    if (!evName) return; // evita meter undefined/"" en la selección
-    const next = new Set(selected);
-    if (next.has(evName)) next.delete(evName);
-    else next.add(evName);
-    setFiltros({ ...filtros, eventosSeleccionados: Array.from(next) });
+    if (!evName) return;
+    // ❌ Si el evento no existe en el contexto actual, no hacemos nada
+    if (!eventosUnicos.includes(evName)) return;
+
+    const current = new Set(filtros?.eventosSeleccionados || []);
+    current.has(evName) ? current.delete(evName) : current.add(evName);
+    setFiltros({ ...filtros, eventosSeleccionados: Array.from(current) });
   };
 
   const selectAllEventos = () => {
@@ -47,13 +46,14 @@ export default function Filters({ filtros, setFiltros, eventos }) {
   };
 
   const onChangeCliente = (value) => {
-    // Al cambiar cliente: reseteo ubicación y checks de eventos
+    // Al cambiar cliente, NO tocamos eventosSeleccionados aquí.
+    // Dejamos que la UI simplemente ignore los no válidos con selectedValid.
     setFiltros({
       ...filtros,
       cliente: value,
-      evento: "", // compat
       ubicacion: "",
-      eventosSeleccionados: [],
+      evento: "",
+      // eventosSeleccionados: filtros.eventosSeleccionados  // (se mantiene tal cual)
     });
   };
 
@@ -64,14 +64,12 @@ export default function Filters({ filtros, setFiltros, eventos }) {
         <label className="filter-label">Cliente</label>
         <select
           className="filter-select"
-          value={filtros.cliente}
+          value={filtros?.cliente ?? ""}
           onChange={(e) => onChangeCliente(e.target.value)}
         >
           <option value="">Todos</option>
-          {clientes.map((c, idx) => (
-            <option key={idx} value={c}>
-              {c}
-            </option>
+          {clientes.map((c) => (
+            <option key={c} value={c}>{c}</option>
           ))}
         </select>
       </div>
@@ -81,15 +79,13 @@ export default function Filters({ filtros, setFiltros, eventos }) {
         <label className="filter-label">Ubicación</label>
         <select
           className="filter-select"
-          value={filtros.ubicacion}
+          value={filtros?.ubicacion ?? ""}
           onChange={(e) => setFiltros({ ...filtros, ubicacion: e.target.value })}
-          disabled={!filtros.cliente}
+          disabled={!filtros?.cliente}
         >
           <option value="">Todas</option>
-          {ubicaciones.map((u, idx) => (
-            <option key={idx} value={u}>
-              {u}
-            </option>
+          {ubicaciones.map((u) => (
+            <option key={u} value={u}>{u}</option>
           ))}
         </select>
       </div>
@@ -100,7 +96,7 @@ export default function Filters({ filtros, setFiltros, eventos }) {
         <input
           type="date"
           className="filter-input"
-          value={filtros.fechaInicio}
+          value={filtros?.fechaInicio ?? ""}
           onChange={(e) => setFiltros({ ...filtros, fechaInicio: e.target.value })}
         />
       </div>
@@ -109,7 +105,7 @@ export default function Filters({ filtros, setFiltros, eventos }) {
         <input
           type="date"
           className="filter-input"
-          value={filtros.fechaFin}
+          value={filtros?.fechaFin ?? ""}
           onChange={(e) => setFiltros({ ...filtros, fechaFin: e.target.value })}
         />
       </div>
@@ -132,14 +128,14 @@ export default function Filters({ filtros, setFiltros, eventos }) {
             type="button"
             className="filter-chip"
             onClick={clearEventos}
-            disabled={!filtros.eventosSeleccionados?.length}
+            disabled={!selectedValid.length}
             title="Limpiar selección"
           >
             Limpiar
           </button>
-          {!!filtros.eventosSeleccionados?.length && (
+          {!!selectedValid.length && (
             <span className="filter-hint">
-              {filtros.eventosSeleccionados.length} seleccionado(s)
+              {selectedValid.length} seleccionado(s)
             </span>
           )}
         </div>
@@ -158,9 +154,9 @@ export default function Filters({ filtros, setFiltros, eventos }) {
           }}
         >
           {eventosUnicos.length ? (
-            eventosUnicos.map((ev, idx) => (
+            eventosUnicos.map((ev) => (
               <label
-                key={idx}
+                key={ev}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -172,7 +168,7 @@ export default function Filters({ filtros, setFiltros, eventos }) {
               >
                 <input
                   type="checkbox"
-                  checked={selected.has(ev)}
+                  checked={selectedValid.includes(ev)}
                   onChange={() => toggleEvento(ev)}
                 />
                 <span>{ev}</span>
@@ -180,7 +176,7 @@ export default function Filters({ filtros, setFiltros, eventos }) {
             ))
           ) : (
             <span style={{ color: "#64748b" }}>
-              {filtros.cliente ? "Sin eventos para este cliente." : "Elegí un cliente para ver eventos."}
+              {filtros?.cliente ? "Sin eventos para este cliente." : "Elegí un cliente para ver eventos."}
             </span>
           )}
         </div>

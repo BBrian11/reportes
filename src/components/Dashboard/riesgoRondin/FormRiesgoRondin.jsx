@@ -1134,6 +1134,7 @@ useEffect(() => {
                 )}
                 <TandaCard
                   tanda={t}
+                  rondaId={rondaId}
                   clientesCat={clientesCat}
                   onSetCliente={setTandaCliente}
                   onAddCam={addCamRow}

@@ -1,317 +1,544 @@
-/* ======== SIDEBAR ======== */
+/* ============ TOKENS (scoped al sidebar) ============ */
 .sidebar {
-  width: 260px;
-  background: #ffffff;
-  height: 100vh;
-  position: fixed;
-  top: 0;
-  left: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease-in-out;
-  z-index: 1000;
+  --bg: #ffffff;
+  --panel: #f8fafc;
+  --ink: #0f172a;
+  --ink-weak: #475569;
+  --brand: #2563eb;
+  --brand-600: #1d4ed8;
+  --muted: #e5e7eb;
+
+  --bd: 1px solid rgba(15, 23, 42, 0.10);
+  --ring: 0 0 0 4px rgba(37, 99, 235, 0.22);
+
+  --r-lg: 14px;
+  --r-md: 12px;
+
+  --shadow-1: 0 10px 28px rgba(2,6,23,.10);
+  --shadow-2: 0 24px 60px rgba(2,6,23,.16);
+
+  --gap: 12px;
+  --sp: 14px;
+
+  color: var(--ink);
+  background: var(--bg);
 }
 
-/* Estado colapsado en desktop */
-.sidebar.collapsed {
-  width: 80px;
-}
-
-/* ===== MOBILE (PWA STYLE) ===== */
-@media (max-width: 768px) {
-  .sidebar {
-    left: -100%; /* Oculta sidebar */
-    width: 80%;
-    max-width: 320px;
-    background: #ffffff;
-    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.2);
-  }
-
-  .sidebar.active {
-    left: 0; /* Desliza */
-  }
-
-  /* Overlay oscuro para UX */
-  .sidebar-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 999;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease;
-  }
-
-  .sidebar-overlay.active {
-    opacity: 1;
-    visibility: visible;
-  }
-}
-
-/* ===== HEADER SIDEBAR ===== */
-.sidebar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.logo-text {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: #2563eb;
-}
-
-.toggle-btn {
-  background: none;
-  border: none;
-  font-size: 1.8rem;
-  cursor: pointer;
-  color: #374151;
-}
-
-/* ===== NAV LINKS ===== */
-.sidebar ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px;
-  margin-bottom: 8px;
-  border-radius: 10px;
-  color: #374151;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
-  font-size: 1rem;
-  font-weight: 500;
-}
-
-.sidebar-link:hover,
-.sidebar-link.active {
-  background: #f3f4f6;
-  color: #2563eb;
-}
-
-/* ===== SUBMENÚ ===== */
-.sub-menu {
-  background: #f9fafb;
-  margin-top: 6px;
-  border-radius: 10px;
-  padding: 10px;
-}
-
-.search-input {
-  width: 100%;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  margin-bottom: 10px;
-  font-size: 0.9rem;
-}
-
-.scrollable-list {
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.sub-item {
-  padding: 6px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: #4b5563;
-  font-size: 0.9rem;
-}
-
-.sub-item:hover {
-  background: #e5e7eb;
-  color: #111827;
-}
-/* Overlay (fondo oscuro) */
-.sidebar-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 900;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s ease;
-}
-
-.sidebar-overlay.active {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* Sidebar animado en mobile */
-@media (max-width: 768px) {
-  .sidebar {
-    left: -100%;
-    width: 80%;
-    max-width: 320px;
-    transition: left 0.3s ease-in-out;
-  }
-  .sidebar.active {
-    left: 0;
-  }
-}
-
-/* Botón hamburguesa flotante */
-.floating-toggle {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  .floating-toggle {
-    display: flex;
-    position: fixed;
-    top: 16px;
-    left: 16px;
-    background: #2563eb;
-    color: #fff;
-    font-size: 1.6rem;
-    padding: 12px;
-    border-radius: 50%;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
-    z-index: 1001;
-    border: none;
-    cursor: pointer;
-  }
-}
-/* ✅ Overlay para mobile */
-.sidebar-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  opacity: 0;
-  visibility: hidden;
-  transition: 0.3s;
+/* ===== Overlay (drawer mobile) ===== */
+.sidebar-overlay{
+  position: fixed; inset: 0;
+  background: rgba(2,6,23,.45);
+  opacity: 0; visibility: hidden;
+  transition: opacity .25s ease, visibility .25s ease;
   z-index: 90;
 }
-.sidebar-overlay.active {
-  opacity: 1;
-  visibility: visible;
-}
+.sidebar-overlay.active{ opacity:1; visibility:visible; }
 
-/* ✅ Sidebar tipo PWA */
-.sidebar {
-  position: fixed;
-  top: 0;
-  left: -100%;
-  width: 85%;
-  max-width: 320px;
-  height: 100%;
-  background: #fff;
-  box-shadow: 4px 0 12px rgba(0,0,0,0.1);
-  border-radius: 0 16px 16px 0;
-  display: flex;
-  flex-direction: column;
-  transition: 0.3s ease;
+/* ===== Contenedor principal ===== */
+.sidebar{
+  position: fixed; top: 0; left: 0;
+  width: 320px; max-width: 92vw; height: 100vh;
+  display: flex; flex-direction: column;
+  padding: var(--sp);
+  border-right: var(--bd);
+  box-shadow: var(--shadow-1);
   z-index: 100;
-  padding: 16px;
-  overflow-y: auto;
+  overflow: hidden;
 }
+.sidebar:hover{ box-shadow: var(--shadow-2); }
+
+/* Scroll vertical interno */
+.sidebar{ overflow-y: auto; }
+.sidebar::-webkit-scrollbar{ width: 10px; }
+.sidebar::-webkit-scrollbar-thumb{ background: rgba(2,6,23,.14); border-radius: 10px; }
+
+/* ===== Header ===== */
+.sidebar-header{
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 4px 10px;
+  position: sticky; top: 0; z-index: 3;
+  background: linear-gradient(180deg, #fff 75%, rgba(255,255,255,.92));
+  border-bottom: var(--bd);
+  backdrop-filter: blur(2px);
+}
+.logo-text{
+  font-weight: 900; letter-spacing: .2px;
+  font-size: 1.05rem; color: var(--ink);
+}
+.close-btn{
+  border: 1px solid rgba(2,6,23,.10);
+  background: #f1f5f9; color: var(--ink);
+  width: 34px; height: 34px; border-radius: 10px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: filter .15s, transform .06s, background .15s, border-color .15s;
+}
+.close-btn:hover{ filter: brightness(1.03); background:#e9eef7; }
+.close-btn:active{ transform: translateY(1px); }
+
+/* ===== Secciones (acordeón) ===== */
+.section{ margin-top: 12px; border: var(--bd); border-radius: var(--r-lg); background: #fff; box-shadow: 0 1px 0 rgba(2,6,23,.04) inset; }
+.section-header{
+  width: 100%; border: 0; background: transparent; cursor: pointer;
+  padding: 12px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-weight: 900; letter-spacing: .2px; color: var(--ink);
+  border-radius: var(--r-lg);
+}
+.section-header:hover{ background: #f5f7fb; }
+.section-content{
+  display: grid; gap: 12px;
+  padding: 0 12px; max-height: 0; overflow: hidden;
+  transition: grid-template-rows .25s ease, max-height .25s ease, padding .25s ease;
+}
+.section-content.open{
+  padding: 0 12px 12px;
+  max-height: 1200px; /* suficiente para transicionar */
+}
+
+/* ===== Filtros de fecha ===== */
+.sf-dates{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sf-label{ display:block; font-size: 12px; color: var(--ink-weak); font-weight: 800; margin-bottom: 6px; }
+.sf-input{
+  width: 100%; min-height: 42px;
+  border: var(--bd); border-radius: var(--r-md);
+  background: #ffffff; color: var(--ink);
+  padding: 10px 12px; font-size: 14px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.sf-input:hover{ background: #fcfdff; }
+.sf-input:focus{ outline: none; border-color: var(--brand); box-shadow: var(--ring); }
+
+/* ===== Buscador de eventos ===== */
+.sidebar-search{ margin-top: 2px; }
+.sidebar-search-input{
+  width: 100%; min-height: 42px;
+  border: var(--bd); border-radius: var(--r-md);
+  background: #ffffff; color: var(--ink);
+  padding: 10px 12px; font-size: 14px;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.sidebar-search-input::placeholder{ color: #8aa0b6; }
+.sidebar-search-input:hover{ background:#fcfdff; }
+.sidebar-search-input:focus{ outline: none; border-color: var(--brand); box-shadow: var(--ring); }
+
+/* ===== Panel de eventos ===== */
+.events-panel{ border: var(--bd); border-radius: var(--r-md); background: var(--panel); padding: 10px; }
+.panel-head{ display: flex; align-items: center; gap: 8px; }
+.badge{
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px; padding: 0 8px;
+  border-radius: 999px; background: #e9efff; color: #1d4ed8; font-weight: 900; font-size: 12px;
+  border: 1px solid rgba(29,78,216,.22);
+}
+.events-actions{ display:flex; gap:8px; flex-wrap: wrap; margin: 8px 0 8px; }
+.chip{
+  border: 1px solid rgba(2,6,23,.10); background:#eef4ff; color:#0f172a;
+  border-radius: 999px; padding: 8px 12px; font-weight: 800; font-size: 12.5px; cursor: pointer;
+  transition: filter .15s, background .15s, border-color .15s, transform .06s;
+}
+.chip:hover{ background:#e6eeff; }
+.chip:disabled{ opacity:.55; cursor:not-allowed; }
+
+.events-list{ display: grid; gap: 8px; max-height: 180px; overflow: auto; padding-right: 2px; }
+.event-item{
+  display: flex; align-items: center; gap: 10px;
+  background: #fff; border: var(--bd); border-radius: var(--r-md);
+  padding: 10px 12px; font-size: 13.5px; color: var(--ink);
+  transition: background .15s, border-color .15s, transform .06s;
+}
+.event-item:hover{ background: #f7faff; border-color: rgba(29,78,216,.28); }
+.event-item input[type="checkbox"]{ width: 16px; height: 16px; accent-color: var(--brand); }
+.events-empty{ color:#94a3b8; font-size: 12.5px; padding: 2px 2px 4px; }
+
+/* ===== Navegación clientes/ubicaciones ===== */
+.nav-list{ display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.sidebar-link{
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px; border-radius: var(--r-md);
+  color: var(--ink); background: #fff; border: 1px solid transparent;
+  font-weight: 800; font-size: 14px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s, transform .06s, box-shadow .15s;
+}
+.sidebar-link:hover{ background:#f5f7fb; border-color:#e7ecf6; }
+.sidebar-link.active{
+  background: #eaf1ff; color: #1d4ed8; border-color: #cfe0ff;
+  box-shadow: inset 0 0 0 1px rgba(29,78,216,.12);
+}
+.expand-btn{
+  margin-left: auto; display: grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 10px;
+  border: 1px solid #e5eaf5; background: #f8faff; color: var(--ink);
+  cursor: pointer; transition: background .15s, transform .06s, border-color .15s;
+}
+.expand-btn:hover{ background:#eef4ff; border-color:#d7e3ff; }
+.expand-btn:active{ transform: translateY(1px); }
+
+/* ===== Submenú (accordion interno) ===== */
+.sub-menu{
+  margin: 6px 0 0 8px; border: var(--bd); border-radius: var(--r-md);
+  background: #fbfcff; padding: 0; max-height: 0; overflow: hidden;
+  transition: max-height .25s ease, padding .25s ease, opacity .25s ease;
+  opacity: 0;
+}
+.sub-menu.open{ padding: 10px; max-height: 700px; opacity: 1; }
+
+.search-input{
+  width: 100%; min-height: 40px;
+  border: var(--bd); border-radius: var(--r-md);
+  background: #ffffff; color: var(--ink);
+  padding: 10px 12px; font-size: 14px; margin-bottom: 10px;
+}
+.search-input::placeholder{ color:#9aa7bd; }
+.scrollable-list{ max-height: 220px; overflow: auto; padding-right: 2px; }
+
+.grupo{ margin: 10px 0; }
+.grupo > strong{ display: block; font-size: 12px; color: var(--ink-weak); margin: 4px 0 6px; letter-spacing: .2px; }
+.sub-item{
+  padding: 8px 10px; border-radius: var(--r-md); color: var(--ink); font-size: 13.5px; cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.sub-item:hover{ background: #f1f5fb; }
+.all-edificio{
+  font-weight: 900; color: #1d4ed8; padding: 8px 10px;
+  border-bottom: 1px dashed #e6ebf5; margin-bottom: 6px; cursor: pointer;
+}
+.all-edificio:hover{ background:#eef4ff; }
+
+/* ===== Estados de foco accesibles ===== */
+.sidebar :is(button, a, input, .sidebar-link, .sub-item, .event-item){
+  outline: none;
+}
+.sidebar :is(button:focus-visible, .sidebar-link:focus-visible, .sub-item:focus-visible, .event-item:focus-visible, .sf-input:focus-visible, .search-input:focus-visible, .sidebar-search-input:focus-visible){
+  box-shadow: var(--ring);
+}
+
+/* ===== Drawer mobile ===== */
+@media (max-width: 768px){
+  .sidebar{
+    left: -100%;
+    width: 86vw; max-width: 360px;
+    border-right: none; border-radius: 0 16px 16px 0;
+    transform: translateX(-8px);
+    transition: transform .28s ease, box-shadow .2s ease, left .28s ease;
+  }
+  .sidebar.active{ left: 0; transform: translateX(0); }
+}
+
+/* ============ DARK MODE (opt-in con .sidebar--dark) ============ */
+.sidebar.sidebar--dark{
+  --bg: #0f172a;
+  --panel: #0b1426;
+  --ink: #eaf2ff;
+  --ink-weak: #9fb0c8;
+  --bd: 1px solid rgba(148,163,184,.18);
+  background: var(--bg);
+  box-shadow: 0 24px 60px rgba(0,0,0,.45);
+}
+.sidebar--dark .sidebar-header{ background: linear-gradient(180deg, rgba(15,23,42,.94), rgba(15,23,42,.90)); }
+.sidebar--dark .close-btn{ background:#0f1f3a; color:#eaf2ff; border-color: rgba(148,163,184,.22); }
+.sidebar--dark .close-btn:hover{ background:#132548; }
+.sidebar--dark .section{ background:#0f172a; }
+.sidebar--dark .section-header{ color:#eaf2ff; }
+.sidebar--dark .section-header:hover{ background:#0f1f3a; }
+
+.sidebar--dark .sf-input,
+.sidebar--dark .sidebar-search-input,
+.sidebar--dark .search-input{
+  background:#0f1f3a; color:#eaf2ff; border-color: rgba(148,163,184,.24);
+}
+.sidebar--dark .sf-input:hover,
+.sidebar--dark .sidebar-search-input:hover,
+.sidebar--dark .search-input:hover{ background:#122548; }
+.sidebar--dark .sf-input:focus,
+.sidebar--dark .sidebar-search-input:focus,
+.sidebar--dark .search-input:focus{ box-shadow: 0 0 0 4px rgba(56,189,248,.20); border-color:#60a5fa; }
+
+.sidebar--dark .events-panel{ background:#0f1f3a; }
+.sidebar--dark .badge{ background:#0b2a66; color:#b9d4ff; border-color: rgba(99,139,255,.35); }
+.sidebar--dark .chip{ background:#0f1f3a; color:#eaf2ff; border-color: rgba(148,163,184,.28); }
+.sidebar--dark .chip:hover{ background:#132548; }
+
+.sidebar--dark .event-item{ background:#0f1f3a; border-color: rgba(148,163,184,.22); }
+.sidebar--dark .event-item:hover{ background:#132548; border-color:#2d6bff; }
+.sidebar--dark .event-item input[type="checkbox"]{ accent-color:#2d6bff; }
+.sidebar--dark .events-empty{ color:#9fb0c8; }
+
+.sidebar--dark .sidebar-link{ background: transparent; color:#eaf2ff; }
+.sidebar--dark .sidebar-link:hover{ background:#0f1f3a; border-color: rgba(148,163,184,.18); }
+.sidebar--dark .sidebar-link.active{
+  background:#132548; color:#7fb0ff; border-color:#2d6bff;
+  box-shadow: inset 0 0 0 1px rgba(45,107,255,.22);
+}
+
+.sidebar--dark .sub-menu{ background:#0b1426; }
+.sidebar--dark .grupo > strong{ color:#b8c6df; }
+.sidebar--dark .all-edificio{ color:#7fb0ff; border-bottom-color: rgba(148,163,184,.24); }
+
+/* ===== Pequeños extras ===== */
+.config-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+/* === OVERRIDE GLOBAL (pegar al final del archivo) === */
+/* Cierra el sidebar por defecto en TODAS las resoluciones */
+.sidebar {
+  left: 0;                             /* mantenemos el anclaje */
+  transform: translateX(-100%);        /* off-canvas por defecto */
+  transition: transform .28s ease, box-shadow .2s ease;
+}
+
+/* Abre el sidebar cuando tenga .active */
 .sidebar.active {
+  transform: translateX(0);
+}
+
+/* El overlay ya lo tenés; aseguramos clicks y stacking */
+.sidebar-overlay {
+  pointer-events: none;
+}
+.sidebar-overlay.active {
+  pointer-events: auto;
+}
+
+/* Si querés un poco más de suavidad al cerrar/abrir */
+.sidebar:hover { box-shadow: var(--shadow-2); }
+@media (max-width: 768px){
+  .sidebar { transform: translateX(-100%); }   /* cerrado */
+  .sidebar.active { transform: translateX(0); }/* abierto */
+}
+/* ==== SIDEBAR: debajo del header (92px) y visible ==== */
+:where(.sidebar, .sidebar-overlay){
+  top: 92px;                 /* evita quedar debajo del header */
+}
+
+.sidebar {
   left: 0;
+  transform: translateX(-100%);       /* cerrado por defecto */
+  transition: transform .28s ease, box-shadow .2s ease;
+  z-index: 2000;                       /* sobre contenido, bajo header (2500) */
 }
 
-/* ✅ Header */
-.sidebar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.logo-text {
-  font-size: 1.4rem;
-  font-weight: bold;
-}
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
+.sidebar.active {
+  transform: translateX(0);            /* abierto */
 }
 
-/* ✅ Links */
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 12px;
-  transition: background 0.2s;
-  cursor: pointer;
-}
-.sidebar-link:hover,
-.sidebar-link.active {
-  background: #f0f0f0;
-}
-
-/* ✅ Submenú */
-.sub-menu {
-  margin-left: 20px;
-  margin-top: 8px;
-}
-.search-input {
-  width: 100%;
-  padding: 8px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  margin-bottom: 8px;
-}
-.scrollable-list {
-  max-height: 150px;
-  overflow-y: auto;
-}
-.sub-item {
-  padding: 6px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.sub-item:hover {
-  background: #f0f0f0;
-}
-
-/* ✅ Botón flotante */
-.floating-toggle {
+/* Overlay clickeable solo cuando esté activo */
+.sidebar-overlay {
   position: fixed;
-  bottom: 20px;
-  left: 20px;
-  background: #2563eb;
-  color: #fff;
-  border: none;
-  border-radius: 50%;
-  width: 56px;
-  height: 56px;
-  font-size: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  cursor: pointer;
-  z-index: 101;
+  inset: 92px 0 0 0;                   /* comienza debajo del header */
+  pointer-events: none;
+  z-index: 1900;                       /* bajo el sidebar */
 }
-.all-edificio {
-  font-weight: bold;
-  color: #2563eb;
-  padding: 8px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid #e5e7eb;
-  cursor: pointer;
+.sidebar-overlay.active {
+  pointer-events: auto;
 }
 
-.all-edificio:hover {
-  background: #e0e7ff;
+/* Mobile: mantiene el mismo comportamiento */
+@media (max-width: 768px){
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.active { transform: translateX(0); }
 }
+:where(.sidebar, .sidebar-overlay){ top: 96px; }
+.sidebar-overlay { inset: 96px 0 0 0; }
+/* === FIX DEFINITIVO: sidebar debajo del header y visible === */
+/* Ajustá acá la altura real del header (92px o 96px) */
+body { --hdr-h: 92px !important; }
+
+/* Colocar el sidebar y el overlay desde debajo del header */
+.sidebar,
+.sidebar-overlay {
+  top: var(--hdr-h) !important;
+}
+
+/* Asegurar que el overlay cubra desde debajo del header y sea clickeable solo activo */
+.sidebar-overlay {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  inset: var(--hdr-h) 0 0 0 !important;  /* equivalente a top: var(--hdr-h) */
+  pointer-events: none;
+  z-index: 1900 !important;              /* bajo el sidebar, sobre el contenido */
+}
+.sidebar-overlay.active { pointer-events: auto; }
+
+/* Sidebar visible sobre contenido pero bajo el header */
+.sidebar {
+  left: 0 !important;
+  height: calc(100vh - var(--hdr-h)) !important;
+  transform: translateX(-100%) !important;   /* cerrado por defecto */
+  transition: transform .28s ease, box-shadow .2s ease !important;
+  z-index: 2000 !important;                  /* header está en ~2500 */
+}
+.sidebar.active { transform: translateX(0) !important; }
+
+/* Mobile: mismo comportamiento */
+@media (max-width: 768px){
+  .sidebar { transform: translateX(-100%) !important; }
+  .sidebar.active { transform: translateX(0) !important; }
+}/* ====== LAYOUT APP: altura única del header ====== */
+.has-fixed-header { --header-h: 92px; }            /* <-- si cambiás el alto del header, solo tocás acá */
+
+/* Sidebar y overlay empiezan DEBAJO del header */
+.has-fixed-header :where(.sidebar, .sidebar-overlay) {
+  top: var(--header-h);
+}
+
+/* Overlay cubre el contenido pero no el header */
+.has-fixed-header .sidebar-overlay {
+  position: fixed;
+  inset: var(--header-h) 0 0 0;                    /* respeta la altura del header */
+  pointer-events: none;
+  z-index: 2300;                                   /* debajo del sidebar, encima del contenido */
+}
+.has-fixed-header .sidebar-overlay.active { pointer-events: auto; }
+
+/* Sidebar: sobre contenido, bajo header */
+.sidebar {
+  left: 0;
+  transform: translateX(-100%);                    /* cerrado por defecto */
+  transition: transform .28s ease, box-shadow .2s ease;
+  z-index: 2400;                                   /* < header (2500/3000), > contenido */
+}
+.sidebar.active { transform: translateX(0); }
+
+/* Aseguramos el stacking del header (no lo tocamos visualmente) */
+header.header-pro { z-index: 3000; }
+
+/* Evitá reglas antiguas que lo empujan mal en mobile: mantenemos la misma animación */
+@media (max-width: 768px){
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.active { transform: translateX(0); }
+}
+
+/* === FIX DEFINITIVO: sidebar debajo del header y visible === */
+/* Ajustá acá la altura real del header (92px o 96px) */
+body { --hdr-h: 92px !important; }
+
+/* Colocar el sidebar y el overlay desde debajo del header */
+.sidebar,
+.sidebar-overlay {
+  top: var(--hdr-h) !important;
+}
+
+/* Asegurar que el overlay cubra desde debajo del header y sea clickeable solo activo */
+.sidebar-overlay {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  inset: var(--hdr-h) 0 0 0 !important;  /* equivalente a top: var(--hdr-h) */
+  pointer-events: none;
+  z-index: 1900 !important;              /* bajo el sidebar, sobre el contenido */
+}
+.sidebar-overlay.active { pointer-events: auto; }
+
+/* Sidebar visible sobre contenido pero bajo el header */
+.sidebar {
+  left: 0 !important;
+  height: calc(100vh - var(--hdr-h)) !important;
+  transform: translateX(-100%) !important;   /* cerrado por defecto */
+  transition: transform .28s ease, box-shadow .2s ease !important;
+  z-index: 2000 !important;                  /* header está en ~2500 */
+}
+.sidebar.active { transform: translateX(0) !important; }
+
+/* Mobile: mismo comportamiento */
+@media (max-width: 768px){
+  .sidebar { transform: translateX(-100%) !important; }
+  .sidebar.active { transform: translateX(0) !important; }
+}
+/* ====== Resumen de filtros (no pisa estilos existentes) ====== */
+.sidebar .filters-summary{
+  margin: 8px 0 6px;
+  border: var(--bd);
+  background: var(--panel);
+  border-radius: var(--r-md);
+  padding: 8px;
+  position: sticky; 
+  top: 6px;            /* queda visible al hacer scroll dentro del sidebar */
+  z-index: 2;
+}
+
+.sidebar .fs-row{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar .fs-chip{
+  appearance: none;
+  border: 1px solid rgba(2,6,23,.12);
+  background: #eef4ff;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex; 
+  align-items: center;
+  gap: 6px;
+}
+.sidebar .fs-chip:hover{ filter: brightness(0.98); border-color: #cfe0ff; }
+.sidebar .fs-chip .fs-x{ opacity: .85; }
+
+.sidebar .fs-more{
+  font-size: 12px; 
+  color: #64748b; 
+  padding: 2px 6px;
+}
+
+.sidebar .fs-clear{
+  margin-left: auto;
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px dashed #cbd5e1;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.sidebar .fs-clear:hover{ background:#f8fafc; }
+
+/* Dark mode */
+.sidebar.sidebar--dark .filters-summary{
+  background:#0f1f3a; 
+  border: 1px solid rgba(148,163,184,.24);
+}
+.sidebar.sidebar--dark .fs-chip{
+  background:#132548; 
+  color:#eaf2ff; 
+  border-color: rgba(148,163,184,.28);
+}
+.sidebar.sidebar--dark .fs-clear{
+  background: transparent; 
+  color:#9fb0c8; 
+  border-color: rgba(148,163,184,.28);
+}
+.sidebar.sidebar--dark .fs-clear:hover{ background:#0f172a; }
+.sidebar.sidebar--dark .fs-more{ color:#9fb0c8; }
+.sidebar.sidebar--dark .fs-hint{ color:#9fb0c8; }
+/* === FIX FINAL: Sidebar siempre arriba de todo === */
+.sidebar {
+  position: fixed !important;
+  top: var(--hdr-h, 92px) !important;
+  left: 0 !important;
+  height: calc(100vh - var(--hdr-h, 92px)) !important;
+  z-index: 9999 !important;        /* 🔥 más alto que cualquier contenido o header */
+  transform: translateX(-100%) !important;
+  transition: transform .28s ease, box-shadow .2s ease !important;
+}
+
+.sidebar.active {
+  transform: translateX(0) !important;
+}
+
+/* Overlay también elevado pero bajo el sidebar */
+.sidebar-overlay {
+  position: fixed !important;
+  inset: var(--hdr-h, 92px) 0 0 0 !important;
+  z-index: 9998 !important;
+  pointer-events: none;
+  background: rgba(2, 6, 23, 0.45);
+}
+.sidebar-overlay.active { pointer-events: auto; }

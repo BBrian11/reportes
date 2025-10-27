@@ -1,3 +1,4 @@
+// src/components/Dashboard/riesgoRondin/CameraTable.jsx
 import React, { useMemo } from "react";
 import {
   Box, IconButton, Select, MenuItem, TextField, Tooltip, Chip, Stack,
@@ -5,16 +6,16 @@ import {
 } from "@mui/material";
 import { Delete, RadioButtonUnchecked } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
-import { CANALES_OPCIONES, ESTADOS, estadoMeta } from "./helpers";
+import { CANALES_OPCIONES, ESTADOS, estadoMeta, toChannelNumber } from "./helpers";
 
 export default function CameraTable({ tanda, historicos = {}, onCamField, onCamRemove, onCamState }) {
   if (!tanda || !Array.isArray(tanda.camaras)) return null;
 
-  // para marcar canales repetidos
+  // canales repetidos en la misma tanda
   const usadosPorOtro = useMemo(() => {
     const count = {};
     for (const c of tanda.camaras) {
-      const key = Number(c.canal);
+      const key = toChannelNumber(c.canal);
       count[key] = (count[key] || 0) + 1;
     }
     return count;
@@ -34,8 +35,7 @@ export default function CameraTable({ tanda, historicos = {}, onCamField, onCamR
       {/* Rows */}
       <Box>
         {tanda.camaras.map((cam, idx) => {
-          const canalNum = Number(cam.canal);
-          // estado efectivo: local si existe; si no, lo último de Firestore (historicos)
+          const canalNum = toChannelNumber(cam.canal);
           const estadoNow = cam.estado ?? historicos[canalNum] ?? null;
           const metaNow   = estadoMeta(estadoNow);
 
@@ -50,11 +50,12 @@ export default function CameraTable({ tanda, historicos = {}, onCamField, onCamR
                 borderTop:"1px solid rgba(2,6,23,.04)"
               }}
             >
-              {/* Select equipo — coloreado por estado efectivo */}
+              {/* Select equipo */}
               <Select
-              key={`${cam.id}-${estadoNow || 'null'}`}
                 value={canalNum}
-                onChange={(e) => onCamField(tanda.id, cam.id, "canal", Number(e.target.value))}
+                onChange={(e) =>
+                  onCamField(tanda.id, cam.id, "canal", toChannelNumber(e.target.value))
+                }
                 input={
                   <OutlinedInput
                     sx={{
@@ -66,34 +67,16 @@ export default function CameraTable({ tanda, historicos = {}, onCamField, onCamR
                     }}
                   />
                 }
-                renderValue={(v) => {
-                  const vNum = Number(v);
-                  const local = tanda.camaras.find(x => Number(x.canal) === vNum)?.estado ?? null;
-                  const estEff = local ?? historicos[vNum] ?? null;
-                  const m = estadoMeta(estEff);
-                  return (
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 0.5 }}>
-                      <span style={{ display:"inline-block", width:8, height:8, borderRadius:999, background:m.color }} />
-                      <span>{`Cámara ${vNum}`}</span>
-                      <Chip
-                        size="small"
-                        label={m.label}
-                        sx={{
-                          ml:.5, height:22, borderRadius:999,
-                          bgcolor: alpha(m.color, .15),
-                          border:`1px solid ${alpha(m.color, .4)}`,
-                          color:"inherit", fontWeight:600
-                        }}
-                      />
-                    </Stack>
-                  );
-                }}
                 MenuProps={{ PaperProps: { sx: { maxHeight: 400 } } }}
               >
-                {CANALES_OPCIONES.map((n) => {
-                  const eff = (tanda.camaras.find(x => Number(x.canal) === n)?.estado) ?? historicos[n] ?? null;
+                {CANALES_OPCIONES.map((opt) => {
+                  const n = toChannelNumber(opt);
+                  const eff =
+                    tanda.camaras.find((x) => toChannelNumber(x.canal) === n)?.estado ??
+                    historicos[n] ?? null;
                   const m = estadoMeta(eff);
                   const repetido = (usadosPorOtro[n] || 0) > 1 && n !== canalNum;
+
                   return (
                     <MenuItem
                       key={n}

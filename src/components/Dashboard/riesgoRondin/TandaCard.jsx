@@ -1,3 +1,5 @@
+// src/components/Dashboard/riesgoRondin/TandaCard.jsx
+import React, { useMemo } from "react";
 import {
   Card, CardHeader, CardContent, Stack, Tooltip, IconButton, Button,
   Grid, FormControl, InputLabel, Select, MenuItem, TextField, Chip
@@ -11,6 +13,15 @@ import { norm } from "./helpers";
 
 import { db } from "../../../services/firebase";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+
+function num(val, fallback = 1) {
+  if (val == null) return Number(fallback);
+  if (typeof val === "object") {
+    const v = val.value ?? val.id ?? val.canal ?? fallback;
+    return Number(v);
+  }
+  return Number(val);
+}
 
 export default function TandaCard({
   tanda,
@@ -26,28 +37,30 @@ export default function TandaCard({
   toggleFallan,
   setResumen,
   clientesCat = [],
-  rondaId, // 👈 NUEVO: lo pasás desde el padre (FormRiesgoRondin)
+  rondaId, // <-- id real del doc en "respuestas-tareas"
+  onAccionConfirm,
 }) {
   if (!tanda) return null;
 
-  const clienteKey = norm(tanda.cliente || "");
+  // clave para colecciones de índice
+  const clienteKey = useMemo(() => norm(tanda.cliente || ""), [tanda.cliente]);
+
+  // histórico live de cámaras de ese cliente
   const historicosHook = useCamarasHistoricas(clienteKey);
   const historicos = historicosProp ?? historicosHook;
 
-  // 👇 callback que usa el NovedadesCard para cambios rápidos de estado
+  // “cambios rápidos” (desde NovedadesCard)
   const handleEstadoChanged = async (canal, next) => {
-    // 1) Si la cámara existe en la tanda, actualizamos via onCamState (UI inmediata + persistencia live que ya hacés ahí)
-    const row = tanda.camaras.find((c) => Number(c.canal) === Number(canal));
-    if (row) {
-      onCamState?.(tanda.id, row.id, next);
+    const row = (tanda.camaras || []).find((c) => num(c.canal) === num(canal));
+    if (row && onCamState) {
+      onCamState(tanda.id, row.id, next);
       return;
     }
 
-    // 2) Si NO existe en la tanda, persistimos directo en el índice para no perder el cambio
     if (clienteKey && canal) {
       try {
         await setDoc(
-          doc(db, "rondin-index", clienteKey, "camaras", String(canal)),
+          doc(db, "rondin-index", clienteKey, "camaras", String(num(canal))),
           { estado: next, updatedAt: serverTimestamp(), rondaId: rondaId || "desde-novedades" },
           { merge: true }
         );
@@ -58,32 +71,36 @@ export default function TandaCard({
     }
   };
 
+  const camsCount = (tanda.camaras || []).length;
+
   return (
     <Card id={tanda.id} sx={{ overflow: "hidden" }}>
       <CardHeader
         titleTypographyProps={{ variant: "h6" }}
-        subheaderTypographyProps={{ sx: { mt: .5, color: "text.secondary" } }}
+        subheaderTypographyProps={{ sx: { mt: 0.5, color: "text.secondary" } }}
         title={tanda.cliente || "Seleccioná cliente"}
         subheader={
           <Stack direction="row" spacing={1} alignItems="center">
             <FormControl size="small" sx={{ minWidth: 280 }}>
               <InputLabel>Cliente</InputLabel>
               <Select
-                value={tanda.cliente}
+                value={tanda.cliente || ""}
                 label="Cliente"
-                onChange={(e) => onSetCliente(tanda.id, e.target.value)}
+                onChange={(e) => onSetCliente?.(tanda.id, e.target.value)}
               >
                 {clientesCat.map((c) => (
-                  <MenuItem key={c.id} value={c.nombre}>{c.nombre}</MenuItem>
+                  <MenuItem key={c.id} value={c.nombre}>
+                    {c.nombre}
+                  </MenuItem>
                 ))}
               </Select>
             </FormControl>
-            <Chip size="small" label={`${tanda.camaras.length} cámaras`} variant="outlined" />
+            <Chip size="small" label={`${camsCount} cámaras`} variant="outlined" />
           </Stack>
         }
         action={
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<Add />} onClick={() => onAddCam(tanda.id)}>
+            <Button variant="outlined" startIcon={<Add />} onClick={() => onAddCam?.(tanda.id)}>
               Agregar cámara
             </Button>
             <Tooltip title="Eliminar tanda">
@@ -105,7 +122,10 @@ export default function TandaCard({
             <CameraTable
               tanda={tanda}
               historicos={historicos}
-              onCamField={onCamField}
+              onCamField={(tId, camId, key, value) => {
+                const val = key === "canal" ? num(value) : value;
+                onCamField?.(tId, camId, key, val);
+              }}
               onCamRemove={onCamRemove}
               onCamState={onCamState}
             />
@@ -115,27 +135,25 @@ export default function TandaCard({
           <Grid item xs={12} md={5}>
             <Grid container spacing={2}>
               <Grid item xs={12}>
-              <NovedadesCard
-  clienteKey={clienteKey}
-  camaras={tanda.camaras}          // ⬅️ clave para ver la nota en vivo
-  historicos={historicos}
-  limit={8}
-  rondaId={rondaId}
-  onEstadoChanged={(canal, next) => {
-    const cam = (tanda.camaras || []).find(c => Number(c.canal) === Number(canal));
-    if (cam && onCamState) onCamState(tanda.id, cam.id, next);
-  }}
-/>
-
-
-
+                <NovedadesCard
+                  clienteKey={clienteKey}
+                  camaras={tanda.camaras}
+                  historicos={historicos}
+                  limit={8}
+                  rondaId={rondaId}
+                  onEstadoChanged={handleEstadoChanged}
+                />
               </Grid>
+
               <Grid item xs={12}>
                 <ChecklistPanel
                   t={tanda}
                   setChecklistVal={setChecklistVal}
                   resetFallan={resetFallan}
                   toggleFallan={toggleFallan}
+                  onAccionConfirm={onAccionConfirm}
+                  // 👇 ahora el panel sabe exactamente dónde persistir
+                  docIdActual={rondaId}
                 />
               </Grid>
             </Grid>
@@ -144,9 +162,11 @@ export default function TandaCard({
 
         <TextField
           label="Resumen (opcional)"
-          fullWidth multiline minRows={2}
-          value={tanda.resumen}
-          onChange={(e) => setResumen(tanda.id, e.target.value)}
+          fullWidth
+          multiline
+          minRows={2}
+          value={tanda.resumen || ""}
+          onChange={(e) => setResumen?.(tanda.id, e.target.value)}
           sx={{ mt: 2 }}
         />
       </CardContent>

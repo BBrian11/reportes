@@ -1238,3 +1238,67 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   padding: 20px;
 }
+/* En tu CSS global, p.ej. styles/dashboard.css */
+.notif-bubbles-portal{
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  gap: 12px;
+  z-index: 2147483647; /* por encima de todo */
+  pointer-events: none; /* evita bloquear clicks al resto */
+}
+.notif-bubbles-portal .icon-btn{
+  pointer-events: auto; /* habilita click en los botones */
+  width: 46px; height: 46px; border-radius: 9999px;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; border:0; cursor:pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+}
+.icon-btn.notif.blue{ background:#2563eb; }
+.icon-btn.notif.red { background:#ef4444; }
+.icon-btn.notif .badge{
+  position:absolute; top:-4px; right:-4px;
+  min-width:18px; height:18px; line-height:18px; font-size:11px;
+  padding:0 5px; border-radius:999px;
+  background:#111827; color:#fff; border:2px solid #fff;
+}
+/* Bloquea scroll AUTOMÁTICAMENTE mientras exista el overlay */
+html:has(.modal-overlay),
+body:has(.modal-overlay) {
+  overflow: hidden;
+}
+
+/* Overlay fijo centrado por encima de todo */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.55);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  z-index: 999999;
+}
+
+/* Card del modal */
+.modal-card {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(80vh, 720px);
+  overflow: auto;                 /* el scroll es del modal, no del body */
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  padding: 16px;
+  overscroll-behavior: contain;   /* la rueda no “se escapa” al fondo */
+}
+
+/* (opcional) asegúrate que el contenido principal sí tenga scroll */
+.dashboard-main { overflow: auto; }
+
+/* resto (como ya tenías) */
+.notif-list { margin: 12px 0; padding: 0; list-style: none; }
+.notif-item { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 8px; }
+.notif-item.unread { background: #f8fbff; }
+.modal-actions { display: flex; justify-content: center; margin-top: 12px; }
+.btn.primary { background: #2151f0; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer; }
+.notif-bubbles-portal { z-index: 999990; }

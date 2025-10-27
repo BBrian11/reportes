@@ -1,5 +1,6 @@
+// src/App.jsx
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import { riesgoTheme, RiesgoGlobalStyles } from "./theme/riesgoTheme.jsx";
 
@@ -9,35 +10,68 @@ import DynamicForm from "./components/Dashboard/DynamicForm.jsx";
 import FormRondin from "./components/Dashboard/FormRondin.jsx";
 import FormRiesgoRondin from "./components/Dashboard/riesgoRondin/FormRiesgoRondin.jsx";
 import LiveOpsDashboard from "./components/Dashboard/LiveOpsDashboard.jsx";
-
-// ✅ IMPORTAR PROTECTOR DE RUTA
+import NovedadesWall from "./components/Dashboard/NovedadesWall.jsx";
 import RequireOperador from "./components/auth/RequireOperador.jsx";
+import RequireAdmin from "./components/auth/RequireAdmin.jsx";
+import ClientesCriticosList from "./components/Dashboard/ClientesCriticosList";
+import LoginAdmin from "./components/auth/LoginAdmin.jsx";
+import AdminDashboard from "./components/admin/AdminDashboard.jsx";
+import NovedadesForm from "./components/Dashboard/NovedadesForm";
+import { AdminAuthProvider } from "./context/AdminAuthContext";
+import PortalPendientes from "./components/Dashboard/PortalPendientes.jsx";
 
 export default function App() {
   return (
     <ThemeProvider theme={riesgoTheme}>
       <CssBaseline />
       <RiesgoGlobalStyles />
-      <Router>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/form-builder" element={<FormBuilder />} />
-          <Route path="/formularios/:id" element={<DynamicForm />} />
-          <Route path="/rondin" element={<FormRondin />} />
+      <AdminAuthProvider>
+        <Router>
+          <Routes>
+            {/* 👇 Hacemos que la raíz muestre login admin */}
+            <Route path="/" element={<Navigate to="/login-admin" replace />} />
 
-          {/* ✅ Protegida por login de operador */}
-          <Route
-            path="/rondin2"
-            element={
-              <RequireOperador>
-                <FormRiesgoRondin />
-              </RequireOperador>
-            }
-          />
+            {/* Login de administración (Firestore only, sin Firebase Auth) */}
+            <Route path="/login-admin" element={<LoginAdmin />} />
 
-          <Route path="/monitor" element={<LiveOpsDashboard />} />
-        </Routes>
-      </Router>
+            {/* Dashboard general AHORA vive en /dashboard */}
+            <Route path="/dashboard" element={<Dashboard />} />
+
+            {/* Formularios */}
+            <Route path="/form-builder" element={<FormBuilder />} />
+            <Route path="/formularios/:id" element={<DynamicForm />} />
+            <Route path="/rondin" element={<FormRondin />} />
+            <Route path="/novedades" element={<NovedadesWall />} />
+            <Route path="/clientes" element={  <ClientesCriticosList />} />
+            <Route path="/formulario" element={<NovedadesForm />} />
+            <Route path="/pendientes" element={<PortalPendientes/>} />
+            <Route
+              path="/rondin2"
+              element={
+                <RequireOperador>
+                  <FormRiesgoRondin />
+                </RequireOperador>
+              }
+            />
+
+            {/* Vista de monitoreo */}
+            <Route path="/monitor" element={<LiveOpsDashboard />} />
+
+            {/* Admin protegido por contexto de admin */}
+            <Route
+              path="/admin"
+              element={
+                <RequireAdmin>
+                  <Dashboard />
+                </RequireAdmin>
+              }
+            />
+
+            {/* Fallback → login admin */}
+            <Route path="*" element={<Navigate to="/login-admin" replace />} />
+          </Routes>
+        </Router>
+      </AdminAuthProvider>
     </ThemeProvider>
   );
 }

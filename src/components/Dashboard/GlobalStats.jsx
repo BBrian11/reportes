@@ -114,17 +114,18 @@ export default function GlobalStats({ eventos }) {
               ))}
             </ul>
           )}
-        </div>    <div className="ranking-card">
-        <h4 className="ranking-title">Top 5 Eventos</h4>
-        <ul className="ranking-list">
-          {eventosOrdenados.map(([evento, count], idx) => (
-            <li key={idx} className="ranking-item">
-              <span className="ranking-name">{evento}</span>
-              <span className="ranking-count">{count}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+        </div>   <div className="global-item ranking-card">
+  <h4 className="ranking-title">Top 5 Eventos</h4>
+  <ul className="ranking-list">
+    {eventosOrdenados.map(([evento, count], idx) => (
+      <li key={idx} className="ranking-item">
+        <span className="ranking-name">{evento}</span>
+        <span className="ranking-count">{count}</span>
+      </li>
+    ))}
+  </ul>
+</div>
+
       </div>
 
       {/* ✅ Turnos */}

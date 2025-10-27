@@ -1,6 +1,6 @@
 // src/components/Dashboard/riesgoRondin/helpers.js
 
-// === Estados de cámara ===
+// === Estados de cámara (única definición) ===
 export const ESTADOS = [
   { key: "ok",    label: "OK",    color: "#16a34a" },
   { key: "medio", label: "Medio", color: "#f59e0b" },
@@ -8,23 +8,47 @@ export const ESTADOS = [
 ];
 
 export function estadoMeta(k) {
-  const def = { label: "Sin estado", color: "#9ca3af" };
-  return ESTADOS.find(e => e.key === k) || def;
+  const def = { label: "Sin estado", color: "#64748b" };
+  return ESTADOS.find((e) => e.key === k) || def;
 }
 
-// === Opciones de canal (1..64) para selects, etc. ===
-export const CANALES_OPCIONES = Array.from({ length: 64 }, (_, i) => ({
-  value: i + 1,
-  label: String(i + 1),
-}));
+// === Opciones de canal ===
+// Preferí este en los <Select> para evitar “[object Object]”
+export const CANALES_OPCIONES = Array.from({ length: 64 }, (_, i) => i + 1);
 
-// === Valores por defecto usados en varios componentes ===
+// Si en algún Autocomplete querés objetos:
+export const CANALES_OPCIONES_OBJ = CANALES_OPCIONES.map((n) => ({ value: n, label: String(n) }));
+
+// === Normalizador de canal (SIEMPRE usarlo al leer/escribir "canal") ===
+// Acepta number, string ("5" o "Cámara 5") u objeto { value|id|canal|key|name|label }
+export const toChannelNumber = (v) => {
+  const pick = (x) => x?.value ?? x?.id ?? x?.canal ?? x?.key ?? x?.name ?? x?.label ?? null;
+
+  const parseNum = (x) => {
+    if (typeof x === "number") return x;
+    if (typeof x === "string") {
+      const m = x.match(/\d+/);            // extrae 12 de "Cámara 12"
+      return m ? Number(m[0]) : NaN;
+    }
+    return NaN;
+  };
+
+  let n = NaN;
+  if (v == null) n = NaN;
+  else if (typeof v === "object") n = parseNum(pick(v));
+  else n = parseNum(v);
+
+  if (!Number.isFinite(n) || n < 1) n = 1;
+  if (n > 64) n = 64;
+  return n;
+};
+
+// === Valores/constantes compartidos ===
 export const MAX_TANDAS = 64;
+export const OPERARIOS_DEFAULT = [
+  "Brisa","Luis","Bruno","Benjamín","Denise","Pedro","Romina","Martín","Juan"
+];
 
-// Podés reemplazar por tu lista real desde Firestore, acá queda un fallback
-export const OPERARIOS_DEFAULT = ["Brisa","Luis","Bruno","Benjamín","Denise","Pedro","Romina","Martín", "Juan"];
-
-// === Helpers de normalización y utilidades ===
 export const norm = (s = "") =>
   s.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toUpperCase();
 
@@ -32,7 +56,7 @@ export const ESTADO_KEYS = ["ok", "medio", "grave"];
 export const isEstadoKey = (v) => ESTADO_KEYS.includes(v);
 
 export const shuffle = (arr) =>
-  arr.map(v => [Math.random(), v]).sort((a,b)=>a[0]-b[0]).map(([,v])=>v);
+  arr.map((v) => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
 
 export const hh = (ms) => String(Math.floor(ms / 3600000)).padStart(2, "0");
 export const mm = (ms) => String(Math.floor((ms % 3600000) / 60000)).padStart(2, "0");
@@ -43,18 +67,20 @@ export const nuevaTanda = (id = Date.now()) => ({
   id: `tanda-${id}`,
   cliente: "",
   resumen: "",
-  camaras: [{
-    id: `cam-${id}-1`,
-    canal: 1,
-    estado: null,
-    estadoPrevio: null,
-    nota: "",
-    touched: false,
-    history: [],
-  }],
+  camaras: [
+    {
+      id: `cam-${id}-1`,
+      canal: 1,               // SIEMPRE número
+      estado: null,
+      estadoPrevio: null,
+      nota: "",
+      touched: false,
+      history: [],
+    },
+  ],
   checklist: {
     grabacionesOK: null,
-    grabacionesFallan: { cam1:false, cam2:false, cam3:false, cam4:false },
+    grabacionesFallan: { cam1: false, cam2: false, cam3: false, cam4: false },
     cortes220v: null,
     equipoOffline: null,
     equipoHora: null,
@@ -62,4 +88,4 @@ export const nuevaTanda = (id = Date.now()) => ({
 });
 
 // Por ahora sin mínimo global de cámaras obligatorias
-export const MIN_CAMERAS_REQUIRED = 0;     
+export const MIN_CAMERAS_REQUIRED = 0;
