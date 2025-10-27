@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { collection, collectionGroup, onSnapshot, doc, getDoc, updateDoc, addDoc } from "firebase/firestore";
+import {
+  collection, collectionGroup, onSnapshot, doc, getDoc, updateDoc, addDoc,
+  query, orderBy, limit, serverTimestamp, deleteDoc
+} from "firebase/firestore";
+
 import { db } from "../../services/firebase";
 import { FaPlusSquare } from "react-icons/fa";
 import {
@@ -455,6 +459,52 @@ export default function MonitoringWallboardTV() {
     return () => unsub();
   }, []);
 
+
+// === Firestore: Novedades (mini-cards) ===
+useEffect(() => {
+  const q = query(collection(db, "novedades-wall"), orderBy("at", "desc"), limit(80));
+  const unsub = onSnapshot(q, (snap) => {
+    const arr = snap.docs.map(d => {
+      const data = d.data() || {};
+      return {
+        id: d.id,
+        text: data.text || "",
+        sev: data.sev || "info",
+        cliente: data.cliente || "",
+        at: data.at?.toDate?.() || new Date(),
+        source: data.source || "manual",
+        createdBy: data.createdBy || "",
+      };
+    });
+    setMiniCards(arr);                 // <<<<<<<<<<<<<<  ahora vienen de Firestore
+    try { bcPost("mini_cards_updated", arr); } catch {}
+  });
+  return () => unsub();
+}, []);
+
+// === Firestore: Ticker ===
+useEffect(() => {
+  const q = query(collection(db, "novedades-ticker"), orderBy("at", "desc"), limit(120));
+  const unsub = onSnapshot(q, (snap) => {
+    const arr = snap.docs.map(d => {
+      const data = d.data() || {};
+      return {
+        id: d.id,
+        text: data.text || "",
+        time: data.at?.toDate?.() || new Date(),
+        source: data.source || "manual",
+        createdBy: data.createdBy || "",
+      };
+    });
+    // Mostramos del más nuevo al más viejo (si querés invertido, dale vuelta)
+    setTickerItems(arr);
+    try { bcPost("ticker_updated", arr); } catch {}
+  });
+  return () => unsub();
+}, []);
+
+
+
   // ====== Audio ======
   const audioCtxRef = useRef(null);
   function ensureAudioCtx() {
@@ -508,19 +558,32 @@ export default function MonitoringWallboardTV() {
   // ====== Ticker y mini-cards ======
   const [tickerItems, setTickerItems] = useState([]);
   const [tickerInput, setTickerInput] = useState("");
-  const addTickerItem = () => {
-    const t = tickerInput?.trim(); if (!t) return;
-    const next = [{ text: t, time: new Date() }, ...tickerItems].slice(0, 50);
-    setTickerItems(next);
+  const addTickerItem = async () => {
+    const t = tickerInput?.trim();
+    if (!t) return;
+    await addDoc(collection(db, "novedades-ticker"), {
+      text: t,
+      at: serverTimestamp(),
+      source: "manual",
+      createdBy: "WallboardTV", // opcional
+    });
     setTickerInput("");
-    try { localStorage.setItem("wallboard_ticker_items", JSON.stringify(next)); } catch {}
-    bcPost("ticker_updated", next);
+    // El onSnapshot actualizará setTickerItems automáticamente
   };
-  const clearTickerItems = () => {
-    setTickerItems([]);
-    try { localStorage.setItem("wallboard_ticker_items", JSON.stringify([])); } catch {}
-    bcPost("ticker_updated", []);
+  const clearTickerItems = async () => {
+    try {
+      const q = query(collection(db, "novedades-ticker"), orderBy("at", "desc"), limit(120));
+      const snap = await new Promise((resolve, reject) => {
+        const unsub = onSnapshot(q, (s) => { unsub(); resolve(s); }, reject);
+      });
+      const batch = await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "novedades-ticker", d.id))));
+      // onSnapshot actualizará el estado a []
+    } catch (e) {
+      console.error(e);
+      MySwal.fire({ icon: "error", title: "No se pudo limpiar el ticker", text: String(e?.message || e) });
+    }
   };
+  
 
   const [miniCards, setMiniCards] = useState(() => {
     try {
@@ -564,6 +627,10 @@ export default function MonitoringWallboardTV() {
     try { localStorage.setItem("wallboard_mini_cards", JSON.stringify(miniCards)); } catch {}
   }, [miniCards]);
 
+
+
+
+  
   function addMiniCard() {
     // 1) armar el datalist con clientes desde clientsMeta
     const clientesList = Array
@@ -609,14 +676,23 @@ export default function MonitoringWallboardTV() {
         // cliente es opcional, pero si lo ponés, lo guardamos
         return { text, sev, cliente };
       },
-    }).then((res) => {
+    }).then(async (res) => {
       if (res.isConfirmed && res.value) {
-        const id = Math.random().toString(36).slice(2, 9);
-        const card = { id, text: res.value.text, sev: res.value.sev, at: new Date(), ...(res.value.cliente ? { cliente: res.value.cliente } : {}) };
-        const next = [card, ...miniCards].slice(0, 40);
-        setMiniCards(next);
-        try { localStorage.setItem("wallboard_mini_cards", JSON.stringify(next)); } catch {}
-        bcPost("mini_cards_updated", next);
+        const { text, sev, cliente } = res.value;
+    
+        // Guardar la mini-card en Firestore
+        await addDoc(collection(db, "novedades-wall"), {
+          text,
+          sev,
+          cliente: cliente || "",
+          at: serverTimestamp(),
+          source: "manual",
+          createdBy: "WallboardTV", // opcional
+        });
+    
+        // No hace falta setMiniCards ni localStorage: el onSnapshot lo actualiza solo.
+        try { bcPost("mini_cards_updated", []); } catch {}
+        MySwal.fire({ icon: "success", title: "Novedad agregada", timer: 900, showConfirmButton: false });
       }
     });
   }
