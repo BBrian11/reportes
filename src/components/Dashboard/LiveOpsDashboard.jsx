@@ -565,12 +565,28 @@ export default function MonitoringWallboardTV() {
   }, [miniCards]);
 
   function addMiniCard() {
+    // 1) armar el datalist con clientes desde clientsMeta
+    const clientesList = Array
+      .from(clientsMeta.values())
+      .map((m) => m?.nombre || "")
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  
+    const optionsHtml = clientesList
+      .map((n) => `<option value="${String(n).replace(/"/g, "&quot;")}"></option>`)
+      .join("");
+  
     MySwal.fire({
       title: "Agregar novedad",
       html: `
-        <div style="text-align:left">
+        <div style="text-align:left;display:grid;gap:10px">
+          <label style="font-weight:800;display:block;margin:4px 0">Cliente</label>
+          <input id="swal-card-cli" class="swal2-input" list="swal-card-cli-list" placeholder="Buscar / seleccionar cliente" style="width:100%"/>
+          <datalist id="swal-card-cli-list">${optionsHtml}</datalist>
+  
           <label style="font-weight:800;display:block;margin:4px 0">Texto</label>
           <textarea id="swal-card-text" class="swal2-textarea" style="width:100%;height:110px"></textarea>
+  
           <label style="font-weight:800;display:block;margin:8px 0 4px">Severidad</label>
           <select id="swal-card-sev" class="swal2-select" style="width:100%">
             <option value="info">Info</option>
@@ -581,23 +597,30 @@ export default function MonitoringWallboardTV() {
           </select>
         </div>
       `,
-      showCancelButton: true, confirmButtonText: "Agregar", cancelButtonText: "Cancelar",
+      showCancelButton: true,
+      confirmButtonText: "Agregar",
+      cancelButtonText: "Cancelar",
+      focusConfirm: false,
       preConfirm: () => {
-        const text = document.getElementById("swal-card-text")?.value?.trim();
-        const sev = document.getElementById("swal-card-sev")?.value || "info";
+        const cliente = document.getElementById("swal-card-cli")?.value?.trim() || "";
+        const text    = document.getElementById("swal-card-text")?.value?.trim();
+        const sev     = document.getElementById("swal-card-sev")?.value || "info";
         if (!text) { MySwal.showValidationMessage("Escribe un texto"); return false; }
-        return { text, sev };
+        // cliente es opcional, pero si lo ponés, lo guardamos
+        return { text, sev, cliente };
       },
     }).then((res) => {
       if (res.isConfirmed && res.value) {
         const id = Math.random().toString(36).slice(2, 9);
-        const next = [{ id, text: res.value.text, sev: res.value.sev, at: new Date() }, ...miniCards].slice(0, 40);
+        const card = { id, text: res.value.text, sev: res.value.sev, at: new Date(), ...(res.value.cliente ? { cliente: res.value.cliente } : {}) };
+        const next = [card, ...miniCards].slice(0, 40);
         setMiniCards(next);
         try { localStorage.setItem("wallboard_mini_cards", JSON.stringify(next)); } catch {}
         bcPost("mini_cards_updated", next);
       }
     });
   }
+  
 
   // prefs
   useEffect(() => {

@@ -71,34 +71,70 @@ function levelOf(card) {
   return "regular";
 }
 
-/* ========================= LIST ROW ========================= */
-function ListRow({ card, onEdit, onClose, onDuplicate, onDelete }) {
+function ListRow({ card, onEdit, onClose, onDuplicate, onDelete, onView }) {
   const meta = PILL_COLORS[card.sev] || PILL_COLORS.info;
   const at = card.at instanceof Date ? card.at : new Date(card.at);
   return (
-    <Box sx={{
-      display: "grid",
-      gridTemplateColumns: "110px 1fr 220px 110px 120px",
-      gap: 10, alignItems: "center", px: 1, py: .75,
-      borderBottom: `1px solid ${PALETTE.border}`
-    }}
-    title="Doble click para editar"
-    onDoubleClick={() => onEdit?.(card)}
+    <Box
+      sx={{
+        display: "grid",
+        // ⬅️ ahora 5 columnas: Sev | Texto | Fecha | Cliente | Acciones
+        gridTemplateColumns: "110px 1fr 220px 160px 120px",
+        gap: 10,
+        alignItems: "center",
+        px: 1,
+        py: 0.75,
+        borderBottom: `1px solid ${PALETTE.border}`,
+      }}
+      title="Doble click para editar"
+      onDoubleClick={() => onEdit?.(card)}
     >
-      <MuiChip label={(PILL_COLORS[card.sev]?.name) || card.sev.toUpperCase()} size="small"
-        sx={{ fontWeight: 900, color: meta.fg, bgcolor: meta.bg, border: `1px solid ${meta.bd}` }} />
-      <Typography sx={{ fontWeight: 900, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{card.text || '—'}</Typography>
-      <Typography sx={{ fontFamily: 'ui-monospace, Menlo, monospace', opacity: .9 }}>{at.toLocaleString('es-AR')}</Typography>
-      <Typography sx={{ opacity: .9, fontWeight: 800, overflow:'hidden', textOverflow:'ellipsis' }}>{card.id}</Typography>
-      <Box sx={{ display: 'flex', gap: .5, justifyContent: 'flex-end' }}>
-        <IconButton size="small" onClick={() => onEdit?.(card)} title="Editar" sx={{ color: PALETTE.subtext }}><FaEdit/></IconButton>
-        <IconButton size="small" onClick={() => onDuplicate?.(card.id)} title="Duplicar" sx={{ color: PALETTE.subtext }}><FaCopy/></IconButton>
-        <IconButton size="small" onClick={() => onDelete?.(card.id)} title="Eliminar" sx={{ color: PALETTE.subtext }}><FaTrash/></IconButton>
-        <IconButton size="small" onClick={() => onClose?.(card.id)} title="Ocultar en esta pantalla" sx={{ color: PALETTE.subtext }}><FaTimes/></IconButton>
+      <MuiChip
+        label={PILL_COLORS[card.sev]?.name || card.sev.toUpperCase()}
+        size="small"
+        sx={{ fontWeight: 900, color: meta.fg, bgcolor: meta.bg, border: `1px solid ${meta.bd}` }}
+      />
+
+      {/* TEXTO */}
+      <Typography
+        sx={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        title={card.text || "—"}
+      >
+        {clip(card.text || "—", 120)}
+      </Typography>
+
+      {/* FECHA */}
+      <Typography sx={{ fontFamily: "ui-monospace, Menlo, monospace", opacity: 0.9 }}>
+        {at.toLocaleString("es-AR")}
+      </Typography>
+
+      {/* ⬇️ NUEVA COLUMNA: CLIENTE */}
+      <Typography sx={{ fontWeight: 800, opacity: 0.95 }}>
+        {card.cliente || "—"}
+      </Typography>
+
+      {/* ACCIONES */}
+      <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
+        <IconButton size="small" onClick={() => onView?.(card)} title="Ver texto completo" sx={{ color: PALETTE.subtext }}>
+          <FaEye />
+        </IconButton>
+        <IconButton size="small" onClick={() => onEdit?.(card)} title="Editar" sx={{ color: PALETTE.subtext }}>
+          <FaEdit />
+        </IconButton>
+        <IconButton size="small" onClick={() => onDuplicate?.(card.id)} title="Duplicar" sx={{ color: PALETTE.subtext }}>
+          <FaCopy />
+        </IconButton>
+        <IconButton size="small" onClick={() => onDelete?.(card.id)} title="Eliminar" sx={{ color: PALETTE.subtext }}>
+          <FaTrash />
+        </IconButton>
+        <IconButton size="small" onClick={() => onClose?.(card.id)} title="Ocultar en esta pantalla" sx={{ color: PALETTE.subtext }}>
+          <FaTimes />
+        </IconButton>
       </Box>
     </Box>
   );
 }
+
 
 /* ========================= PANEL LISTA ========================= */
 function PanelList({ title, color, items, rowActions }) {
@@ -111,12 +147,12 @@ function PanelList({ title, color, items, rowActions }) {
 
       {/* Encabezado */}
       <Box sx={{ display: 'grid', gridTemplateColumns: "110px 1fr 220px 110px 120px", gap: 10, alignItems: 'center', px: 1, py: .75, borderBottom: `1px solid ${PALETTE.border}`, color: PALETTE.subtext, fontWeight: 800, textTransform: 'uppercase', fontSize: 12 }}>
-        <span>Sev</span>
-        <span>Texto</span>
-        <span>Fecha</span>
-        <span>ID</span>
-        <span style={{ textAlign: 'right' }}>Acciones</span>
-      </Box>
+      <span>Sev</span>
+  <span>Texto</span>
+  <span>Fecha</span>
+  <span>Cliente</span>
+  <span style={{ textAlign: 'right' }}>Acciones</span>
+</Box>
 
       {/* Items */}
       <Box>
@@ -195,6 +231,20 @@ export default function NovedadesWall() {
   const updateOne = (id, patch) => setAndPersistMiniCards(miniCards.map(c => (c.id === id ? { ...c, ...patch } : c)));
   const deleteOne = (id) => { setAndPersistMiniCards(miniCards.filter(c => c.id !== id)); const d = new Set(dismissed); d.delete(id); saveDismissed(d); };
   const duplicateOne = (id) => { const card = miniCards.find(c => c.id === id); if (!card) return; const nid = Math.random().toString(36).slice(2, 9); const clone = { ...card, id: nid, at: new Date() }; setAndPersistMiniCards([clone, ...miniCards]); };
+// ✅ DENTRO de NovedadesWall (después de deleteOne/duplicateOne)
+const onViewCard = (card) => {
+  const safe = escapeHtml(card.text || "");
+  MySwal.fire({
+    icon: "info",
+    title: "Texto completo",
+    html: `<div style="text-align:left;white-space:pre-wrap">${safe || "<i>Sin texto</i>"}</div>`,
+    confirmButtonText: "Cerrar",
+    background: PALETTE.panel,
+    color: PALETTE.text,
+  });
+};
+
+// Acciones por fila (ahora sí con ámbito correcto)
 
   // Editor simple
   const openEditCard = (card) => {
