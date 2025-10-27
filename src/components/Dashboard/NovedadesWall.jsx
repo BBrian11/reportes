@@ -459,7 +459,7 @@ export default function NovedadesWall() {
             </Box>
           </Box>
 
-          <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: .6, ml: 1 }}>Wall de Novedades (por nivel de atención)</Typography>
+       
           <Box sx={{ flex: 1 }} />
 
           {/* TV actual */}
