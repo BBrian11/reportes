@@ -78,8 +78,7 @@ function ListRow({ card, onEdit, onClose, onDuplicate, onDelete, onView }) {
     <Box
       sx={{
         display: "grid",
-        // ⬅️ ahora 5 columnas: Sev | Texto | Fecha | Cliente | Acciones
-        gridTemplateColumns: "110px 1fr 220px 160px 120px",
+        gridTemplateColumns: "110px 1fr 220px 120px",
         gap: 10,
         alignItems: "center",
         px: 1,
@@ -95,25 +94,29 @@ function ListRow({ card, onEdit, onClose, onDuplicate, onDelete, onView }) {
         sx={{ fontWeight: 900, color: meta.fg, bgcolor: meta.bg, border: `1px solid ${meta.bd}` }}
       />
 
-      {/* TEXTO */}
+      {/* TEXTO MUY CORTO EN LA FILA */}
       <Typography
-        sx={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        sx={{
+          fontWeight: 900,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          // si querés 2 líneas con “…” en vez de 1:
+          // display: "-webkit-box",
+          // WebkitLineClamp: 2,
+          // WebkitBoxOrient: "vertical",
+          // whiteSpace: "normal",
+        }}
         title={card.text || "—"}
       >
         {clip(card.text || "—", 120)}
       </Typography>
 
-      {/* FECHA */}
       <Typography sx={{ fontFamily: "ui-monospace, Menlo, monospace", opacity: 0.9 }}>
         {at.toLocaleString("es-AR")}
       </Typography>
 
-      {/* ⬇️ NUEVA COLUMNA: CLIENTE */}
-      <Typography sx={{ fontWeight: 800, opacity: 0.95 }}>
-        {card.cliente || "—"}
-      </Typography>
-
-      {/* ACCIONES */}
+      {/* ACCIONES (con “Ver”) */}
       <Box sx={{ display: "flex", gap: 0.5, justifyContent: "flex-end" }}>
         <IconButton size="small" onClick={() => onView?.(card)} title="Ver texto completo" sx={{ color: PALETTE.subtext }}>
           <FaEye />
@@ -147,12 +150,12 @@ function PanelList({ title, color, items, rowActions }) {
 
       {/* Encabezado */}
       <Box sx={{ display: 'grid', gridTemplateColumns: "110px 1fr 220px 110px 120px", gap: 10, alignItems: 'center', px: 1, py: .75, borderBottom: `1px solid ${PALETTE.border}`, color: PALETTE.subtext, fontWeight: 800, textTransform: 'uppercase', fontSize: 12 }}>
-      <span>Sev</span>
-  <span>Texto</span>
-  <span>Fecha</span>
-  <span>Cliente</span>
-  <span style={{ textAlign: 'right' }}>Acciones</span>
-</Box>
+        <span>Sev</span>
+        <span>Texto</span>
+        <span>Fecha</span>
+        <span>ID</span>
+        <span style={{ textAlign: 'right' }}>Acciones</span>
+      </Box>
 
       {/* Items */}
       <Box>
@@ -173,7 +176,12 @@ export default function NovedadesWall() {
   useEffect(() => { try { localStorage.setItem(LS_TV_ID, tvId); } catch {} }, [tvId]);
   const [tvShows, setTvShows] = useState("all");
   useEffect(() => { try { localStorage.setItem(LS_TV_SHOWS, JSON.stringify(tvShows)); } catch {} }, [tvShows]);
-
+    // ⏱️ Reloj en vivo
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => {
+      const id = setInterval(() => setNow(new Date()), 1000);
+      return () => clearInterval(id);
+    }, []);
   // Cards y ticker desde localStorage (formato existente)
   const [miniCards, setMiniCards] = useState(() => {
     try {
@@ -421,10 +429,40 @@ const onViewCard = (card) => {
           {/* Estado + Reloj */}
           <Box sx={{ display:"flex", alignItems:"center", gap:1.5, mr:1.5 }}>
             <Box sx={{ px: 1.4, py: .6, borderRadius: 1, border: `1px solid ${PALETTE.border}`, bgcolor: navigator.onLine ? PALETTE.okBg : PALETTE.offlineBg, color:  navigator.onLine ? PALETTE.okFg : PALETTE.offlineFg, fontWeight: 900, fontSize: 13, letterSpacing: .4 }}>{navigator.onLine ? 'ONLINE' : 'OFFLINE'}</Box>
-            <Box sx={{ lineHeight: 1 }}>
-              <Typography sx={{ fontFamily:"ui-monospace, Menlo, monospace", fontWeight:900, fontSize: 48, letterSpacing: 1 }}>{new Date().toLocaleTimeString("es-AR", { hour12:false })}</Typography>
-              <Typography sx={{ fontFamily:"ui-monospace, Menlo, monospace", fontWeight:800, fontSize: 14, color: PALETTE.subtext, textAlign: "right", mt: "-2px" }}>{new Date().toLocaleDateString("es-AR", { weekday:"short", day:"2-digit", month:"2-digit", year:"numeric" })}</Typography>
-            </Box>
+                   
+           <Box sx={{ lineHeight: 1 }}>
+              <Typography
+                sx={{
+                  fontFamily:"ui-monospace, Menlo, monospace",
+                  fontWeight:900,
+                   fontSize: 56,
+                  background: "#0E2318",
+                  padding: "2px 8px",
+                  borderRadius: 6,
+                  letterSpacing: 1,
+                  color: PALETTE.ok,                    // ✅ verde
+                  textShadow: `0 0 8px ${PALETTE.ok}55` // glow sutil
+                }}
+              >
+                {now.toLocaleTimeString("es-AR", { hour12:false, timeZone: "America/Argentina/Buenos_Aires" })}
+              </Typography>
+             <Typography
+                sx={{
+                  fontFamily:"ui-monospace, Menlo, monospace",
+                  fontWeight:800,
+                  fontSize: 14,
+                  color: PALETTE.subtext,
+                  textAlign: "right",
+                 mt: "-2px"
+                }}
+              >
+                {now.toLocaleDateString("es-AR", {
+                  weekday:"short", day:"2-digit", month:"2-digit", year:"numeric",
+                  timeZone: "America/Argentina/Buenos_Aires"
+                })}
+              </Typography>
+           </Box>
+
           </Box>
 
           <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: .6, ml: 1 }}>Wall de Novedades (por nivel de atención)</Typography>
