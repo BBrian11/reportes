@@ -10,6 +10,60 @@ import {
 } from "react-icons/fa";
 import "../../styles/sidebar.css";
 
+/* ========= Helpers de fecha (fuera del componente) ========= */
+function toDate(value) {
+  if (!value) return null;
+
+  // Date nativa
+  if (value instanceof Date) return isNaN(value) ? null : value;
+
+  // Firestore Timestamp
+  if (typeof value === "object" && typeof value.toDate === "function") {
+    const d = value.toDate();
+    return isNaN(d) ? null : d;
+  }
+
+  // Epoch (segundos o ms)
+  if (typeof value === "number") {
+    const ms = value < 1e12 ? value * 1000 : value;
+    const d = new Date(ms);
+    return isNaN(d) ? null : d;
+  }
+
+  // Strings
+  if (typeof value === "string") {
+    // "YYYY-MM-DD" -> local
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [y, m, d] = value.split("-").map(Number);
+      return new Date(y, m - 1, d);
+    }
+    // "DD/MM/YYYY"
+    const m = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) {
+      const [, dd, mm, yyyy] = m.map(Number);
+      return new Date(yyyy, (mm || 1) - 1, dd || 1);
+    }
+    // ISO u otros
+    const d = new Date(value);
+    return isNaN(d) ? null : d;
+  }
+
+  return null;
+}
+
+function startOfDayLocal(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDayLocal(date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+/* ========= fin helpers ========= */
+
 export default function Sidebar({
   eventos,
   isOpen,
@@ -28,7 +82,7 @@ export default function Sidebar({
   // ======== Estado controlado o interno ========
   const [internalFiltros, setInternalFiltros] = useState({
     cliente: "",
-    grupo: "",            // ⬅️ nuevo
+    grupo: "",
     ubicacion: "",
     fechaInicio: "",
     fechaFin: "",
@@ -71,25 +125,37 @@ export default function Sidebar({
   const effectiveGrupo = F?.grupo || "";
   const effectiveUbicacion = F?.ubicacion || "";
 
-  // (Opcional) Filtrado por fechas — ajustá e.fecha si tu campo se llama distinto
+  // ======== Fechas normalizadas (memo) ========
+  const fechaInicioNorm = useMemo(
+    () => (F?.fechaInicio ? startOfDayLocal(toDate(F.fechaInicio)) : null),
+    [F?.fechaInicio]
+  );
+  const fechaFinNorm = useMemo(
+    () => (F?.fechaFin ? endOfDayLocal(toDate(F.fechaFin)) : null),
+    [F?.fechaFin]
+  );
+
+  // ======== Filtrado por fechas robusto ========
   const dentroDeRango = useCallback(
     (e) => {
-      const fi = F?.fechaInicio ? new Date(F.fechaInicio) : null;
-      const ff = F?.fechaFin ? new Date(F.fechaFin) : null;
-      if (!e?.fecha) return true;
-      const d = new Date(e.fecha);
-      if (fi && d < fi) return false;
-      if (ff && d > ff) return false;
+      // Ajustá estos nombres si tu campo de fecha es distinto
+      const raw = e?.fecha ?? e?.fechaHora ?? e?.ts ?? e?.createdAt;
+      const d = toDate(raw);
+
+      if (!d) return true; // si el evento no trae fecha legible, no lo excluimos
+
+      if (fechaInicioNorm && d < fechaInicioNorm) return false;
+      if (fechaFinNorm && d > fechaFinNorm) return false;
       return true;
     },
-    [F?.fechaInicio, F?.fechaFin]
+    [fechaInicioNorm, fechaFinNorm]
   );
 
   // === helper: lista de ubicaciones del grupo seleccionado ===
   const ubicacionesDelGrupo = useMemo(() => {
     if (!effectiveCliente || !effectiveGrupo) return null;
-    const set = estructura[effectiveCliente]?.[effectiveGrupo];
-    return set ? new Set([...set]) : null;
+    const setUb = estructura[effectiveCliente]?.[effectiveGrupo];
+    return setUb ? new Set([...setUb]) : null;
   }, [estructura, effectiveCliente, effectiveGrupo]);
 
   // Eventos disponibles para el contexto (cliente + (ubicación | grupo) + fechas)
@@ -139,14 +205,12 @@ export default function Sidebar({
     setF((prev) => ({
       ...prev,
       grupo: "",
-      // mantenemos cliente; limpiamos selección de eventos por seguridad
       eventosSeleccionados: [],
     }));
   const clearUbicacion = () =>
     setF((prev) => ({
       ...prev,
       ubicacion: "",
-      // si había grupo activo, se sigue aplicando; si no, queda solo por cliente
       eventosSeleccionados: [],
     }));
   const clearFechaInicio = () => setF((prev) => ({ ...prev, fechaInicio: "" }));
@@ -187,8 +251,8 @@ export default function Sidebar({
     setF((prev) => ({
       ...prev,
       cliente: value,
-      grupo: "",        // ⬅️ resetea grupo
-      ubicacion: "",    // ⬅️ resetea ubicación
+      grupo: "",
+      ubicacion: "",
       eventosSeleccionados: nextSelected,
     }));
 
@@ -221,8 +285,8 @@ export default function Sidebar({
     setF((prev) => ({
       ...prev,
       cliente: clienteValue,
-      grupo: grupo,     // ⬅️ fija grupo
-      ubicacion: "",    // ⬅️ borra ubicación específica
+      grupo: grupo,
+      ubicacion: "",
       eventosSeleccionados: nextSelected,
     }));
 
@@ -233,7 +297,7 @@ export default function Sidebar({
   const selectUbicacion = (cliente, ubic) => {
     const clienteValue = cliente === "Todos" ? "" : cliente;
 
-    // Eventos válidos para cliente + ubicación (overrides grupo)
+    // Eventos válidos para cliente + ubicación (override grupo)
     const nextEventosUnicos = [
       ...new Set(
         lista
@@ -251,7 +315,7 @@ export default function Sidebar({
     setF((prev) => ({
       ...prev,
       cliente: clienteValue,
-      grupo: "",        // ⬅️ si eligen una ubicación puntual, desactivo grupo
+      grupo: "",
       ubicacion: ubic || "",
       eventosSeleccionados: nextSelected,
     }));
@@ -268,7 +332,7 @@ export default function Sidebar({
 
   const toggleEvento = (evName) => {
     if (!evName) return;
-    if (!eventosUnicos.includes(evName)) return; // seguridad
+    if (!eventosUnicos.includes(evName)) return;
 
     setF((prev) => {
       const current = new Set(prev.eventosSeleccionados || []);
@@ -399,7 +463,7 @@ export default function Sidebar({
                             <ul>
                               <li
                                 className="sub-item all-edificio"
-                                onClick={() => selectGrupo(cliente, grupo)}  // ⬅️ ahora actualiza filtros
+                                onClick={() => selectGrupo(cliente, grupo)}
                               >
                                 ➤ Ver todo {grupo}
                               </li>
@@ -445,7 +509,7 @@ export default function Sidebar({
                   className="sf-input"
                   value={F?.fechaInicio || ""}
                   onChange={(e) => {
-                    const v = e.target.value;
+                    const v = e.target.value || "";
                     onChangeFechaInicio?.(v);
                     setF((prev) => ({ ...prev, fechaInicio: v }));
                   }}
@@ -458,7 +522,7 @@ export default function Sidebar({
                   className="sf-input"
                   value={F?.fechaFin || ""}
                   onChange={(e) => {
-                    const v = e.target.value;
+                    const v = e.target.value || "";
                     onChangeFechaFin?.(v);
                     setF((prev) => ({ ...prev, fechaFin: v }));
                   }}

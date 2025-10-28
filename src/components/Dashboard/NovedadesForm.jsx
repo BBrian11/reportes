@@ -13,6 +13,7 @@ import {
   getDocs,
   query,
   orderBy,
+  
   Timestamp,
 } from "firebase/firestore";
 import {
@@ -21,6 +22,7 @@ import {
   uploadBytes,
   getDownloadURL,
 } from "firebase/storage";
+import { where, limit } from "firebase/firestore";
 
 /* ⚠️ En producción usá env vars (VITE_*, NEXT_PUBLIC_* o .env) */
 const firebaseConfig = {

@@ -2,11 +2,10 @@
 import React, { useMemo } from "react";
 import {
   Card, CardHeader, CardContent, Stack, Tooltip, IconButton, Button,
-  Grid, FormControl, InputLabel, Select, MenuItem, TextField, Chip
+  Grid, FormControl, InputLabel, Select, MenuItem, TextField, Chip, Paper, Typography
 } from "@mui/material";
 import { Add, Delete } from "@mui/icons-material";
 import CameraTable from "./CameraTable";
-import ChecklistPanel from "./ChecklistPanel";
 import NovedadesCard from "./NovedadesCard";
 import useCamarasHistoricas from "./useCamarasHistoricas";
 import { norm } from "./helpers";
@@ -32,24 +31,17 @@ export default function TandaCard({
   onCamField,
   onCamRemove,
   onCamState,
-  setChecklistVal,
-  resetFallan,
-  toggleFallan,
   setResumen,
   clientesCat = [],
-  rondaId, // <-- id real del doc en "respuestas-tareas"
+  rondaId,
   onAccionConfirm,
 }) {
   if (!tanda) return null;
 
-  // clave para colecciones de índice
   const clienteKey = useMemo(() => norm(tanda.cliente || ""), [tanda.cliente]);
-
-  // histórico live de cámaras de ese cliente
   const historicosHook = useCamarasHistoricas(clienteKey);
   const historicos = historicosProp ?? historicosHook;
 
-  // “cambios rápidos” (desde NovedadesCard)
   const handleEstadoChanged = async (canal, next) => {
     const row = (tanda.camaras || []).find((c) => num(c.canal) === num(canal));
     if (row && onCamState) {
@@ -65,13 +57,14 @@ export default function TandaCard({
           { merge: true }
         );
       } catch (e) {
-        // eslint-disable-next-line no-console
         console.error("fallback quick set failed:", e);
       }
     }
   };
 
-  const camsCount = (tanda.camaras || []).length;
+  const cams = Array.isArray(tanda.camaras) ? tanda.camaras : [];
+  const hasCams = cams.length > 0;
+  const camsCount = cams.length;
 
   return (
     <Card id={tanda.id} sx={{ overflow: "hidden" }}>
@@ -100,7 +93,11 @@ export default function TandaCard({
         }
         action={
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<Add />} onClick={() => onAddCam?.(tanda.id)}>
+            <Button
+              variant="outlined"
+              startIcon={<Add />}
+              onClick={() => onAddCam?.(tanda.id)}
+            >
               Agregar cámara
             </Button>
             <Tooltip title="Eliminar tanda">
@@ -117,46 +114,54 @@ export default function TandaCard({
 
       <CardContent sx={{ pt: 1.5 }}>
         <Grid container spacing={2.25}>
-          {/* Izquierda: tabla de cámaras */}
+          {/* Izquierda: tabla de cámaras (solo si hay) */}
           <Grid item xs={12} md={7}>
-            <CameraTable
-              tanda={tanda}
-              historicos={historicos}
-              onCamField={(tId, camId, key, value) => {
-                const val = key === "canal" ? num(value) : value;
-                onCamField?.(tId, camId, key, val);
-              }}
-              onCamRemove={onCamRemove}
-              onCamState={onCamState}
-            />
+            {hasCams ? (
+              <CameraTable
+                tanda={tanda}
+                historicos={historicos}
+                onCamField={(tId, camId, key, value) => {
+                  const val = key === "canal" ? num(value) : value;
+                  onCamField?.(tId, camId, key, val);
+                }}
+                onCamRemove={onCamRemove}
+                onCamState={onCamState}
+              />
+            ) : (
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 2,
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                }}
+              >
+                <Stack spacing={0.5}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                    Sin cámaras cargadas
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    El operador debe seleccionar manualmente si hay alguna cámara para reportar.
+                  </Typography>
+                </Stack>
+               
+              </Paper>
+            )}
           </Grid>
 
-          {/* Derecha: novedades + checklist */}
+          {/* Derecha: novedades (funciona igual, aunque no haya cámaras) */}
           <Grid item xs={12} md={5}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <NovedadesCard
-                  clienteKey={clienteKey}
-                  camaras={tanda.camaras}
-                  historicos={historicos}
-                  limit={8}
-                  rondaId={rondaId}
-                  onEstadoChanged={handleEstadoChanged}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <ChecklistPanel
-                  t={tanda}
-                  setChecklistVal={setChecklistVal}
-                  resetFallan={resetFallan}
-                  toggleFallan={toggleFallan}
-                  onAccionConfirm={onAccionConfirm}
-                  // 👇 ahora el panel sabe exactamente dónde persistir
-                  docIdActual={rondaId}
-                />
-              </Grid>
-            </Grid>
+            <NovedadesCard
+              clienteKey={clienteKey}
+              camaras={cams}
+              historicos={historicos}
+              limit={8}
+              rondaId={rondaId}
+              onEstadoChanged={handleEstadoChanged}
+            />
           </Grid>
         </Grid>
 

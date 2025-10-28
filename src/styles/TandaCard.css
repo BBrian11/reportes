@@ -1,0 +1,128 @@
+/* =============================== */
+/*  FORM RONDIN · ESTILO GLOBAL    */
+/*  (scope: solo dentro .formRondin) */
+/* =============================== */
+.formRondin {
+    color: #e6eef8;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(30,166,228,.08), transparent 50%),
+      radial-gradient(1200px 600px at 110% -10%, rgba(54,191,250,.06), transparent 50%),
+      #0a0f1c;
+  }
+  
+  /* Panel genérico */
+  .formRondin .pane {
+    background: linear-gradient(180deg, #0d1628 0%, #0f1b31 100%);
+    border: 1px solid rgba(168,192,255,.14);
+    box-shadow: 0 12px 36px rgba(2,6,23,.35);
+    border-radius: 16px;
+  }
+  
+  .formRondin .title { font-weight: 800; letter-spacing: .2px; color: #e6eef8; }
+  .formRondin .sub   { color: #a9bedf; }
+  
+  /* Header sticky */
+  .formRondin .headerSticky { position: sticky; top: 8px; z-index: 12; }
+  
+  /* Inputs MUI (alto contraste) */
+  .formRondin .MuiOutlinedInput-root {
+    height: 56px;
+    border-radius: 12px;
+    background: #0b1430;
+    color: #e6eef8;
+  }
+  .formRondin .MuiOutlinedInput-notchedOutline { border-color: rgba(168,192,255,.18); }
+  .formRondin .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline { border-color: #36bffa; }
+  .formRondin .MuiFormLabel-root { color: #a9bedf; }
+  .formRondin .MuiSelect-select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  
+  /* Barra de atajos */
+  .formRondin .hint {
+    border-radius: 10px;
+    background: rgba(30,166,228,.12);
+    border: 1px solid rgba(54,191,250,.25);
+    padding: 8px 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .formRondin .kbd{
+    display:inline-block;min-width:22px;text-align:center;padding:2px 6px;border-radius:6px;
+    border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);margin-left:6px
+  }
+  
+  /* Progreso */
+  .formRondin .progressBar{height:8px;border-radius:6px;background:rgba(168,192,255,.18)}
+  .formRondin .progressBar .MuiLinearProgress-bar{background:#36bffa}
+  
+  /* Botones grandes */
+  .formRondin .btnXL{border-radius:12px;padding:10px 16px;font-weight:800;text-transform:none}
+  .formRondin .btnPrimary{background:#36bffa}
+  .formRondin .btnPrimary:hover{background:#1ea6e4}
+  
+  /* Footer acciones */
+  .formRondin .footerPane{position:sticky;bottom:12px;backdrop-filter:saturate(1.15) blur(6px)}
+  
+  
+  /* ===================================== */
+  /*   TANDACARD (estilado desde el form)  */
+  /*   Usa las className del componente    */
+  /* ===================================== */
+  
+  .formRondin .tandaCard{
+    overflow:hidden;
+    background:#0c1324;
+    border:1px solid rgba(54,191,250,.15);
+    border-radius:12px;
+    box-shadow:0 0 20px rgba(0,0,0,.4);
+    color:#e8eef7;
+  }
+  .formRondin .tcCardContent{ padding:12px 12px 16px; }
+  
+  /* Header */
+  .formRondin .tcHeaderRow{ margin-bottom:12px; }
+  .formRondin .tcHeader{ gap:12px; min-width:260px; }
+  .formRondin .tcFormControl{ min-width:300px; flex:1; }
+  .formRondin .tcFormControl .MuiOutlinedInput-root{ background:#111a34; color:#e8eef7; border-radius:8px; }
+  .formRondin .tcFormControl .MuiOutlinedInput-notchedOutline{ border-color:rgba(255,255,255,.18); }
+  .formRondin .tcFormControl:hover .MuiOutlinedInput-notchedOutline{ border-color:rgba(54,191,250,.5); }
+  .formRondin .tcFormControl .Mui-focused .MuiOutlinedInput-notchedOutline{ border-color:#36bffa; }
+  .formRondin .tcFormControl .MuiFormLabel-root{ color:#a9bedf; }
+  .formRondin .tcFormControl .MuiSelect-icon{ color:#36bffa; }
+  
+  .formRondin .tcChip{
+    font-weight:700;
+    background:rgba(54,191,250,.12);
+    color:#36bffa;
+    border:1px solid rgba(54,191,250,.4);
+  }
+  
+  /* Acciones */
+  .formRondin .tcActions{ justify-content:flex-end; gap:8px; }
+  .formRondin .tcBtnAdd{ background:#1ea6e4; font-weight:700; text-transform:none; border-radius:8px; }
+  .formRondin .tcBtnAdd:hover{ background:#36bffa; }
+  .formRondin .tcBtnDelete{ border:1px solid rgba(255,255,255,.12); color:#ef4444; border-radius:8px; }
+  .formRondin .tcBtnDelete:hover{ background:rgba(239,68,68,.15); }
+  
+  /* Divider */
+  .formRondin .tcDivider{ margin:8px 0 14px; border-color:rgba(168,192,255,.12); }
+  
+  /* Cuerpo */
+  .formRondin .tcBodyGrid{ gap:12px; }
+  .formRondin .tcCol{ display:flex; }
+  .formRondin .tcPanel{
+    background:#0d1628;
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:10px;
+    color:#e8eef7;
+    padding:12px; width:100%;
+  }
+  .formRondin .tcPanelEmpty{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .formRondin .tcTitle{ font-weight:700; }
+  .formRondin .tcSub{ color:#a9bedf; }
+  
+  /* Resumen */
+  .formRondin .tcResumen .MuiOutlinedInput-root{ background:#0d1628; color:#e8eef7; border-radius:10px; }
+  .formRondin .tcResumen .MuiOutlinedInput-notchedOutline{ border-color:rgba(255,255,255,.15); }
+  .formRondin .tcResumen:hover .MuiOutlinedInput-notchedOutline{ border-color:#36bffa; }
+  .formRondin .tcResumen .MuiFormLabel-root{ color:#a9bedf; }
+  .formRondin .tcResumen{ margin-top:12px; }
+  

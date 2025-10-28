@@ -63,29 +63,23 @@ export const mm = (ms) => String(Math.floor((ms % 3600000) / 60000)).padStart(2,
 export const ss = (ms) => String(Math.floor((ms % 60000) / 1000)).padStart(2, "0");
 
 // === Modelo de nueva tanda ===
-export const nuevaTanda = (id = Date.now()) => ({
-  id: `tanda-${id}`,
-  cliente: "",
-  resumen: "",
-  camaras: [
-    {
-      id: `cam-${id}-1`,
-      canal: 1,               // SIEMPRE número
-      estado: null,
-      estadoPrevio: null,
-      nota: "",
-      touched: false,
-      history: [],
+export function nuevaTanda(id = Date.now()) {
+  return {
+    id: `tanda-${id}`,
+    cliente: "",
+    resumen: "",
+    // 👇 sin cámaras iniciales
+    camaras: [],
+    checklist: {
+      grabacionesOK: null,
+      cortes220v: null,
+      equipoHora: null,
+      equipoOffline: null,
     },
-  ],
-  checklist: {
-    grabacionesOK: null,
-    grabacionesFallan: { cam1: false, cam2: false, cam3: false, cam4: false },
-    cortes220v: null,
-    equipoOffline: null,
-    equipoHora: null,
-  },
-});
+  };
+}
+
+
 
 // Por ahora sin mínimo global de cámaras obligatorias
 export const MIN_CAMERAS_REQUIRED = 0;

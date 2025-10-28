@@ -19,6 +19,10 @@ import AdminDashboard from "./components/admin/AdminDashboard.jsx";
 import NovedadesForm from "./components/Dashboard/NovedadesForm";
 import { AdminAuthProvider } from "./context/AdminAuthContext";
 import PortalPendientes from "./components/Dashboard/PortalPendientes.jsx";
+import DashboardOperador from './components/Dashboard/DashboardOperador';
+import RondinCCTV from './components/Dashboard/RondinCCTV';
+
+
 
 export default function App() {
   return (
@@ -40,11 +44,14 @@ export default function App() {
             {/* Formularios */}
             <Route path="/form-builder" element={<FormBuilder />} />
             <Route path="/formularios/:id" element={<DynamicForm />} />
-            <Route path="/rondin" element={<FormRondin />} />
+            <Route path="/monitoreo" element={<DashboardOperador/>} />
             <Route path="/novedades" element={<NovedadesWall />} />
             <Route path="/clientes" element={  <ClientesCriticosList />} />
             <Route path="/formulario" element={<NovedadesForm />} />
             <Route path="/pendientes" element={<PortalPendientes/>} />
+
+            <Route path="/ron" element={<RondinCCTV/>} />
+
             <Route
               path="/rondin2"
               element={

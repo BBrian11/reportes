@@ -30,11 +30,6 @@ import {
   LinearProgress,
   Tooltip,
   IconButton,
-  Checkbox,
-  RadioGroup,
-  Radio,
-  FormControlLabel,
-  FormLabel,
 } from "@mui/material";
 import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
@@ -48,7 +43,6 @@ import {
   Add,
   Delete,
 } from "@mui/icons-material";
-import { CANALES_OPCIONES, ESTADOS, toChannelNumber } from "./helpers";
 
 import "../../styles/formRiesgoRondin.css";
 import { motion } from "framer-motion";
@@ -73,10 +67,15 @@ const confirm = (title, text, confirmButtonText = "Sí") =>
     reverseButtons: true,
   });
 
-/** Helpers */
+/** ====== Helpers ====== */
 const OPERARIOS_DEFAULT = ["Brisa", "Luis", "Bruno", "Benjamín", "Denise", "Pedro", "Romina"];
 const MAX_TANDAS = 20;
+
+/* Solo cámaras (64 canales) */
 const CANALES_OPCIONES = Array.from({ length: 64 }, (_, i) => i + 1);
+const toChannelNumber = (v) => Number(v ?? 1);
+
+/* Estados de cámara (sin alarmas) */
 const ESTADOS = [
   { key: "ok", label: "OK", color: "var(--ok)" },
   { key: "medio", label: "Medio", color: "var(--medio)" },
@@ -85,19 +84,12 @@ const ESTADOS = [
 
 const MIN_CAMERAS_REQUIRED = 50;
 
+/* Tanda (solo cámaras, sin checklist ni alarmas) */
 const nuevaTanda = (id = Date.now()) => ({
   id: `tanda-${id}`,
   cliente: "",
   resumen: "",
   camaras: [{ id: `cam-${id}-1`, canal: 1, estado: null, nota: "", touched: false }],
-  // ✅ Checklist por cliente
-  checklist: {
-    grabacionesOK: null, // true/false
-    grabacionesFallan: { cam1: false, cam2: false, cam3: false, cam4: false },
-    cortes220v: null,  
-    equipoHora: null, // true/false
-    equipoOffline: null // true/false
-  },
 });
 
 export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
@@ -348,30 +340,6 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     toast.fire({ icon: "info", title: "Reset visual realizado" });
   };
 
-  // 🔎 Validación del checklist antes de finalizar
-  const checklistIssues = () => {
-    const issues = [];
-    tandas.forEach((t) => {
-      const c = t.checklist;
-      if (!c) return;
-      const incompletas = [];
-      if (c.grabacionesOK === null) incompletas.push("GRABACIONES");
-      if (c.cortes220v === null) incompletas.push("CORTES 220V");
-      if (c.equipoHora === null) incompletas.push("equipoHora");
-      if (c.equipoOffline === null) incompletas.push("EQUIPO OFFLINE");
-      if (incompletas.length) {
-        issues.push(`${t.cliente || "Cliente"}: completar ${incompletas.join(", ")}`);
-      }
-      if (c.grabacionesOK === false) {
-        const any = Object.values(c.grabacionesFallan || {}).some(Boolean);
-        if (!any) {
-          issues.push(`${t.cliente || "Cliente"}: indicá qué cámaras fallan en GRABACIONES`);
-        }
-      }
-    });
-    return issues;
-  };
-
   const handleFinalizar = async () => {
     if (!rondaId || !startTime) return Swal.fire("Sin ronda activa", "Primero iniciá la ronda.", "info");
 
@@ -382,17 +350,6 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
         `Necesitás al menos ${MIN_CAMERAS_REQUIRED} cámaras verificadas (actual: ${camarasCompletadas}).`,
         "info"
       );
-    }
-
-    // Validar checklist por cliente
-    const issues = checklistIssues();
-    if (issues.length) {
-      return Swal.fire({
-        title: "Checklist incompleto",
-        html: `<div style="text-align:left"><ul style="margin-left:18px">${issues.map(i=>`<li>${i}</li>`).join("")}</ul></div>`,
-        icon: "info",
-        confirmButtonText: "OK",
-      });
     }
 
     const totalPausedMsPreview = pausasRef.current.reduce((acc, p) => acc + (p.to ? p.to - p.from : 0), 0);
@@ -473,34 +430,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
   const setTandaResumen = (tandaId, value) =>
     setTandas(prev => prev.map(t => (t.id === tandaId ? { ...t, resumen: value } : t)));
 
-  const setChecklistVal = (tandaId, field, value) => {
-    setTandas(prev =>
-      prev.map(t =>
-        t.id === tandaId
-          ? { ...t, checklist: { ...t.checklist, [field]: value } }
-          : t
-      )
-    );
-  };
-
-  const toggleGrabacionFalla = (tandaId, key) => {
-    setTandas(prev =>
-      prev.map(t =>
-        t.id === tandaId
-          ? { ...t, checklist: { ...t.checklist, grabacionesFallan: { ...t.checklist.grabacionesFallan, [key]: !t.checklist.grabacionesFallan[key] } } }
-          : t
-      )
-    );
-  };
-
-  const estadoRonda = useMemo(() => {
-    if (endTime) return "finalizada";
-    if (startTime && paused) return "pausada";
-    if (startTime) return "enCurso";
-    return "lista";
-  }, [endTime, startTime, paused]);
-
-  // CAMARAS
+  // Cámaras
   const addCamRow = (tandaId) => {
     setTandas(prev =>
       prev.map(t =>
@@ -522,19 +452,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     );
   };
   const setCamField = (tandaId, camId, key, value) => {
-    userInteractedRef.current = true;
-  
-    const normVal =
-      key === "canal"
-        ? Number(
-            value == null
-              ? 1
-              : typeof value === "object"
-                ? (value.value ?? value.id ?? value.canal ?? 1)
-                : value
-          )
-        : value;
-  
+    const normVal = key === "canal" ? toChannelNumber(value) : value;
     setTandas(prev =>
       prev.map(t =>
         t.id === tandaId
@@ -551,20 +469,18 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     );
   };
   useEffect(() => {
+    // Forzar números en canal al montar
     setTandas(prev =>
       prev.map(t => ({
         ...t,
         camaras: (t.camaras || []).map(c => ({
           ...c,
-          canal:
-            typeof c.canal === "object"
-              ? Number(c.canal?.value ?? c.canal?.id ?? c.canal?.canal ?? 1)
-              : Number(c.canal ?? 1),
+          canal: Number(c.canal ?? 1),
         })),
       }))
     );
-  }, []); // una sola vez
-    
+  }, []);
+
   const onCameraState = (tandaId, camId, next) => {
     setTandas(prev =>
       prev.map(t =>
@@ -613,7 +529,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
       {/* HEADER */}
       <Box className="riesgo-header">
         <div className="riesgo-header__left">
-          <Typography variant="h5" className="riesgo-title">RONDÍN ALTO RIESGO (por tandas)</Typography>
+          <Typography variant="h5" className="riesgo-title">RONDÍN ALTO RIESGO (CCTV / Cámaras)</Typography>
 
           <StatChip
             label={`Misión: ${camarasCompletadas}/${Math.max(totalCamaras, MIN_CAMERAS_REQUIRED)} cámaras (mín. ${MIN_CAMERAS_REQUIRED})`}
@@ -630,109 +546,103 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
 
       {/* CONTENEDOR */}
       <Paper className="riesgo-container" sx={{ p: 2, borderRadius: 2 }}>
-  {/* Progresos en fila */}
-  <Stack direction="row" spacing={4} alignItems="center" sx={{ mb: 2 }}>
-    {/* Progreso global */}
-    <Stack direction="row" spacing={1} alignItems="center" flex={1}>
-      <Typography variant="subtitle2" color="text.secondary">Progreso global</Typography>
-      <LinearProgress
-        variant="determinate"
-        value={overallProgress}
-        sx={{ flex: 1, height: 8, borderRadius: 5 }}
-      />
-      <Typography variant="caption" sx={{ minWidth: 36, textAlign: "right" }}>
-        {overallProgress}%
-      </Typography>
-    </Stack>
+        {/* Progresos en fila */}
+        <Stack direction="row" spacing={4} alignItems="center" sx={{ mb: 2 }}>
+          {/* Progreso global */}
+          <Stack direction="row" spacing={1} alignItems="center" flex={1}>
+            <Typography variant="subtitle2" color="text.secondary">Progreso global</Typography>
+            <LinearProgress
+              variant="determinate"
+              value={overallProgress}
+              sx={{ flex: 1, height: 8, borderRadius: 5 }}
+            />
+            <Typography variant="caption" sx={{ minWidth: 36, textAlign: "right" }}>
+              {overallProgress}%
+            </Typography>
+          </Stack>
 
-    {/* Cámaras */}
-    <Stack direction="row" spacing={1} alignItems="center" flex={1}>
-      <Typography variant="subtitle2" color="text.secondary">Cámaras</Typography>
-      <LinearProgress
-        variant="determinate"
-        value={camerasProgress}
-        sx={{ flex: 1, height: 6, borderRadius: 5 }}
-      />
-      <Typography variant="caption" sx={{ minWidth: 36, textAlign: "right" }}>
-        {camerasProgress}%
-      </Typography>
-    </Stack>
-  </Stack>
+          {/* Cámaras */}
+          <Stack direction="row" spacing={1} alignItems="center" flex={1}>
+            <Typography variant="subtitle2" color="text.secondary">Cámaras</Typography>
+            <LinearProgress
+              variant="determinate"
+              value={camerasProgress}
+              sx={{ flex: 1, height: 6, borderRadius: 5 }}
+            />
+            <Typography variant="caption" sx={{ minWidth: 36, textAlign: "right" }}>
+              {camerasProgress}%
+            </Typography>
+          </Stack>
+        </Stack>
 
-  {/* Datos superiores en una sola fila */}
-{/* Datos superiores en una sola fila */}
-<Grid container spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
-  {/* Turno (1/3) */}
-  <Grid item xs={12} md={4}>
-    <FormControl fullWidth size="medium"
-      sx={{
-        "& .MuiInputBase-root": { height: 56, borderRadius: 2 },
-        "& .MuiFormLabel-root": { fontSize: "0.95rem" },
-        "& .MuiSelect-select": { display: "flex", alignItems: "center", py: 1.25 }
-      }}
-    >
-      <InputLabel>Turno</InputLabel>
-      <Select
-        value={turno}
-        label="Turno"
-        onChange={(e) => setTurno(e.target.value)}
-        MenuProps={{ PaperProps: { sx: { maxHeight: 360, minWidth: 220 } } }}
-      >
-        <MenuItem value="Noche">Nocturno</MenuItem>
-        <MenuItem value="Día">Día</MenuItem>
-      </Select>
-    </FormControl>
-  </Grid>
+        {/* Datos superiores */}
+        <Grid container spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+          {/* Turno */}
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth size="medium"
+              sx={{
+                "& .MuiInputBase-root": { height: 56, borderRadius: 2 },
+                "& .MuiFormLabel-root": { fontSize: "0.95rem" },
+                "& .MuiSelect-select": { display: "flex", alignItems: "center", py: 1.25 }
+              }}
+            >
+              <InputLabel>Turno</InputLabel>
+              <Select
+                value={turno}
+                label="Turno"
+                onChange={(e) => setTurno(e.target.value)}
+                MenuProps={{ PaperProps: { sx: { maxHeight: 360, minWidth: 220 } } }}
+              >
+                <MenuItem value="Noche">Nocturno</MenuItem>
+                <MenuItem value="Día">Día</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
 
-  {/* Operador (2/3) — GRANDE y legible */}
-  <Grid item xs={12} md={8}>
-    <FormControl fullWidth size="medium"
-      sx={{
-        "& .MuiInputBase-root": { height: 56, borderRadius: 2 },
-        "& .MuiFormLabel-root": { fontSize: "0.95rem" },
-        "& .MuiSelect-select": { display: "flex", alignItems: "center", py: 1.25 }
-      }}
-    >
-      <InputLabel>Operador</InputLabel>
-      <Select
-        value={operario}
-        label="Operador"
-        onChange={(e) => setOperario(e.target.value)}
-        // menú ancho y cómodo para leer nombres largos
-        MenuProps={{ PaperProps: { sx: { maxHeight: 420, minWidth: 360 } } }}
-      >
-        {operarios.map(op => (
-          <MenuItem key={op} value={op}>
-            <Typography sx={{ fontSize: "0.98rem", whiteSpace: "nowrap" }}>{op}</Typography>
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
-  </Grid>
-</Grid>
+          {/* Operador */}
+          <Grid item xs={12} md={8}>
+            <FormControl fullWidth size="medium"
+              sx={{
+                "& .MuiInputBase-root": { height: 56, borderRadius: 2 },
+                "& .MuiFormLabel-root": { fontSize: "0.95rem" },
+                "& .MuiSelect-select": { display: "flex", alignItems: "center", py: 1.25 }
+              }}
+            >
+              <InputLabel>Operador</InputLabel>
+              <Select
+                value={operario}
+                label="Operador"
+                onChange={(e) => setOperario(e.target.value)}
+                MenuProps={{ PaperProps: { sx: { maxHeight: 420, minWidth: 360 } } }}
+              >
+                {operarios.map(op => (
+                  <MenuItem key={op} value={op}>
+                    <Typography sx={{ fontSize: "0.98rem", whiteSpace: "nowrap" }}>{op}</Typography>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
 
+        {/* Novedades */}
+        <Box sx={{ mb: 1 }}>
+          <TextField
+            label="Novedades Generales"
+            fullWidth
+            multiline
+            rows={3}
+            value={novedades}
+            onChange={(e) => setNovedades(e.target.value)}
+            sx={{
+              "& .MuiOutlinedInput-root": { fontSize: "0.95rem", borderRadius: "10px" },
+              "& .MuiInputLabel-root": { fontSize: "0.95rem" },
+              "& textarea": { padding: "10px" }
+            }}
+          />
+        </Box>
 
-
-  {/* Observaciones */}
-  <Box sx={{ mb: 1 }}>
-    <TextField
-      label="Novedades Generales"
-      fullWidth
-      multiline
-      rows={3}
-      value={novedades}
-      onChange={(e) => setNovedades(e.target.value)}
-      sx={{
-        "& .MuiOutlinedInput-root": { fontSize: "0.95rem", borderRadius: "10px" },
-        "& .MuiInputLabel-root": { fontSize: "0.95rem" },
-        "& textarea": { padding: "10px" }
-      }}
-    />
-  </Box>
-
-
-
-        {/* TANDAS (clientes) */}
+        {/* TANDAS */}
         <Box className="tandas-grid">
           {tandas.map((t) => (
             <Card key={t.id} id={t.id} className="tanda-card">
@@ -761,10 +671,10 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
                   </Stack>
                 </div>
 
-                {/* CONTENIDO PRINCIPAL: Cámaras + Checklist lado a lado */}
+                {/* CONTENIDO PRINCIPAL: Cámaras */}
                 <Grid container spacing={2}>
                   {/* Tabla de cámaras */}
-                  <Grid item xs={12} md={7}>
+                  <Grid item xs={12}>
                     <Box className="tabla-camaras">
                       <div className="tabla-head">
                         <span>Equipo</span>
@@ -776,20 +686,15 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
                       {t.camaras.map((cam) => (
                         <div className={`tabla-row estado-${cam.estado}`} key={cam.id}>
                           <div className="cell canal">
-                          <Select
-  size="small"
-  value={toChannelNumber(cam.canal)}
-  onChange={(e) => setCamField(t.id, cam.id, "canal", toChannelNumber(e.target.value))}
->
-  {CANALES_OPCIONES.map((opt) => {
-    const n = toChannelNumber(opt);
-    return (
-      <MenuItem key={n} value={n}>
-        Cámara {n}
-      </MenuItem>
-    );
-  })}
-</Select>
+                            <Select
+                              size="small"
+                              value={toChannelNumber(cam.canal)}
+                              onChange={(e) => setCamField(t.id, cam.id, "canal", toChannelNumber(e.target.value))}
+                            >
+                              {CANALES_OPCIONES.map((n) => (
+                                <MenuItem key={n} value={n}>Cámara {n}</MenuItem>
+                              ))}
+                            </Select>
                           </div>
 
                           <div className="cell estado">
@@ -833,98 +738,6 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
                         </div>
                       ))}
                     </Box>
-                  </Grid>
-
-                  {/* ✅ Checklist al lado */}
-                  <Grid item xs={12} md={5}>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>GRABACIONES</Typography>
-                      <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-                        ¿FUNCIONAN TODAS LAS CÁMARAS?
-                      </FormLabel>
-                      <RadioGroup
-                        row
-                        value={t.checklist.grabacionesOK === null ? "" : String(t.checklist.grabacionesOK)}
-                        onChange={(e) => {
-                          const val = e.target.value === "true";
-                          setChecklistVal(t.id, "grabacionesOK", val);
-                          if (val) {
-                            // Si dijo que funcionan todas, limpiar selección de fallas
-                            ["cam1","cam2","cam3","cam4"].forEach(k => {
-                              setTandas(prev => prev.map(x => x.id === t.id
-                                ? { ...x, checklist: { ...x.checklist, grabacionesFallan: { cam1:false, cam2:false, cam3:false, cam4:false } } }
-                                : x
-                              ));
-                            });
-                          } else {
-                            toast.fire({ icon: "info", title: "Indicá cuáles fallan (1–4)" });
-                          }
-                        }}
-                      >
-                        <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
-                        <FormControlLabel value="false" control={<Radio size="small" />} label="No (indicar cuáles)" />
-                      </RadioGroup>
-
-                      {t.checklist.grabacionesOK === false && (
-                        <Grid container spacing={1} sx={{ mt: 1 }}>
-                          {(["cam1","cam2","cam3","cam4"]).map((k, idx) => (
-                            <Grid item xs={6} key={k}>
-                              <FormControlLabel
-                                control={
-                                  <Checkbox
-                                    size="small"
-                                    checked={t.checklist.grabacionesFallan[k]}
-                                    onChange={() => toggleGrabacionFalla(t.id, k)}
-                                  />
-                                }
-                                label={`Cámara ${idx + 1}`}
-                              />
-                            </Grid>
-                          ))}
-                        </Grid>
-                      )}
-
-                      <Divider sx={{ my: 1.5 }} />
-
-                      <Typography variant="subtitle2" gutterBottom>ENERGÍA</Typography>
-                      <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-                        ¿TIENE CORTES 220V?
-                      </FormLabel>
-                      <RadioGroup
-                        row
-                        value={t.checklist.cortes220v === null ? "" : String(t.checklist.cortes220v)}
-                        onChange={(e) => setChecklistVal(t.id, "cortes220v", e.target.value === "true")}
-                      >
-                        <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
-                        <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
-                      </RadioGroup>
-
-                      <Divider sx={{ my: 1.5 }} />
-
-                      <Typography variant="subtitle2" gutterBottom>CONEXIÓN</Typography>
-                      <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-                        ¿EQUIPO OFFLINE?
-                      </FormLabel>
-                      <RadioGroup
-                        row
-                        value={t.checklist.equipoOffline === null ? "" : String(t.checklist.equipoOffline)}
-                        onChange={(e) => setChecklistVal(t.id, "equipoOffline", e.target.value === "true")}
-                      >
-                        <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
-                        <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
-                      </RadioGroup>
-                      <FormLabel component="legend" sx={{ fontSize: 13, mb: .5 }}>
-                        ¿EQUIPO EN HORA?
-                      </FormLabel>
-                      <RadioGroup
-                        row
-                        value={t.checklist.equipoHora === null ? "" : String(t.checklist.equipoHora )}
-                        onChange={(e) => setChecklistVal(t.id, "equipoHora ", e.target.value === "true")}
-                      >
-                        <FormControlLabel value="true" control={<Radio size="small" />} label="Sí" />
-                        <FormControlLabel value="false" control={<Radio size="small" />} label="No" />
-                      </RadioGroup>
-                    </Paper>
                   </Grid>
                 </Grid>
 
@@ -980,7 +793,7 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
             <Chip icon={<AccessTime />} label={displayElapsed} />
             <div className="spacer" />
 
-            {estadoRonda === "lista" && (
+            {(!startTime && !endTime) && (
               <motion.div whileTap={{ scale: .96 }} whileHover={{ scale: 1.02 }}>
                 <Button variant="contained" color="primary" startIcon={<PlayArrow />} onClick={handleIniciar}>
                   Iniciar
@@ -988,19 +801,19 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
               </motion.div>
             )}
 
-            {estadoRonda === "enCurso" && (
+            {(startTime && !paused && !endTime) && (
               <Button variant="contained" color="warning" startIcon={<Pause />} onClick={handlePausar}>
                 Pausar
               </Button>
             )}
 
-            {estadoRonda === "pausada" && (
+            {(startTime && paused && !endTime) && (
               <Button variant="contained" color="success" startIcon={<PlayArrow />} onClick={handleReanudar}>
                 Reanudar
               </Button>
             )}
 
-            {(estadoRonda === "enCurso" || estadoRonda === "pausada") && (
+            {(startTime && !endTime) && (
               <Button variant="contained" color="error" startIcon={<Stop />} onClick={handleFinalizar}>
                 Finalizar
               </Button>

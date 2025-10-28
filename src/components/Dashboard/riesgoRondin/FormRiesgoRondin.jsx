@@ -17,6 +17,7 @@ import {
   OPERARIOS_DEFAULT, MAX_TANDAS,
   norm, nuevaTanda, shuffle, hh, mm, ss
 } from "./helpers";
+import "../../../styles/TandaCard.css";
 import { useOperadorAuth } from "../../../context/OperadorAuthContext";
 import LogoutIcon from "@mui/icons-material/Logout"
 export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
@@ -736,7 +737,7 @@ useEffect(() => {
   const setTandaResumen = (tandaId, value) =>
     setTandas((prev) => prev.map((t) => (t.id === tandaId ? { ...t, resumen: value } : t)));
 
-  const addCamRow = (tandaId) =>
+    const addCamRow = (tandaId) =>
     setTandas((prev) =>
       prev.map((t) =>
         t.id === tandaId
@@ -744,13 +745,13 @@ useEffect(() => {
               ...t,
               camaras: [
                 ...t.camaras,
-                { id: `cam-${tandaId}-${Date.now()}`, canal: 1, estado: null, nota: "", touched: false },
+                { id: `cam-${tandaId}-${Date.now()}`, canal: null, estado: null, nota: "", touched: false },
               ],
             }
           : t
       )
     );
-
+  
   const removeCamRow = (tandaId, camId) =>
     setTandas((prev) => prev.map((t) => (t.id === tandaId ? { ...t, camaras: t.camaras.filter((c) => c.id !== camId) } : t)));
 
@@ -759,7 +760,7 @@ useEffect(() => {
     
       const normVal =
         key === "canal"
-          ? (value == null ? 1 : Number(value?.value ?? value)) // ← fuerza número (sirve para Select o Autocomplete)
+          ? (value == null || value === "" ? null : Number(value?.value ?? value))
           : value;
     
       setTandas((prev) =>
@@ -777,6 +778,7 @@ useEffect(() => {
         )
       );
     };
+    
     
   const onCamState = async (tandaId, camId, next) => {
     userInteractedRef.current = true;
@@ -1134,7 +1136,6 @@ useEffect(() => {
                 )}
                 <TandaCard
                   tanda={t}
-                  rondaId={rondaId}
                   clientesCat={clientesCat}
                   onSetCliente={setTandaCliente}
                   onAddCam={addCamRow}
