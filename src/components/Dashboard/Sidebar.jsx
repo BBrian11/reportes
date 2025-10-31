@@ -10,11 +10,16 @@ import {
 } from "react-icons/fa";
 import "../../styles/sidebar.css";
 
+/* ======== Constantes de fallback ======== */
+const CLIENTE_FALLBACK = "Otros";
+const GRUPO_FALLBACK = "General";
+const UBIC_FALLBACK = "Sin ubicación";
+const EVENTO_FALLBACK = "—";
+
 /* ========= Helpers de fecha (fuera del componente) ========= */
 function toDate(value) {
   if (!value) return null;
 
-  // Date nativa
   if (value instanceof Date) return isNaN(value) ? null : value;
 
   // Firestore Timestamp
@@ -62,6 +67,48 @@ function endOfDayLocal(date) {
   d.setHours(23, 59, 59, 999);
   return d;
 }
+
+/* ========= Helpers de sanitización ========= */
+const safeStr = (v, fb = "") => {
+  if (v == null) return fb;
+  if (typeof v === "object") return fb || "";
+  const s = String(v).trim();
+  return s || fb;
+};
+
+const toCliente = (v) => safeStr(v, CLIENTE_FALLBACK);
+const toUbic = (v) => safeStr(v, UBIC_FALLBACK);
+const toGrupo = (e) => {
+  const gSrc = safeStr(e?.grupo, "");
+  if (gSrc) return gSrc;
+  const ubic = toUbic(e?.ubicacion);
+  const first = safeStr(ubic.split(" ")[0], "");
+  return first || GRUPO_FALLBACK;
+};
+const toEvento = (v) => safeStr(v, EVENTO_FALLBACK);
+
+/** Intenta derivar una fecha primaria a partir de múltiples campos posibles */
+const pickPrimaryDate = (e) => {
+  const candidates = [
+    e?.fechaEvento,
+    e?.eventoFecha,
+    e?.fecha_evento,
+    e?.fechaEnvio,
+    e?.fecha_envio,
+    e?.enviadoAt,
+    e?.fecha,
+    e?.fechaObj,
+    e?.fechaHora,
+    e?.ts,
+    e?.createdAt,
+  ];
+  for (const c of candidates) {
+    const d = toDate(c);
+    if (d) return d;
+  }
+  return null;
+};
+
 /* ========= fin helpers ========= */
 
 export default function Sidebar({
@@ -77,7 +124,21 @@ export default function Sidebar({
   onChangeFechaFin,
 }) {
   // ======== Fuente de datos segura ========
-  const lista = Array.isArray(eventos) ? eventos : [];
+  const listaRaw = Array.isArray(eventos) ? eventos : [];
+
+  // Normalizamos una vista “segura”
+  const lista = useMemo(
+    () =>
+      listaRaw.map((e) => ({
+        ...e,
+        _cliente: toCliente(e?.cliente),
+        _ubic: toUbic(e?.ubicacion),
+        _grupo: toGrupo(e),
+        _evento: toEvento(e?.evento),
+        _fechaPrimaria: pickPrimaryDate(e), // ✅ usa evento o envío o lo que haya
+      })),
+    [listaRaw]
+  );
 
   // ======== Estado controlado o interno ========
   const [internalFiltros, setInternalFiltros] = useState({
@@ -110,9 +171,9 @@ export default function Sidebar({
   const estructura = useMemo(() => {
     const map = {};
     for (const e of lista) {
-      const cliente = e?.cliente || "Otros";
-      const grupo = e?.grupo || e?.ubicacion?.split(" ")?.[0] || "General";
-      const ubicacion = e?.ubicacion || "Sin ubicación";
+      const cliente = e._cliente || CLIENTE_FALLBACK;
+      const grupo = e._grupo || GRUPO_FALLBACK;
+      const ubicacion = e._ubic || UBIC_FALLBACK;
       if (!map[cliente]) map[cliente] = {};
       if (!map[cliente][grupo]) map[cliente][grupo] = new Set();
       map[cliente][grupo].add(ubicacion);
@@ -121,9 +182,9 @@ export default function Sidebar({
   }, [lista]);
 
   // ======== Filtros activos ========
-  const effectiveCliente = F?.cliente || "";
-  const effectiveGrupo = F?.grupo || "";
-  const effectiveUbicacion = F?.ubicacion || "";
+  const effectiveCliente = safeStr(F?.cliente, "");
+  const effectiveGrupo = safeStr(F?.grupo, "");
+  const effectiveUbicacion = safeStr(F?.ubicacion, "");
 
   // ======== Fechas normalizadas (memo) ========
   const fechaInicioNorm = useMemo(
@@ -138,12 +199,9 @@ export default function Sidebar({
   // ======== Filtrado por fechas robusto ========
   const dentroDeRango = useCallback(
     (e) => {
-      // Ajustá estos nombres si tu campo de fecha es distinto
-      const raw = e?.fecha ?? e?.fechaHora ?? e?.ts ?? e?.createdAt;
-      const d = toDate(raw);
-
-      if (!d) return true; // si el evento no trae fecha legible, no lo excluimos
-
+      const d = e?._fechaPrimaria; // ✅ ya es un Date o null
+      // Si no hay fecha legible → NO excluir (mostrar igual)
+      if (!d) return true;
       if (fechaInicioNorm && d < fechaInicioNorm) return false;
       if (fechaFinNorm && d > fechaFinNorm) return false;
       return true;
@@ -161,21 +219,22 @@ export default function Sidebar({
   // Eventos disponibles para el contexto (cliente + (ubicación | grupo) + fechas)
   const eventosDisponibles = useMemo(() => {
     let base = lista.filter(dentroDeRango);
-    if (effectiveCliente) base = base.filter((e) => e?.cliente === effectiveCliente);
+
+    if (effectiveCliente) base = base.filter((e) => e._cliente === effectiveCliente);
 
     if (effectiveUbicacion) {
-      base = base.filter((e) => e?.ubicacion === effectiveUbicacion);
+      base = base.filter((e) => e._ubic === effectiveUbicacion);
     } else if (ubicacionesDelGrupo && ubicacionesDelGrupo.size) {
-      base = base.filter((e) => ubicacionesDelGrupo.has(e?.ubicacion));
+      base = base.filter((e) => ubicacionesDelGrupo.has(e._ubic));
     }
 
     return base;
   }, [lista, dentroDeRango, effectiveCliente, effectiveUbicacion, ubicacionesDelGrupo]);
 
-  const eventosUnicos = useMemo(
-    () => [...new Set(eventosDisponibles.map((e) => e?.evento).filter(Boolean))].sort(),
-    [eventosDisponibles]
-  );
+  const eventosUnicos = useMemo(() => {
+    const set = new Set(eventosDisponibles.map((e) => e._evento || EVENTO_FALLBACK));
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  }, [eventosDisponibles]);
 
   // Selección segura: intersección con los eventos disponibles
   const selectedEventosSafe = useMemo(() => {
@@ -233,17 +292,16 @@ export default function Sidebar({
 
   // ======== Handlers con saneo inmediato ========
   const selectCliente = (clienteUI, { close = false } = {}) => {
-    const value = clienteUI === "Todos" ? "" : clienteUI;
+    const value = clienteUI === "Todos" ? "" : safeStr(clienteUI, CLIENTE_FALLBACK);
 
     const nextEventosUnicos = [
       ...new Set(
         lista
           .filter(dentroDeRango)
-          .filter((e) => (value ? e?.cliente === value : true))
-          .map((e) => e?.evento)
-          .filter(Boolean)
+          .filter((e) => (value ? e._cliente === value : true))
+          .map((e) => e._evento || EVENTO_FALLBACK)
       ),
-    ].sort();
+    ].sort((a, b) => a.localeCompare(b, "es"));
 
     const currentSel = new Set(F?.eventosSeleccionados || []);
     const nextSelected = nextEventosUnicos.filter((ev) => currentSel.has(ev));
@@ -264,20 +322,20 @@ export default function Sidebar({
   };
 
   const selectGrupo = (cliente, grupo) => {
-    const clienteValue = cliente === "Todos" ? "" : cliente;
+    const clienteValue = cliente === "Todos" ? "" : safeStr(cliente, CLIENTE_FALLBACK);
+    const grupoValue = safeStr(grupo, GRUPO_FALLBACK);
 
     // Eventos válidos para cliente + grupo
-    const ubicSet = estructura[clienteValue]?.[grupo] || new Set();
+    const ubicSet = estructura[clienteValue]?.[grupoValue] || new Set();
     const nextEventosUnicos = [
       ...new Set(
         lista
           .filter(dentroDeRango)
-          .filter((e) => (clienteValue ? e?.cliente === clienteValue : true))
-          .filter((e) => (ubicSet.size ? ubicSet.has(e?.ubicacion) : true))
-          .map((e) => e?.evento)
-          .filter(Boolean)
+          .filter((e) => (clienteValue ? e._cliente === clienteValue : true))
+          .filter((e) => (ubicSet.size ? ubicSet.has(e._ubic) : true))
+          .map((e) => e._evento || EVENTO_FALLBACK)
       ),
-    ].sort();
+    ].sort((a, b) => a.localeCompare(b, "es"));
 
     const currentSel = new Set(F?.eventosSeleccionados || []);
     const nextSelected = nextEventosUnicos.filter((ev) => currentSel.has(ev));
@@ -285,29 +343,29 @@ export default function Sidebar({
     setF((prev) => ({
       ...prev,
       cliente: clienteValue,
-      grupo: grupo,
+      grupo: grupoValue,
       ubicacion: "",
       eventosSeleccionados: nextSelected,
     }));
 
-    onSelectGrupo?.(clienteValue, grupo);
+    onSelectGrupo?.(clienteValue, grupoValue);
     setOpenSection("filters");
   };
 
   const selectUbicacion = (cliente, ubic) => {
-    const clienteValue = cliente === "Todos" ? "" : cliente;
+    const clienteValue = cliente === "Todos" ? "" : safeStr(cliente, CLIENTE_FALLBACK);
+    const ubicValue = safeStr(ubic, UBIC_FALLBACK);
 
     // Eventos válidos para cliente + ubicación (override grupo)
     const nextEventosUnicos = [
       ...new Set(
         lista
           .filter(dentroDeRango)
-          .filter((e) => (clienteValue ? e?.cliente === clienteValue : true))
-          .filter((e) => (ubic ? e?.ubicacion === ubic : true))
-          .map((e) => e?.evento)
-          .filter(Boolean)
+          .filter((e) => (clienteValue ? e._cliente === clienteValue : true))
+          .filter((e) => (ubicValue ? e._ubic === ubicValue : true))
+          .map((e) => e._evento || EVENTO_FALLBACK)
       ),
-    ].sort();
+    ].sort((a, b) => a.localeCompare(b, "es"));
 
     const currentSel = new Set(F?.eventosSeleccionados || []);
     const nextSelected = nextEventosUnicos.filter((ev) => currentSel.has(ev));
@@ -316,11 +374,11 @@ export default function Sidebar({
       ...prev,
       cliente: clienteValue,
       grupo: "",
-      ubicacion: ubic || "",
+      ubicacion: ubicValue || "",
       eventosSeleccionados: nextSelected,
     }));
 
-    onSelectUbicacion?.(clienteValue, ubic);
+    onSelectUbicacion?.(clienteValue, ubicValue);
   };
 
   const toggleExpand = (cliente) => {
@@ -331,12 +389,13 @@ export default function Sidebar({
   };
 
   const toggleEvento = (evName) => {
-    if (!evName) return;
-    if (!eventosUnicos.includes(evName)) return;
+    const name = toEvento(evName);
+    if (!name) return;
+    if (!eventosUnicos.includes(name)) return; // seguridad
 
     setF((prev) => {
       const current = new Set(prev.eventosSeleccionados || []);
-      current.has(evName) ? current.delete(evName) : current.add(evName);
+      current.has(name) ? current.delete(name) : current.add(name);
       return { ...prev, eventosSeleccionados: [...current] };
     });
   };
@@ -464,18 +523,20 @@ export default function Sidebar({
                               <li
                                 className="sub-item all-edificio"
                                 onClick={() => selectGrupo(cliente, grupo)}
+                                title="Ver todo el grupo"
                               >
                                 ➤ Ver todo {grupo}
                               </li>
                               {[...(estructura[cliente]?.[grupo] || new Set())]
                                 .filter((u) =>
-                                  String(u).toLowerCase().includes(searchTermUbic.toLowerCase())
+                                  safeStr(u).toLowerCase().includes(searchTermUbic.toLowerCase())
                                 )
                                 .map((ubicacion, i) => (
                                   <li
                                     key={i}
                                     onClick={() => selectUbicacion(cliente, ubicacion)}
                                     className={`sub-item ${effectiveUbicacion === ubicacion ? "active" : ""}`}
+                                    title={ubicacion}
                                   >
                                     {ubicacion}
                                   </li>
@@ -569,6 +630,7 @@ export default function Sidebar({
                       className="chip"
                       onClick={selectAllEventos}
                       disabled={!eventosUnicos.length}
+                      title="Seleccionar todos"
                     >
                       Seleccionar todos
                     </button>
@@ -577,6 +639,7 @@ export default function Sidebar({
                       className="chip"
                       onClick={clearEventos}
                       disabled={!selectedEventosSafe.length}
+                      title="Limpiar selección"
                     >
                       Limpiar
                     </button>
@@ -585,9 +648,11 @@ export default function Sidebar({
                   <div className="events-list">
                     {eventosUnicos.length ? (
                       eventosUnicos
-                        .filter((ev) => (ev || "").toLowerCase().includes(searchTermEvento.toLowerCase()))
+                        .filter((ev) =>
+                          safeStr(ev).toLowerCase().includes(searchTermEvento.toLowerCase())
+                        )
                         .map((ev) => (
-                          <label key={ev} className="event-item">
+                          <label key={ev} className="event-item" title={ev === EVENTO_FALLBACK ? "Sin nombre" : ev}>
                             <input
                               type="checkbox"
                               checked={selectedEventosSafe.includes(ev)}

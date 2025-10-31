@@ -23,6 +23,7 @@ import { FaTasks, FaBars, FaWpforms } from "react-icons/fa";
 import { collection, onSnapshot, query, limit } from "firebase/firestore";
 import { db } from "../../services/firebase";
 import "../../styles/dashboard.css";
+import NotificationsBridge from "../common/NotificationsBridge.jsx"; 
 
 export default function Dashboard() {
   const [eventos, setEventos] = useState([]);
@@ -345,16 +346,25 @@ const eventosFiltrados = useMemo(() => {
     return true;
   });
 }, [eventos, filtros]);
+useEffect(() => {
+  const onInfo = () => {
+    setShowNotifModal(true);
+    markAllRead();
+  };
+  const onAlert = () => setShowAlertModal(true);
+
+  window.addEventListener("g3t:openInfo", onInfo);
+  window.addEventListener("g3t:openAlert", onAlert);
+  return () => {
+    window.removeEventListener("g3t:openInfo", onInfo);
+    window.removeEventListener("g3t:openAlert", onAlert);
+  };
+}, [markAllRead]);
 
   // ------------ UI ------------
   return (
     <div className="dashboard-layout">
-       <NotificationBubbles
-       onOpenInfo={abrirInfo}
-       onOpenAlert={abrirAlertas}
-       infoCount={unreadCount}
-       alertCount={alertCount}
-     />
+    
 
       <div className="floating-controls">
         <button className="icon-btn dark" onClick={() => setSidebarOpen(true)}>
@@ -406,21 +416,10 @@ const eventosFiltrados = useMemo(() => {
 
       <main className="dashboard-main">
  
-      <Header
+    <NotificationsBridge
   notificaciones={notificaciones}
   alertas={alertas}
-  showNotifModal={showNotifModal}
-  showAlertModal={showAlertModal}
-  onCloseNotif={() => setShowNotifModal(false)}
-  onCloseAlert={() => setShowAlertModal(false)}
-  onOpenSearch={() => {/* abrir tu command palette o input global */}}
-  onOpenNotifications={() => setShowNotifModal(true)}
-  rightActions={
-    <button className="ghost-btn" onClick={() => {/* export / ayuda */}}>
-      {/* cualquier icono */}
-      <span className="ghost-btn__label">Exportar</span>
-    </button>
-  }
+  onAfterOpenInfo={markAllRead}   // opcional
 />
 
         <div className="dashboard-content">

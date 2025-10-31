@@ -9,7 +9,8 @@ import { Box, Paper, TextField, Button, Container, Stack, GlobalStyles } from "@
 import HeaderBar from "./HeaderBar";
 // import ProgressRows from "./ProgressRows"; // si no lo usás, podés borrar este import
 import TopFields from "./TopFields";
-import TandaCard from "./TandaCard";
+// import TandaCard from "./TandaCard"; // ← ya no se usa
+import TandasTable from "./TandasTable"; // ← NUEVO
 import FooterActions from "./FooterActions";
 import Swal, { toast, confirm } from "./swal";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
@@ -20,6 +21,7 @@ import {
 import "../../../styles/TandaCard.css";
 import { useOperadorAuth } from "../../../context/OperadorAuthContext";
 import LogoutIcon from "@mui/icons-material/Logout"
+
 export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
   // ===== Config plan =====
   const DEFAULT_TOTAL_CLIENTES_PLAN = 2;
@@ -80,87 +82,86 @@ export default function FormRiesgoRondin({ operarios = OPERARIOS_DEFAULT }) {
     }
     return null;
   };
-// Sesión del operador logueado
-const { operador,logout  } = useOperadorAuth();
-// ===== Recordatorios de inicio/reanudación =====
-// --- DEV: tiempos cortos para probar ---
-// ===== Recordatorios de inicio/reanudación =====
-// PRODUCCIÓN
-const IDLE_FIRST_MIN    = 5; // 15 min desde login sin ronda
-const IDLE_REPEAT_MIN   = 5; // repetir cada 30 min
-const PAUSED_REMIND_MIN = 15; // recordatorio de pausa cada 10 min
 
-const IDLE_FIRST_MS    = IDLE_FIRST_MIN * 60 * 1000;
-const IDLE_REPEAT_MS   = IDLE_REPEAT_MIN * 60 * 1000;
-const PAUSED_REMIND_MS = PAUSED_REMIND_MIN * 60 * 1000;
+  // Sesión del operador logueado
+  const { operador, logout } = useOperadorAuth();
 
-const LS_LOGIN_AT_KEY    = "rondin:loginAt";
-const LS_LAST_PROMPT_KEY = "rondin:lastPromptAt";
+  // ===== Recordatorios de inicio/reanudación =====
+  // PRODUCCIÓN (dejé los valores que pusiste)
+  const IDLE_FIRST_MIN    = 5;  // 15
+  const IDLE_REPEAT_MIN   = 5;  // 30
+  const PAUSED_REMIND_MIN = 15; // 10
 
-const swalOpenRef = useRef(false); // evita múltiples Swal simultáneos
-const fmtElapsed = (ms) => {
-  if (ms < 60 * 1000) return "menos de 1 min";
-  const m = Math.ceil(ms / 60000);
-  return m === 1 ? "1 min" : `${m} min`;
-};
+  const IDLE_FIRST_MS    = IDLE_FIRST_MIN * 60 * 1000;
+  const IDLE_REPEAT_MS   = IDLE_REPEAT_MIN * 60 * 1000;
+  const PAUSED_REMIND_MS = PAUSED_REMIND_MIN * 60 * 1000;
 
-// ---- Audio (beep) ----
-const audioCtxRef = useRef(null);
-const ensureAudioCtx = () => {
-  if (audioCtxRef.current) return audioCtxRef.current;
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return null;
-  audioCtxRef.current = new Ctx();
-  return audioCtxRef.current;
-};
-const playBeepOnce = (freq = 740, dur = 0.2) => {
-  try {
-    const ctx = ensureAudioCtx();
-    if (!ctx) return;
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(freq, now);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(now); osc.stop(now + dur + 0.02);
-  } catch {}
-};
-useEffect(() => {
-  const nombreDetectado =
-    operador?.nombre?.trim() ||
-    operador?.usuario?.trim() ||
-    operador?.displayName?.trim() || "";
+  const LS_LOGIN_AT_KEY    = "rondin:loginAt";
+  const LS_LAST_PROMPT_KEY = "rondin:lastPromptAt";
 
-  if (nombreDetectado && nombreDetectado !== operario) {
-    setOperario(nombreDetectado);
+  const swalOpenRef = useRef(false); // evita múltiples Swal simultáneos
+  const fmtElapsed = (ms) => {
+    if (ms < 60 * 1000) return "menos de 1 min";
+    const m = Math.ceil(ms / 60000);
+    return m === 1 ? "1 min" : `${m} min`;
+  };
+
+  // ---- Audio (beep) ----
+  const audioCtxRef = useRef(null);
+  const ensureAudioCtx = () => {
+    if (audioCtxRef.current) return audioCtxRef.current;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    audioCtxRef.current = new Ctx();
+    return audioCtxRef.current;
+  };
+  const playBeepOnce = (freq = 740, dur = 0.2) => {
     try {
-      localStorage.setItem(LS_OPERARIO_KEY, nombreDetectado);
-      localStorage.setItem(LS_LOGIN_AT_KEY, String(Date.now()));   // marca de login
-      localStorage.setItem(LS_LAST_PROMPT_KEY, "0");               // listo para 1er aviso
-    } catch {}
-  }
-}, [operador]); // eslint-disable-line react-hooks/exhaustive-deps
-
-
-
-useEffect(() => {
-  const resumeAudioIfNeeded = () => {
-    try {
-      const ctx = audioCtxRef.current;
-      if (ctx && ctx.state === "suspended") ctx.resume();
+      const ctx = ensureAudioCtx();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now); osc.stop(now + dur + 0.02);
     } catch {}
   };
-  window.addEventListener("click", resumeAudioIfNeeded, { once: true, passive: true });
-  window.addEventListener("keydown", resumeAudioIfNeeded, { once: true });
-  return () => {
-    window.removeEventListener("click", resumeAudioIfNeeded);
-    window.removeEventListener("keydown", resumeAudioIfNeeded);
-  };
-}, []);
+
+  useEffect(() => {
+    const nombreDetectado =
+      operador?.nombre?.trim() ||
+      operador?.usuario?.trim() ||
+      operador?.displayName?.trim() || "";
+
+    if (nombreDetectado && nombreDetectado !== operario) {
+      setOperario(nombreDetectado);
+      try {
+        localStorage.setItem(LS_OPERARIO_KEY, nombreDetectado);
+        localStorage.setItem(LS_LOGIN_AT_KEY, String(Date.now()));   // marca de login
+        localStorage.setItem(LS_LAST_PROMPT_KEY, "0");               // listo para 1er aviso
+      } catch {}
+    }
+  }, [operador]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const resumeAudioIfNeeded = () => {
+      try {
+        const ctx = audioCtxRef.current;
+        if (ctx && ctx.state === "suspended") ctx.resume();
+      } catch {}
+    };
+    window.addEventListener("click", resumeAudioIfNeeded, { once: true, passive: true });
+    window.addEventListener("keydown", resumeAudioIfNeeded, { once: true });
+    return () => {
+      window.removeEventListener("click", resumeAudioIfNeeded);
+      window.removeEventListener("keydown", resumeAudioIfNeeded);
+    };
+  }, []);
 
   // —— Popup de cliente completado (solo si hubo interacción)
   useEffect(() => {
@@ -195,7 +196,7 @@ useEffect(() => {
         }
       });
     }
-  }, [tandas, activeTandaIdx]);
+  }, [tandas, activeTandaIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeTandaIdx >= tandas.length) {
@@ -251,8 +252,8 @@ useEffect(() => {
   // === Cargar catálogo de clientes desde Firestore (dinámico, ordenado por nombre)
   useEffect(() => {
     const colRef = collection(db, "clientes");
-    const qRef = query(colRef, where("rondin", "==", true)); // 👈 SIN orderBy
-  
+    const qRef = query(colRef, where("rondin", "==", true)); // 👈 SIN orderBy para evitar índice
+
     const unsub = onSnapshot(
       qRef,
       (snap) => {
@@ -263,7 +264,7 @@ useEffect(() => {
           if (!nombre) return;
           lista.push({ id: d.id, nombre });
         });
-  
+
         // ordenamos en cliente (evita índice)
         lista.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
         setClientesCat(lista);
@@ -273,10 +274,9 @@ useEffect(() => {
         setClientesCat([]); // para que no quede colgado
       }
     );
-  
+
     return () => { try { unsub(); } catch {} };
   }, []);
-  
 
   // Suscripción a “rondin-index/{cliente}/camaras/*” solo para clientes seleccionados
   useEffect(() => {
@@ -347,6 +347,7 @@ useEffect(() => {
       setElapsed(now - startedAt.getTime() - pausedMs);
     }, 500);
   };
+
   const handleLogout = async () => {
     const { isConfirmed } = await Swal.fire({
       title: "Cerrar sesión",
@@ -358,7 +359,7 @@ useEffect(() => {
       reverseButtons: true,
     });
     if (!isConfirmed) return;
-  
+
     try {
       // Limpia estado local y Firestore listeners
       softReset();
@@ -367,17 +368,17 @@ useEffect(() => {
         localStorage.removeItem(LS_RONDA_KEY);
         localStorage.removeItem(LS_OPERARIO_KEY);
       } catch {}
-  
+
       // Cerrar sesión de contexto (esto debe gatillar la vista de login)
       await logout?.();
-  
+
       toast.fire({ icon: "success", title: "Sesión cerrada" });
     } catch (e) {
       console.error(e);
       Swal.fire("Error", "No se pudo cerrar la sesión.", "error");
     }
   };
-  
+
   // Iniciar
   const handleIniciar = async () => {
     if (!operario) return Swal.fire("Falta operario", "Seleccioná un operario.", "warning");
@@ -445,100 +446,95 @@ useEffect(() => {
       Swal.fire("Error", "No se pudo iniciar la ronda.", "error");
     }
   };
-  // ----- Recordatorio "iniciar ronda" — chequeo cada 15 min -----
-// ----- Recordatorio "iniciar ronda" — chequeo cada 15 min -----
-// ----- Recordatorio "iniciar ronda" — chequeo cada 60s -----
-useEffect(() => {
-  if (!operario) return;
 
-  const check = () => {
-    if (document.hidden) return;
-    if (swalOpenRef.current) return;
-    if (rondaId || startTime) return;
+  // ----- Recordatorio "iniciar ronda" — chequeo cada 60s -----
+  useEffect(() => {
+    if (!operario) return;
 
-    const now = Date.now();
-    const loginAt = Number(localStorage.getItem(LS_LOGIN_AT_KEY) || now);
-    const lastPromptAt = Number(localStorage.getItem(LS_LAST_PROMPT_KEY) || 0);
+    const check = () => {
+      if (document.hidden) return;
+      if (swalOpenRef.current) return;
+      if (rondaId || startTime) return;
 
-    const sinceLogin = now - loginAt;
-    const sincePrompt = now - lastPromptAt;
+      const now = Date.now();
+      const loginAt = Number(localStorage.getItem(LS_LOGIN_AT_KEY) || now);
+      const lastPromptAt = Number(localStorage.getItem(LS_LAST_PROMPT_KEY) || 0);
 
-    const window1 = sinceLogin >= IDLE_FIRST_MS && lastPromptAt === 0;            // primer aviso
-    const windowN = sinceLogin >= IDLE_FIRST_MS && sincePrompt >= IDLE_REPEAT_MS; // siguientes
+      const sinceLogin = now - loginAt;
+      const sincePrompt = now - lastPromptAt;
 
-    if (!(window1 || windowN)) return;
+      const window1 = sinceLogin >= IDLE_FIRST_MS && lastPromptAt === 0;            // primer aviso
+      const windowN = sinceLogin >= IDLE_FIRST_MS && sincePrompt >= IDLE_REPEAT_MS; // siguientes
 
-    swalOpenRef.current = true;
-    playBeepOnce(880, 0.25);
-    Swal.fire({
-      title: "¿Iniciamos la ronda?",
-      html: `<div style="text-align:left">
-               <p>Pasaron <b>${fmtElapsed(sinceLogin)}</b> desde tu ingreso y no hay una ronda activa.</p>
-               <p>Podés generar la tanda de clientes y arrancar el control.</p>
-             </div>`,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Iniciar ahora",
-      cancelButtonText: "Más tarde",
-      reverseButtons: true,
-    }).then(({ isConfirmed }) => {
-      try { localStorage.setItem(LS_LAST_PROMPT_KEY, String(Date.now())); } catch {}
-      swalOpenRef.current = false;
-      if (isConfirmed) handleIniciar();
-    });
-  };
+      if (!(window1 || windowN)) return;
 
-  // correr ya y luego cada 60s
-  check();
-  const id = setInterval(check, 60 * 1000);
-  return () => clearInterval(id);
-}, [operario, rondaId, startTime]);
+      swalOpenRef.current = true;
+      playBeepOnce(880, 0.25);
+      Swal.fire({
+        title: "¿Iniciamos la ronda?",
+        html: `<div style="text-align:left">
+                 <p>Pasaron <b>${fmtElapsed(sinceLogin)}</b> desde tu ingreso y no hay una ronda activa.</p>
+                 <p>Podés generar la tanda de clientes y arrancar el control.</p>
+               </div>`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Iniciar ahora",
+        cancelButtonText: "Más tarde",
+        reverseButtons: true,
+      }).then(({ isConfirmed }) => {
+        try { localStorage.setItem(LS_LAST_PROMPT_KEY, String(Date.now())); } catch {}
+        swalOpenRef.current = false;
+        if (isConfirmed) handleIniciar();
+      });
+    };
 
+    // correr ya y luego cada 60s
+    check();
+    const id = setInterval(check, 60 * 1000);
+    return () => clearInterval(id);
+  }, [operario, rondaId, startTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
-// ----- Recordatorio "reanudar" — chequeo cada 60s -----
-useEffect(() => {
-  if (!startTime) return;
-  if (!paused) return;
-
-  const checkPause = () => {
+  // ----- Recordatorio "reanudar" — chequeo cada 60s -----
+  useEffect(() => {
     if (!startTime) return;
     if (!paused) return;
-    if (document.hidden) return;
-    if (swalOpenRef.current) return;
 
-    const last = pausasRef.current[pausasRef.current.length - 1];
-    if (!last || last.to !== null) return;
+    const checkPause = () => {
+      if (!startTime) return;
+      if (!paused) return;
+      if (document.hidden) return;
+      if (swalOpenRef.current) return;
 
-    const sincePause = Date.now() - last.from;
-    if (sincePause < PAUSED_REMIND_MS) return;
+      const last = pausasRef.current[pausasRef.current.length - 1];
+      if (!last || last.to !== null) return;
 
-    swalOpenRef.current = true;
-    playBeepOnce(660, 0.25);
-    Swal.fire({
-      title: "Ronda en pausa",
-      html: `<div style="text-align:left">
-               <p>La ronda está pausada hace <b>${Math.round(sincePause/60000)} min</b>.</p>
-               <p>¿Querés reanudar?</p>
-             </div>`,
-      icon: "info",
-      showCancelButton: true,
-      confirmButtonText: "Reanudar",
-      cancelButtonText: "Seguir en pausa",
-      reverseButtons: true,
-    }).then(({ isConfirmed }) => {
-      swalOpenRef.current = false;
-      if (isConfirmed) handleReanudar();
-    });
-  };
+      const sincePause = Date.now() - last.from;
+      if (sincePause < PAUSED_REMIND_MS) return;
 
-  // correr ya y luego cada 60s
-  checkPause();
-  const id = setInterval(checkPause, 60 * 1000);
-  return () => clearInterval(id);
-}, [startTime, paused]);
+      swalOpenRef.current = true;
+      playBeepOnce(660, 0.25);
+      Swal.fire({
+        title: "Ronda en pausa",
+        html: `<div style="text-align:left">
+                 <p>La ronda está pausada hace <b>${Math.round(sincePause/60000)} min</b>.</p>
+                 <p>¿Querés reanudar?</p>
+               </div>`,
+        icon: "info",
+        showCancelButton: true,
+        confirmButtonText: "Reanudar",
+        cancelButtonText: "Seguir en pausa",
+        reverseButtons: true,
+      }).then(({ isConfirmed }) => {
+        swalOpenRef.current = false;
+        if (isConfirmed) handleReanudar();
+      });
+    };
 
-
-
+    // correr ya y luego cada 60s
+    checkPause();
+    const id = setInterval(checkPause, 60 * 1000);
+    return () => clearInterval(id);
+  }, [startTime, paused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePausar = async () => {
     if (paused || !startTime) return;
@@ -737,7 +733,7 @@ useEffect(() => {
   const setTandaResumen = (tandaId, value) =>
     setTandas((prev) => prev.map((t) => (t.id === tandaId ? { ...t, resumen: value } : t)));
 
-    const addCamRow = (tandaId) =>
+  const addCamRow = (tandaId) =>
     setTandas((prev) =>
       prev.map((t) =>
         t.id === tandaId
@@ -751,35 +747,34 @@ useEffect(() => {
           : t
       )
     );
-  
+
   const removeCamRow = (tandaId, camId) =>
     setTandas((prev) => prev.map((t) => (t.id === tandaId ? { ...t, camaras: t.camaras.filter((c) => c.id !== camId) } : t)));
 
-    const setCamField = (tandaId, camId, key, value) => {
-      userInteractedRef.current = true;
-    
-      const normVal =
-        key === "canal"
-          ? (value == null || value === "" ? null : Number(value?.value ?? value))
-          : value;
-    
-      setTandas((prev) =>
-        prev.map((t) =>
-          t.id === tandaId
-            ? {
-                ...t,
-                camaras: t.camaras.map((c) =>
-                  c.id === camId
-                    ? { ...c, [key]: normVal, touched: key === "estado" ? true : c.touched }
-                    : c
-                ),
-              }
-            : t
-        )
-      );
-    };
-    
-    
+  const setCamField = (tandaId, camId, key, value) => {
+    userInteractedRef.current = true;
+
+    const normVal =
+      key === "canal"
+        ? (value == null || value === "" ? null : Number(value?.value ?? value))
+        : value;
+
+    setTandas((prev) =>
+      prev.map((t) =>
+        t.id === tandaId
+          ? {
+              ...t,
+              camaras: t.camaras.map((c) =>
+                c.id === camId
+                  ? { ...c, [key]: normVal, touched: key === "estado" ? true : c.touched }
+                  : c
+              ),
+            }
+          : t
+      )
+    );
+  };
+
   const onCamState = async (tandaId, camId, next) => {
     userInteractedRef.current = true;
 
@@ -881,7 +876,7 @@ useEffect(() => {
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
-  }, [rondaId, startTime, endTime]);
+  }, [rondaId, startTime, endTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const savedId = localStorage.getItem(LS_RONDA_KEY);
@@ -1039,57 +1034,56 @@ useEffect(() => {
       <Container maxWidth="lg" className="rondin-force" sx={{ py: 2, display: "grid", gap: 2 }}>
         {/* Header sticky */}
         <Box sx={{ position: "sticky", top: 8, zIndex: 12 }}>
-        
           <Paper
-    elevation={1}
-    sx={{
-      px: 1.5,
-      py: 1,
-      borderRadius: 2,
-     backdropFilter: "saturate(1.2) blur(6px)",
-    }}
-  >
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <HeaderBar
-          camarasCompletadas={camarasCompletadas}
-         totalCamaras={totalCamaras}
-          elapsed={displayElapsed}
-        />
-      </Box>
-      <Button
-        onClick={handleLogout}
-        size="small"
-        variant="outlined"
-       startIcon={<LogoutIcon />}
-        sx={{
-        ml: 1,
-          borderRadius: 2,
-         textTransform: "none",
-         fontWeight: 700,
-          whiteSpace: "nowrap",
-        }}
-        title={`Cerrar sesión${operario ? ` — ${operario}` : ""}`}
-      >
-        Cerrar sesión
-     </Button>
-   </Box>
- </Paper>
+            elevation={1}
+            sx={{
+              px: 1.5,
+              py: 1,
+              borderRadius: 2,
+              backdropFilter: "saturate(1.2) blur(6px)",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <HeaderBar
+                  camarasCompletadas={camarasCompletadas}
+                  totalCamaras={totalCamaras}
+                  elapsed={displayElapsed}
+                />
+              </Box>
+              <Button
+                onClick={handleLogout}
+                size="small"
+                variant="outlined"
+                startIcon={<LogoutIcon />}
+                sx={{
+                  ml: 1,
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                }}
+                title={`Cerrar sesión${operario ? ` — ${operario}` : ""}`}
+              >
+                Cerrar sesión
+              </Button>
+            </Box>
+          </Paper>
         </Box>
 
         {/* Progreso + Campos superiores */}
         <Paper sx={{ p: 2, display: "grid", gap: 1.25 }}>
-        <TopFields
-  turno={turno}
-  setTurno={setTurno}
-  operario={operario}                 // 👈 FALTABA ESTA PROP
-  setOperario={setOperario}
-  operarios={operario ? [operario] : operarios}
-  layout="wide"
-  size="medium"
-  required={{ turno: true, operario: true }}
-  helperText={{ turno: "Seleccioná el turno de la ronda.", operario: "Elegí el operador a cargo." }}
-/>
+          <TopFields
+            turno={turno}
+            setTurno={setTurno}
+            operario={operario}                 // 👈 PROP conectada
+            setOperario={setOperario}
+            operarios={operario ? [operario] : operarios}
+            layout="wide"
+            size="medium"
+            required={{ turno: true, operario: true }}
+            helperText={{ turno: "Seleccioná el turno de la ronda.", operario: "Elegí el operador a cargo." }}
+          />
 
           <TextField
             label="Novedades generales"
@@ -1101,66 +1095,36 @@ useEffect(() => {
           />
         </Paper>
 
-        {/* Tandas */}
-        <Stack spacing={2}>
-          {tandas.map((t, idx) => {
-            const isActive = idx === activeTandaIdx;
-            return (
-              <Box
-                key={t.id}
-                id={t.id}
-                sx={{
-                  position: "relative",
-                  opacity: isActive ? 1 : 0.45,
-                  pointerEvents: isActive ? "auto" : "none",
-                  transition: "opacity .2s ease",
-                }}
-              >
-                {!isActive && (
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      top: 8,
-                      right: 8,
-                      zIndex: 2,
-                      px: 1,
-                      py: 0.25,
-                      bgcolor: "warning.light",
-                      color: "warning.contrastText",
-                      borderRadius: 1,
-                      fontSize: 12,
-                    }}
-                  >
-                    Esperá a completar el anterior
-                  </Box>
-                )}
-                <TandaCard
-                  tanda={t}
-                  clientesCat={clientesCat}
-                  onSetCliente={setTandaCliente}
-                  onAddCam={addCamRow}
-                  onRemoveTanda={(id) => (tandas.length === 1 ? null : removeTanda(id))}
-                  onCamField={setCamField}
-                  onCamRemove={removeCamRow}
-                  onCamState={onCamState}
-                  setChecklistVal={setChecklistVal}
-                  resetFallan={resetFallan}
-                  toggleFallan={toggleGrabacionFalla}
-                  setResumen={setTandaResumen}
-                  historicos={historicosPorCliente[norm(t.cliente || "")]}
-                />
-              </Box>
-            );
-          })}
-          <Button
-            onClick={addTanda}
-            variant="outlined"
-            disabled={tandas.length >= Math.min(clientesCat.length || 0, MAX_TANDAS)}
-            sx={{ alignSelf: "flex-start" }}
-          >
-            Agregar cliente {tandas.length}/{Math.min(clientesCat.length || 0, MAX_TANDAS)}
-          </Button>
-        </Stack>
+        {/* TABLA de Tandas (NUEVO) */}
+        <Paper sx={{ p: 1.5 }}>
+          <TandasTable
+            tandas={tandas}
+            clientesCat={clientesCat}
+            isTandaCompleta={isTandaCompleta}
+            activeTandaIdx={activeTandaIdx}
+            setActiveTandaIdx={setActiveTandaIdx}
+            onRemoveTanda={removeTanda}
+            onSetCliente={setTandaCliente}
+            onSetResumen={setTandaResumen}
+            onAddCam={addCamRow}
+            onRemoveCam={removeCamRow}
+            onCamField={setCamField}
+            onCamState={onCamState}
+            setChecklistVal={setChecklistVal}
+            historicosPorCliente={historicosPorCliente}
+          />
+
+          <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+            <Button
+              onClick={addTanda}
+              variant="outlined"
+              disabled={tandas.length >= Math.min(clientesCat.length || 0, MAX_TANDAS)}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Agregar cliente {tandas.length}/{Math.min(clientesCat.length || 0, MAX_TANDAS)}
+            </Button>
+          </Stack>
+        </Paper>
 
         {/* Footer */}
         <Paper

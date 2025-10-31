@@ -361,7 +361,54 @@ export default function EventsTable({
       MySwal.fire("❌ Error", "No se pudo eliminar el evento", "error");
     }
   };
-
+  const handleEditRazones = async (event) => {
+    if (!isEdificioRow(event)) {
+      MySwal.fire("Solo Edificios", "Las razones PMA se editan en eventos de Edificios.", "info");
+      return;
+    }
+  
+    const current = getRazones(event) || "";
+    const { value } = await MySwal.fire({
+      title: "Editar Razones PMA",
+      html: `
+        <textarea id="swal-razones" class="swal2-textarea" style="width:100%;padding:10px;"
+          placeholder="Ej.: Puerta mal cerrada; Cerradura dañada; Error de lectura de tarjeta...">${current}</textarea>
+        <small style="display:block;opacity:.7;margin-top:6px">
+          Separá por coma o punto y coma. Se guardará en los campos: razones-pma / razones_pma / razonesPma / razones (compatibilidad).
+        </small>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Guardar",
+      cancelButtonText: "Cancelar",
+      width: "560px",
+      preConfirm: () => (document.getElementById("swal-razones").value ?? "").trim(),
+    });
+    if (value === undefined) return;
+  
+    try {
+      const clienteLower = getClienteLower(event);
+      const path = `novedades/${clienteLower}/eventos/${event.id}`;
+  
+      // Normalizo separadores a coma + espacio y limpio duplicados
+      const normalized = value
+        .replace(/[;\n]+/g, ", ")
+        .replace(/\s*,\s*/g, ", ")
+        .replace(/,\s*,+/g, ", ")
+        .replace(/^,\s*|,\s*$/g, "");
+  
+      await updateDoc(doc(db, path), {
+        ["razones-pma"]: normalized,
+        ["razones_pma"]: normalized,
+        razonesPma: normalized,
+        razones: normalized,
+      });
+  
+      MySwal.fire("✅ Guardado", "Razones PMA actualizadas", "success");
+    } catch (e) {
+      MySwal.fire("❌ Error", "No se pudo actualizar las razones", "error");
+    }
+  };
+  
   // ===== Filtrado/orden =====
   const filteredData = useMemo(() => {
     const getSortDate = (row) =>
@@ -622,10 +669,19 @@ export default function EventsTable({
         wrap: wrapCells,
         cell: (r) => {
           const text = getRazones(r) || "—";
-          return <span style={cellTextStyle} title={text}>{text}</span>;
+          return (
+            <span
+              style={{ ...cellTextStyle, cursor: isEdificioRow(r) ? "pointer" : "default", textDecoration: isEdificioRow(r) ? "underline dotted" : "none" }}
+              title={isEdificioRow(r) ? "Editar razones PMA" : text}
+              onClick={() => isEdificioRow(r) && handleEditRazones(r)}
+            >
+              {text}
+            </span>
+          );
         },
       });
     }
+    
     if (visible.resolucion) {
       cols.push({
         name: "Resolución",
@@ -696,9 +752,11 @@ export default function EventsTable({
             <button onClick={() => handleEditObservation(row)} className="btn -indigo">
               Obs
             </button>
+  
             <button onClick={() => handleEditFechaHora(row)} className="btn -violet">
               {isEdificioRow(row) ? "Fecha evento" : "Fecha envío"}
             </button>
+  
             {isEdificioRow(row) && (
               <>
                 <button onClick={() => handleEditResolucion(row)} className="btn -emerald">
@@ -707,8 +765,12 @@ export default function EventsTable({
                 <button onClick={() => handleEditRespuesta(row)} className="btn -sky">
                   Resp
                 </button>
+                <button onClick={() => handleEditRazones(row)} className="btn -slate">
+                  Razones
+                </button>
               </>
             )}
+  
             <button onClick={() => handleEditUbicacion(row)} className="btn -amber">
               Ubic
             </button>
@@ -719,6 +781,7 @@ export default function EventsTable({
         ),
       });
     }
+  
     return cols;
   }, [baseColumns, edificioOnlyColumns, tgsOnlyColumns, filteredData, visible]);
 

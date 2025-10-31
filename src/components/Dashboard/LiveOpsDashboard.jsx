@@ -1,3 +1,4 @@
+// src/components/Dashboard/LiveOpsDashboard.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection, collectionGroup, onSnapshot, doc, getDoc, updateDoc, addDoc,
@@ -8,12 +9,12 @@ import { db } from "../../services/firebase";
 import { FaPlusSquare } from "react-icons/fa";
 import {
   AppBar, Toolbar, Box, Paper, Typography, Chip, Stack, Table, TableHead,
-  TableRow, TableCell, TableBody, Divider, IconButton
+  TableRow, TableCell, TableBody, Divider, IconButton, Tooltip
 } from "@mui/material";
 
 import {
   FaExclamationTriangle, FaShieldAlt, FaVideo, FaPause, FaPlay, FaDownload,
-  FaExpand, FaCompress, FaBook, FaPlus, FaVolumeUp, FaVolumeMute, FaColumns, FaExternalLinkAlt
+  FaExpand, FaCompress, FaBook, FaPlus, FaVolumeUp, FaColumns, FaExternalLinkAlt
 } from "react-icons/fa";
 
 import "../../styles/wallboard-soc.css";
@@ -36,11 +37,11 @@ export const PALETTE = {
 };
 export const SEVERITY = {
   critical: { fill: PALETTE.critical, bg: PALETTE.criticalBg, fg: PALETTE.criticalFg },
-  warning: { fill: PALETTE.warning, bg: PALETTE.warningBg, fg: PALETTE.warningFg },
-  ok: { fill: PALETTE.ok, bg: PALETTE.okFg, fg: PALETTE.okFg },
-  info: { fill: PALETTE.info, bg: PALETTE.infoFg, fg: PALETTE.infoFg },
-  offline: { fill: PALETTE.offline, bg: PALETTE.offlineBg, fg: PALETTE.offlineFg },
-  tamper: { fill: PALETTE.tamper, bg: PALETTE.tamperBg, fg: PALETTE.tamperFg },
+  warning:  { fill: PALETTE.warning,  bg: PALETTE.warningBg,  fg: PALETTE.warningFg  },
+  ok:       { fill: PALETTE.ok,       bg: PALETTE.okBg,       fg: PALETTE.okFg       },
+  info:     { fill: PALETTE.info,     bg: PALETTE.infoBg,     fg: PALETTE.infoFg     },
+  offline:  { fill: PALETTE.offline,  bg: PALETTE.offlineBg,  fg: PALETTE.offlineFg  },
+  tamper:   { fill: PALETTE.tamper,   bg: PALETTE.tamperBg,   fg: PALETTE.tamperFg   },
 };
 const sevColor = (sev) => SEVERITY[sev]?.fill || PALETTE.ok;
 
@@ -274,117 +275,101 @@ const worstSev = (issues) => {
 
 const ClientRow = React.memo(function ClientRow({ row, onOpen, onPlaybook, onShowFails, onDragStart, onDoubleClear }) {
   const color = sevColor(row.worst);
-  const c = row.checklist || {};
   const now = Date.now();
   const ackActive = row.ackUntil && row.ackUntil.getTime() > now;
   const mFrom = row.maintenanceFrom?.getTime?.();
   const mTo = row.maintenanceTo?.getTime?.();
   const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
 
-  const ageMin = row.time ? Math.floor((Date.now() - row.time.getTime()) / 60000) : 0;
-  const agingFilter = ageMin >= 180 ? "saturate(85%) brightness(0.9)" : ageMin >= 60 ? "saturate(90%) brightness(0.95)" : undefined;
-
-  const statusPills = [];
-  statusPills.push(c.equipoOffline ? <Pill key="offline" label="OFFLINE" sev="offline" blink={!ackActive && !mantActive} /> : <Pill key="online" label="ONLINE" sev="ok" />);
-  if (c.alarmaMonitoreada === true) {
-    statusPills.push(c.alarmaComunicacionOK ? <Pill key="comm-ok" label="COMM OK" sev="ok" /> : <Pill key="comm-no" label="SIN COMMS" sev="critical" blink={!ackActive && !mantActive} />);
-    statusPills.push(c.alarmaPanelArmado ? <Pill key="arm" label="ARMADO" sev="ok" /> : <Pill key="disarm" label="DESARMADO" sev="warning" />);
-    if (c.alarmaZonasAbiertas) statusPills.push(<Pill key="zonas" label="Zonas abiertas" sev="warning" />);
-    if (c.alarmaBateriaBaja) statusPills.push(<Pill key="bat" label="Batería baja" sev="warning" />);
-  }
-  if (c.grabacionesOK === false) statusPills.push(<Pill key="grab-ko" label="Falla grabaciones" sev="warning" />);
-  if (c.cortes220v === true) statusPills.push(<Pill key="220v" label="Cortes 220V" sev="critical" blink={!ackActive && !mantActive} />);
-  if (c.equipoHora === true) statusPills.push(<Pill key="hora" label="Hora desfasada" sev="warning" />);
-  if (ackActive) statusPills.push(<Pill key="ack" label={`ACK hasta ${row.ackUntil.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`} sev="info" />);
-  if (mantActive) statusPills.push(<Pill key="mant" label="MANTENIMIENTO" sev="info" />);
-  if (row.escalation?.to) statusPills.push(<Pill key="esc" label={`ESC → ${row.escalation.to}`} sev="warning" />);
-
-  // Indicadores de origen del bucket
-  if (row.bucketSource === "manual") statusPills.push(<Pill key="manual" label="MANUAL" sev="info" sx={{ ml: 0.5 }} />);
-  if (row.bucketSource === "meta")   statusPills.push(<Pill key="meta" label={`NIVEL: ${row.metaLabel || ""}`.trim()} sev="info" sx={{ ml: 0.5 }} />);
+  const generalPills = [];
+  if (ackActive) generalPills.push(<Pill key="ack" label={`ACK hasta ${row.ackUntil.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`} sev="info" />);
+  if (mantActive) generalPills.push(<Pill key="mant" label="MANTENIMIENTO" sev="info" />);
+  if (row.escalation?.to) generalPills.push(<Pill key="esc" label={`ESC → ${row.escalation.to}`} sev="warning" />);
 
   const rowBg =
     row.worst === "critical" ? PALETTE.criticalBg :
     row.worst === "offline"  ? PALETTE.offlineBg  :
     row.worst === "warning"  ? PALETTE.warningBg  : PALETTE.panel;
 
-  const handleKey = (e) => { if (e.key === "Enter" || e.key === " ") onOpen?.(row); };
-
   return (
     <TableRow
-      hover
-      role="button"
-      tabIndex={0}
+      hover role="button" tabIndex={0}
       onClick={() => onOpen?.(row)}
-      onKeyDown={handleKey}
-      draggable
-      onDragStart={(e)=>onDragStart?.(e,row)}
+      onKeyDown={(e)=>{ if (e.key === "Enter" || e.key === " ") onOpen?.(row); }}
+      draggable onDragStart={(e)=>onDragStart?.(e,row)}
       onDoubleClick={(e)=>{ e.stopPropagation(); onDoubleClear?.(row); }}
-      title={row.bucketSource === "manual" ? "Doble click para volver a AUTO" : "Arrastrá para cambiar de panel"}
       sx={{
-        cursor: "grab", height: 64, background: rowBg, opacity: ackActive || mantActive ? 0.7 : 1,
-        borderLeft: `6px solid ${color}`, outline: `1px solid ${PALETTE.border}`, filter: agingFilter,
-        boxShadow:
-          row.worst === "critical" ? `0 0 0 1px ${PALETTE.border}, 0 0 18px 2px rgba(255,59,48,.18)` :
-          row.worst === "offline"  ? `0 0 0 1px ${PALETTE.border}, 0 0 18px 2px rgba(168,85,247,.18)` : "none",
+        cursor: "grab", height: 64,
+        background: rowBg,
+        borderLeft: `8px solid ${sevColor(row.worst)}`,
+        outline: `1px solid ${PALETTE.border}`,
       }}
     >
-      <TableCell sx={{ fontWeight: 900, whiteSpace: "nowrap", color: PALETTE.text }}>{row.cliente}</TableCell>
-      <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
-          <FaVideo style={{ opacity: 0.9 }} />
-          <Box component="span" onClick={(e)=>{e.stopPropagation(); onShowFails?.(row);}} sx={{cursor:"pointer", display:"inline-flex"}}>
-            <Pill label={`MEDIO ${row.camSum.medio || 0}`} sev="warning" />
-          </Box>
-          <Box component="span" onClick={(e)=>{e.stopPropagation(); onShowFails?.(row);}} sx={{cursor:"pointer", display:"inline-flex"}}>
-            <Pill label={`GRAVE ${row.camSum.grave || 0}`} sev="critical" />
-          </Box>
-        </Stack>
+      {/* indicador */}
+      <TableCell sx={{ width: 18, pr: 0 }}>
+        {(row.camSum.grave > 0 || row.camSum.medio > 0) && (
+          <Box sx={{ width: 10, height: 10, borderRadius: "50%", background: row.camSum.grave > 0 ? "#ef4444" : "#f59e0b" }}/>
+        )}
       </TableCell>
+
+      {/* Cliente */}
+      <TableCell sx={{ fontWeight: 900, whiteSpace: "nowrap", color: PALETTE.text }}>
+        {row.cliente}
+      </TableCell>
+
+      {/* Estados (pills) */}
       <TableCell sx={{ color: PALETTE.text }}>
         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexWrap: "wrap" }}>
-          <FaShieldAlt style={{ opacity: 0.9 }} />
-          {statusPills.length ? statusPills : <Pill label="Sin alarma / OK" sev="ok" />}
-          <IconButton
-            size="small"
-            onClick={(e) => { e.stopPropagation(); onPlaybook?.(row); }}
-            sx={{ color: PALETTE.subtext, ml: 0.5 }}
-            title="Guía rápida (playbook)"
-          >
-            <FaBook />
-          </IconButton>
+          {row.camSum.grave > 0 ? <Pill label={`GRAVE ${row.camSum.grave}`} sev="critical" /> : null}
+          {row.camSum.medio > 0 ? <Pill label={`MEDIO ${row.camSum.medio}`} sev="warning" /> : null}
+          {row.camSum.grave === 0 && row.camSum.medio === 0 ? <Pill label="Operativo" sev="ok" /> : null}
         </Stack>
       </TableCell>
 
-      <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text, maxWidth: 480 }}>
+      {/* Cámaras en falla */}
+      <TableCell sx={{ color: PALETTE.text }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
+          <Typography variant="body2" sx={{ fontWeight: 800 }}>
+            {`Grave ${row.camSum.grave || 0} · Medio ${row.camSum.medio || 0} (Total ${row.camSum.total || 0})`}
+          </Typography>
+          <Box
+            onClick={(e) => { e.stopPropagation(); onShowFails?.(row); }}
+            role="button"
+            aria-label="Ver fallas"
+            style={{
+              cursor: "pointer",
+              padding: "4px 10px",
+              borderRadius: 9999,
+              border: `1px solid ${PALETTE.border}`,
+              background: "#1E293B",
+              fontWeight: 900
+            }}
+          >
+            Ver
+          </Box>
+        </Stack>
+      </TableCell>
+
+      {/* Acción */}
+      <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text, maxWidth: 420 }}>
         <Typography variant="body1" sx={{ fontWeight: 800 }}>
           {row.accionLabel || "—"}
         </Typography>
         {row.accionNota ? (
           <Typography
             variant="caption"
-            sx={{ color: PALETTE.subtext, display: "block", maxWidth: 460, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}
-            title={row.accionNota}
+            sx={{ color: PALETTE.subtext, display: "block", maxWidth: 420, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}
           >
             {row.accionNota}
           </Typography>
         ) : null}
-      </TableCell>
-
-      <TableCell sx={{ whiteSpace: "nowrap", color: PALETTE.text }}>
-        <Typography variant="body1" sx={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-          {row.time ? fmtAgo(row.time) : "—"}
-        </Typography>
-        <Typography variant="caption" sx={{ color: PALETTE.subtext }}>
-          {row.time?.toLocaleString?.("es-AR") || ""}
-        </Typography>
       </TableCell>
     </TableRow>
   );
 });
 
 /* ========================= Main ========================= */
-export default function MonitoringWallboardTV() {
+export default function LiveOpsDashboard() {
   const ROW_HEIGHT = 64, HEADER_H = 80, FOOTER_H = 44, PAGE_MS = 12000, REMIND_MS = 3 * 60 * 1000;
   const SOUND_PASS = "@Grupo3T1134";
 
@@ -397,7 +382,7 @@ export default function MonitoringWallboardTV() {
 
   const [docs, setDocs] = useState([]); // respuestas-tareas
   const [indexCamsByClient, setIndexCamsByClient] = useState(new Map()); // rondin-index/{cliente}/camaras/*
-  const [clientsMeta, setClientsMeta] = useState(new Map()); // NUEVO: metadata por cliente (nivel/atencion)
+  const [clientsMeta, setClientsMeta] = useState(new Map()); // metadata por cliente
 
   // ======== Canal de sincronización entre ventanas ========
   const bcRef = useRef(null);
@@ -420,7 +405,6 @@ export default function MonitoringWallboardTV() {
     return () => unsub();
   }, []);
 
-  // rondin-index: subcolección "camaras" por cliente (usamos collectionGroup)
   useEffect(() => {
     const unsub = onSnapshot(collectionGroup(db, "camaras"), (snap) => {
       const m = new Map();
@@ -436,7 +420,6 @@ export default function MonitoringWallboardTV() {
     return () => unsub();
   }, []);
 
-  // NUEVO: Colección de clientes con 'nombre' + 'atencion' o 'nivel'
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "clientes"), (snap) => {
       const m = new Map();
@@ -446,8 +429,8 @@ export default function MonitoringWallboardTV() {
         if (!nombre) return;
         const meta = {
           nombre: data?.nombre || "",
-          atencion: data?.atencion || null,  // "alto" | "medio" | "bajo"     (ej: tu ejemplo)
-          nivel: data?.nivel || null,        // "critico" | "medio" | "regular"| "info"
+          atencion: data?.atencion || null,
+          nivel: data?.nivel || null,
           categoria: data?.categoria || null,
           rondin: data?.rondin ?? null,
           raw: data,
@@ -459,53 +442,59 @@ export default function MonitoringWallboardTV() {
     return () => unsub();
   }, []);
 
-
-// === Firestore: Novedades (mini-cards) ===
-useEffect(() => {
-  const q = query(collection(db, "novedades-wall"), orderBy("at", "desc"), limit(80));
-  const unsub = onSnapshot(q, (snap) => {
-    const arr = snap.docs.map(d => {
-      const data = d.data() || {};
-      return {
-        id: d.id,
-        text: data.text || "",
-        sev: data.sev || "info",
-        cliente: data.cliente || "",
-        at: data.at?.toDate?.() || new Date(),
-        source: data.source || "manual",
-        createdBy: data.createdBy || "",
-      };
-    });
-    setMiniCards(arr);                 // <<<<<<<<<<<<<<  ahora vienen de Firestore
-    try { bcPost("mini_cards_updated", arr); } catch {}
+  // === Firestore: Novedades (mini-cards) ===
+  const [miniCards, setMiniCards] = useState(() => {
+    try {
+      const raw = localStorage.getItem("wallboard_mini_cards");
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.map((c) => ({ ...c, at: c.at ? new Date(c.at) : new Date() })) : [];
+    } catch { return []; }
   });
-  return () => unsub();
-}, []);
-
-// === Firestore: Ticker ===
-useEffect(() => {
-  const q = query(collection(db, "novedades-ticker"), orderBy("at", "desc"), limit(120));
-  const unsub = onSnapshot(q, (snap) => {
-    const arr = snap.docs.map(d => {
-      const data = d.data() || {};
-      return {
-        id: d.id,
-        text: data.text || "",
-        time: data.at?.toDate?.() || new Date(),
-        source: data.source || "manual",
-        createdBy: data.createdBy || "",
-      };
+  useEffect(() => {
+    const qy = query(collection(db, "novedades-wall"), orderBy("at", "desc"), limit(80));
+    const unsub = onSnapshot(qy, (snap) => {
+      const arr = snap.docs.map(d => {
+        const data = d.data() || {};
+        return {
+          id: d.id,
+          text: data.text || "",
+          sev: data.sev || "info",
+          cliente: data.cliente || "",
+          at: data.at?.toDate?.() || new Date(),
+          source: data.source || "manual",
+          createdBy: data.createdBy || "",
+        };
+      });
+      setMiniCards(arr);
+      try { bcPost("mini_cards_updated", arr); } catch {}
     });
-    // Mostramos del más nuevo al más viejo (si querés invertido, dale vuelta)
-    setTickerItems(arr);
-    try { bcPost("ticker_updated", arr); } catch {}
-  });
-  return () => unsub();
-}, []);
+    return () => unsub();
+  }, []);
 
+  // === Firestore: Ticker ===
+  const [tickerItems, setTickerItems] = useState([]);
+  const [tickerInput, setTickerInput] = useState("");
+  useEffect(() => {
+    const qy = query(collection(db, "novedades-ticker"), orderBy("at", "desc"), limit(120));
+    const unsub = onSnapshot(qy, (snap) => {
+      const arr = snap.docs.map(d => {
+        const data = d.data() || {};
+        return {
+          id: d.id,
+          text: data.text || "",
+          time: data.at?.toDate?.() || new Date(),
+          source: data.source || "manual",
+          createdBy: data.createdBy || "",
+        };
+      });
+      setTickerItems(arr);
+      try { bcPost("ticker_updated", arr); } catch {}
+    });
+    return () => unsub();
+  }, []);
 
-
-  // ====== Audio ======
+  // ====== Audio / TTS ======
   const audioCtxRef = useRef(null);
   function ensureAudioCtx() {
     try {
@@ -555,150 +544,7 @@ useEffect(() => {
     try { if (!("speechSynthesis" in window)) return; window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = "es-AR"; u.rate = 1; window.speechSynthesis.speak(u); } catch {}
   }
 
-  // ====== Ticker y mini-cards ======
-  const [tickerItems, setTickerItems] = useState([]);
-  const [tickerInput, setTickerInput] = useState("");
-  const addTickerItem = async () => {
-    const t = tickerInput?.trim();
-    if (!t) return;
-    await addDoc(collection(db, "novedades-ticker"), {
-      text: t,
-      at: serverTimestamp(),
-      source: "manual",
-      createdBy: "WallboardTV", // opcional
-    });
-    setTickerInput("");
-    // El onSnapshot actualizará setTickerItems automáticamente
-  };
-  const clearTickerItems = async () => {
-    try {
-      const q = query(collection(db, "novedades-ticker"), orderBy("at", "desc"), limit(120));
-      const snap = await new Promise((resolve, reject) => {
-        const unsub = onSnapshot(q, (s) => { unsub(); resolve(s); }, reject);
-      });
-      const batch = await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "novedades-ticker", d.id))));
-      // onSnapshot actualizará el estado a []
-    } catch (e) {
-      console.error(e);
-      MySwal.fire({ icon: "error", title: "No se pudo limpiar el ticker", text: String(e?.message || e) });
-    }
-  };
-  
-
-  const [miniCards, setMiniCards] = useState(() => {
-    try {
-      const raw = localStorage.getItem("wallboard_mini_cards");
-      if (!raw) return [];
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr.map((c) => ({ ...c, at: c.at ? new Date(c.at) : new Date() })) : [];
-    } catch { return []; }
-  });
-
-  useEffect(() => {
-    try {
-      const t = JSON.parse(localStorage.getItem("wallboard_ticker_items") || "[]");
-      if (Array.isArray(t)) setTickerItems(t.map((x) => ({ ...x, time: x.time ? new Date(x.time) : new Date() })));
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    const onBC = (ev) => {
-      const { type, payload } = ev.data || {};
-      if (type === "mini_cards_updated") setMiniCards(payload.map((c) => ({ ...c, at: c.at ? new Date(c.at) : new Date() })));
-      if (type === "ticker_updated") setTickerItems(payload.map((x) => ({ ...x, time: x.time ? new Date(x.time) : new Date() })));
-    };
-    const onStorage = (ev) => {
-      if (ev.key === "wallboard_mini_cards" && ev.newValue) {
-        try { setMiniCards(JSON.parse(ev.newValue).map((c) => ({ ...c, at: c.at ? new Date(c.at) : new Date() }))); } catch {}
-      }
-      if (ev.key === "wallboard_ticker_items" && ev.newValue) {
-        try { setTickerItems(JSON.parse(ev.newValue).map((x) => ({ ...x, time: x.time ? new Date(x.time) : new Date() }))); } catch {}
-      }
-    };
-    try { bcRef.current?.addEventListener("message", onBC); } catch {}
-    window.addEventListener("storage", onStorage);
-    return () => {
-      try { bcRef.current?.removeEventListener("message", onBC); } catch {}
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
-
-  useEffect(() => {
-    try { localStorage.setItem("wallboard_mini_cards", JSON.stringify(miniCards)); } catch {}
-  }, [miniCards]);
-
-
-
-
-  
-  function addMiniCard() {
-    // 1) armar el datalist con clientes desde clientsMeta
-    const clientesList = Array
-      .from(clientsMeta.values())
-      .map((m) => m?.nombre || "")
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
-  
-    const optionsHtml = clientesList
-      .map((n) => `<option value="${String(n).replace(/"/g, "&quot;")}"></option>`)
-      .join("");
-  
-    MySwal.fire({
-      title: "Agregar novedad",
-      html: `
-        <div style="text-align:left;display:grid;gap:10px">
-          <label style="font-weight:800;display:block;margin:4px 0">Cliente</label>
-          <input id="swal-card-cli" class="swal2-input" list="swal-card-cli-list" placeholder="Buscar / seleccionar cliente" style="width:100%"/>
-          <datalist id="swal-card-cli-list">${optionsHtml}</datalist>
-  
-          <label style="font-weight:800;display:block;margin:4px 0">Texto</label>
-          <textarea id="swal-card-text" class="swal2-textarea" style="width:100%;height:110px"></textarea>
-  
-          <label style="font-weight:800;display:block;margin:8px 0 4px">Severidad</label>
-          <select id="swal-card-sev" class="swal2-select" style="width:100%">
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-            <option value="critical">Critical</option>
-            <option value="offline">Offline</option>
-            <option value="ok">OK</option>
-          </select>
-        </div>
-      `,
-      showCancelButton: true,
-      confirmButtonText: "Agregar",
-      cancelButtonText: "Cancelar",
-      focusConfirm: false,
-      preConfirm: () => {
-        const cliente = document.getElementById("swal-card-cli")?.value?.trim() || "";
-        const text    = document.getElementById("swal-card-text")?.value?.trim();
-        const sev     = document.getElementById("swal-card-sev")?.value || "info";
-        if (!text) { MySwal.showValidationMessage("Escribe un texto"); return false; }
-        // cliente es opcional, pero si lo ponés, lo guardamos
-        return { text, sev, cliente };
-      },
-    }).then(async (res) => {
-      if (res.isConfirmed && res.value) {
-        const { text, sev, cliente } = res.value;
-    
-        // Guardar la mini-card en Firestore
-        await addDoc(collection(db, "novedades-wall"), {
-          text,
-          sev,
-          cliente: cliente || "",
-          at: serverTimestamp(),
-          source: "manual",
-          createdBy: "WallboardTV", // opcional
-        });
-    
-        // No hace falta setMiniCards ni localStorage: el onSnapshot lo actualiza solo.
-        try { bcPost("mini_cards_updated", []); } catch {}
-        MySwal.fire({ icon: "success", title: "Novedad agregada", timer: 900, showConfirmButton: false });
-      }
-    });
-  }
-  
-
-  // prefs
+  // ====== Prefs ======
   useEffect(() => {
     try {
       const s = JSON.parse(localStorage.getItem("wallboard_prefs") || "{}");
@@ -786,7 +632,7 @@ useEffect(() => {
             raw: cam,
           }));
 
-        // accion desde log
+        // Acciones desde log
         let accionLabel = "";
         let accionNota = "";
         try {
@@ -818,7 +664,7 @@ useEffect(() => {
             ackUntil: ackUntil, maintenanceFrom, maintenanceTo,
             escalation, lastTanda: t, camFails, camsMerged,
             accionLabel, accionNota,
-            bucketManual: t?.bucketManual || null, // manual override
+            bucketManual: t?.bucketManual || null,
           });
         }
       }
@@ -832,13 +678,11 @@ useEffect(() => {
 
       const autoBucket = worstToBucket(worst);
 
-      // Buscar meta del cliente por nombre
       const meta = clientsMeta.get(normalizeText(v.cliente));
       const bucketFromMeta =
         (meta?.atencion ? mapAtencionToBucket(meta.atencion) : null) ??
         (meta?.nivel ? mapNivelToBucket(meta.nivel) : null);
 
-      // Elegir bucket final según prioridad: manual > meta > auto
       let bucket = autoBucket;
       let bucketSource = "auto";
       let metaLabel = null;
@@ -849,7 +693,6 @@ useEffect(() => {
       return { ...v, issues: allIssues, worst, autoBucket, bucket, bucketSource, metaLabel };
     });
 
-    // ORDEN por bucket final + más reciente
     arr.sort((a, b) => {
       const ra = BUCKET_RANK[a.bucket] ?? 99;
       const rb = BUCKET_RANK[b.bucket] ?? 99;
@@ -860,7 +703,6 @@ useEffect(() => {
     return arr;
   }, [docs, indexCamsByClient, clientsMeta]);
 
-  // === Agrupación para vista 4 paneles (por bucket final) ===
   const groups = useMemo(() => {
     const crit   = byClient.filter((r) => r.bucket === BUCKETS.crit);
     const medio  = byClient.filter((r) => r.bucket === BUCKETS.medio);
@@ -869,7 +711,6 @@ useEffect(() => {
     return { crit, medio, regular, info };
   }, [byClient]);
 
-  // === Activos críticos/offline (para recordatorios) ===
   const activeCriticals = useMemo(() => {
     const now = Date.now();
     const list = [];
@@ -885,7 +726,6 @@ useEffect(() => {
     return list;
   }, [byClient]);
 
-  // === Beeps / TTS ===
   const prevSevSet = useRef(new Set());
   useEffect(() => {
     const now = Date.now();
@@ -921,7 +761,6 @@ useEffect(() => {
     return () => clearInterval(id);
   }, [activeCriticals, soundOn, ttsOn, paused]);
 
-  // KPIs
   const kpis = useMemo(() => {
     const total = byClient.length;
     const critOrOff = groups.crit.length;
@@ -931,7 +770,6 @@ useEffect(() => {
     return { total, critOrOff, warn, ok, inf };
   }, [groups]);
 
-  // Layout / paginación
   const containerRef = useRef(null);
   const [containerH, setContainerH] = useState(0);
   useEffect(() => {
@@ -960,25 +798,7 @@ useEffect(() => {
   const pageRowsRight = useMemo(() => (totalPages > 1 ? byClient.slice(nextPage * rowsPerPane, nextPage * rowsPerPane + rowsPerPane) : pageRowsLeft.slice(Math.ceil(pageRowsLeft.length / 2))), [byClient, nextPage, rowsPerPane, totalPages, pageRowsLeft]);
   const leftForSplit = useMemo(() => (totalPages > 1 ? pageRowsLeft : pageRowsLeft.slice(0, Math.ceil(pageRowsLeft.length / 2))), [pageRowsLeft, totalPages]);
 
-  const marquee = useMemo(() => {
-    const auto = [];
-    const now = Date.now();
-    for (const x of byClient) {
-      const ackActive = x.ackUntil && x.ackUntil.getTime() > now;
-      const mFrom = x.maintenanceFrom?.getTime?.();
-      const mTo = x.maintenanceTo?.getTime?.();
-      const mantActive = (mFrom ? now >= mFrom : false) && (mTo ? now <= mTo : false);
-      if (ackActive || mantActive) continue;
-      for (const it of x.issues) if (it.sev === "critical" || it.sev === "offline") auto.push({ text: `${x.cliente}: ${it.label}`, time: x.time });
-    }
-    auto.sort((a, b) => (b.time?.getTime?.() || 0) - (a.time?.getTime?.() || 0));
-    const autoStr = auto.slice(0, 40).map((ev) => `${ev.text} (${ev.time ? fmtAgo(ev.time) : "—"})`).join("   •   ");
-    const manualStr = tickerItems.map((ev) => `${ev.text}`).join("   •   ");
-    const both = [manualStr, autoStr].filter(Boolean).join("   •   ");
-    return both || "";
-  }, [byClient, tickerItems]);
-
-  // ==== Firestore updates ====
+  /* ===== Firestore updates ===== */
   async function updateClienteInDoc(docId, cliente, patch) {
     const ref = doc(db, "respuestas-tareas", docId);
     const snap = await getDoc(ref);
@@ -1001,7 +821,6 @@ useEffect(() => {
       if (patch.escalation === null) t.escalation = null;
       else if (patch.escalation) t.escalation = { to: patch.escalation.to || "", reason: patch.escalation.reason || "", at: new Date() };
     }
-    // persistir bucketManual
     if (Object.prototype.hasOwnProperty.call(patch, "bucketManual")) {
       t.bucketManual = patch.bucketManual || null;
     }
@@ -1014,7 +833,7 @@ useEffect(() => {
       else t.camaras = {};
 
       for (const [camId, upd] of Object.entries(patch.camaras)) {
-        const now = new Date();
+        const nowCam = new Date();
         if (Array.isArray(t.camaras)) {
           let idxCam = t.camaras.findIndex(
             (x) =>
@@ -1027,19 +846,30 @@ useEffect(() => {
           }
           if (Number.isFinite(idxCam) && idxCam >= 0) {
             const prev = t.camaras[idxCam] || {};
-            t.camaras[idxCam] = { ...prev, ...upd, updatedAt: now };
+            t.camaras[idxCam] = { ...prev, ...upd, updatedAt: nowCam };
           } else {
-            t.camaras.push({ id: String(camId), ...upd, updatedAt: now });
+            t.camaras.push({ id: String(camId), ...upd, updatedAt: nowCam });
           }
         } else {
           const prev = t.camaras[camId] || {};
-          t.camaras[camId] = { ...prev, ...upd, updatedAt: now };
+          t.camaras[camId] = { ...prev, ...upd, updatedAt: nowCam };
         }
       }
     }
 
-    const entry = { at: new Date(), operador: data.operador || "", action: "update", patch: { ...patch } };
+    const now = new Date();
+    const entry = { at: now, operador: data.operador || "", action: "update", patch: { ...patch } };
     t.log = Array.isArray(t.log) ? [...t.log, entry] : [entry];
+
+    if (patch.accionCode) {
+      const accEntry = {
+        at: now,
+        operador: data.operador || "",
+        accion: patch.accionCode,
+        nota: patch.accionNota || "",
+      };
+      t.log.push(accEntry);
+    }
 
     tandas[idx] = t;
     await updateDoc(ref, {
@@ -1048,156 +878,190 @@ useEffect(() => {
       "respuestas.turno": respuestas.turno || null,
     });
   }
-// Crear un doc "manual" en respuestas-tareas con una tanda del cliente
-async function createManualDoc({ cliente, bucketManual, checklist, notas, accionCode, accionNota }) {
-  const operador = "Manual";         // podés tomarlo de tu sesión si la tenés
-  const turno = "";                  // idem
-  const now = new Date();
 
-  const t = {
-    cliente,
-    checklist: {
-      alarmaMonitoreada: true,
-      ...checklist,
-    },
-    notas: notas || "",
-    bucketManual: bucketManual || null,
-    log: accionCode
-      ? [{ at: now, operador, accion: accionCode, nota: accionNota || "" }]
-      : [],
-    ackUntil: null,
-    maintenanceFrom: null,
-    maintenanceTo: null,
-    escalation: null,
-  };
+  // Crear un doc "manual" en respuestas-tareas con una tanda del cliente
+  async function createManualDoc({ cliente, bucketManual, checklist, notas, accionCode, accionNota }) {
+    const operador = "Manual";
+    const turno = "";
+    const now = new Date();
 
-  await addDoc(collection(db, "respuestas-tareas"), {
-    operador,
-    fechaEnvio: now,                // preferDate lo toma
-    respuestas: {
-      turno,
-      tandas: [t],
-    },
-  });
-}
-async function addManualRow() {
-  // 1) Armo opciones de clientes desde la metadata ya cargada
-  const clientesList = Array
-    .from(clientsMeta.values())
-    .map((m) => m?.nombre || "")
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+    const t = {
+      cliente,
+      checklist: {
+        alarmaMonitoreada: true,
+        ...checklist,
+      },
+      notas: notas || "",
+      bucketManual: bucketManual || null,
+      log: accionCode
+        ? [{ at: now, operador, accion: accionCode, nota: accionNota || "" }]
+        : [],
+      ackUntil: null,
+      maintenanceFrom: null,
+      maintenanceTo: null,
+      escalation: null,
+    };
 
-  const optionsHtml = clientesList.map((n) => `<option value="${n.replace(/"/g, "&quot;")}"></option>`).join("");
-
-  const html = `
-    <div style="text-align:left;display:grid;gap:10px">
-      <label style="font-weight:800">Cliente</label>
-      <input id="m-cli" class="swal2-input" list="m-cli-list" placeholder="Buscar / seleccionar cliente" style="width:100%"/>
-      <datalist id="m-cli-list">${optionsHtml}</datalist>
-
-      <label style="font-weight:800">Nivel de atención (panel destino)</label>
-      <select id="m-nivel" class="swal2-select" style="width:100%">
-        <option value="crit">CRÍTICO / OFFLINE</option>
-        <option value="medio">MEDIO</option>
-        <option value="regular">REGULAR (OK)</option>
-        <option value="info">INFO</option>
-      </select>
-
-      <fieldset style="border:1px solid #1E2A44;padding:8px;border-radius:8px">
-        <legend style="padding:0 6px">Checklist (opcional)</legend>
-        <label><input id="m-off"  type="checkbox"/> Equipo OFFLINE</label><br/>
-        <label><input id="m-comm" type="checkbox"/> SIN comunicaciones</label><br/>
-        <label><input id="m-220"  type="checkbox"/> Cortes 220V</label><br/>
-        <label><input id="m-arm"  type="checkbox" checked/> Panel ARMADO</label><br/>
-        <label><input id="m-zonas" type="checkbox"/> Zonas abiertas</label><br/>
-        <label><input id="m-bat"   type="checkbox"/> Batería baja</label><br/>
-        <label><input id="m-hora"  type="checkbox"/> Hora desfasada</label>
-      </fieldset>
-
-      <label style="font-weight:800">Acción tomada (opcional)</label>
-      <select id="m-accion" class="swal2-select" style="width:100%">
-        <option value="">(ninguna)</option>
-        <option value="llamo_avisa">Llamé y avisé</option>
-        <option value="whatsapp_avisa">Avisé por WhatsApp</option>
-        <option value="no_corresponde">No correspondía avisar</option>
-        <option value="no_contacto">No pude contactar</option>
-      </select>
-
-      <label style="font-weight:800">Detalle / Nota (opcional)</label>
-      <textarea id="m-nota" class="swal2-textarea" style="height:90px" placeholder="Detalle de la situación / contacto / referencia"></textarea>
-    </div>
-  `;
-
-  const res = await MySwal.fire({
-    title: "Agregar fila manual a la tabla",
-    html,
-    width: 700,
-    showCancelButton: true,
-    confirmButtonText: "Agregar",
-    cancelButtonText: "Cancelar",
-    focusConfirm: false,
-
-    // 2) Al abrir, engancho auto-selección de bucket según meta (atención/nivel)
-    didOpen: (el) => {
-      const input = el.querySelector("#m-cli");
-      const selNivel = el.querySelector("#m-nivel");
-
-      const pickNivelFromMeta = (nombre) => {
-        const key = normalizeText(nombre);
-        const meta = clientsMeta.get(key);
-        if (!meta) return;
-        const bucketFromMeta =
-          (meta?.atencion ? mapAtencionToBucket(meta.atencion) : null) ??
-          (meta?.nivel ? mapNivelToBucket(meta.nivel) : null);
-        if (bucketFromMeta) selNivel.value = bucketFromMeta; // "crit"|"medio"|"regular"|"info"
-      };
-
-      // Al cambiar el cliente (o al perder foco), intento setear bucket por meta
-      input?.addEventListener("change", () => pickNivelFromMeta(input.value));
-      input?.addEventListener("blur",   () => pickNivelFromMeta(input.value));
-    },
-
-    preConfirm: () => {
-      const Q = (id) => document.getElementById(id);
-      const cliente = Q("m-cli")?.value?.trim();
-      const nivel = Q("m-nivel")?.value || "crit";
-      if (!cliente) { MySwal.showValidationMessage("Seleccioná un cliente de la lista"); return false; }
-
-      // bucket destino (usa los mismos BUCKETS del tablero)
-      const bucketManual = nivel; // "crit" | "medio" | "regular" | "info"
-
-      const checklist = {
-        equipoOffline: Q("m-off")?.checked || false,
-        alarmaComunicacionOK: !(Q("m-comm")?.checked || false),
-        cortes220v: Q("m-220")?.checked || false,
-        alarmaPanelArmado: Q("m-arm")?.checked || false,
-        alarmaZonasAbiertas: Q("m-zonas")?.checked || false,
-        alarmaBateriaBaja: Q("m-bat")?.checked || false,
-        equipoHora: Q("m-hora")?.checked || false,
-      };
-      const accionCode = Q("m-accion")?.value || "";
-      const accionNota  = Q("m-nota")?.value?.trim() || "";
-
-      return { cliente, bucketManual, checklist, notas: accionNota, accionCode, accionNota };
-    }
-  });
-
-  if (res.isConfirmed && res.value) {
-    await createManualDoc(res.value);
-    MySwal.fire({ icon: "success", title: "Fila agregada", timer: 1100, showConfirmButton: false });
+    await addDoc(collection(db, "respuestas-tareas"), {
+      operador,
+      fechaEnvio: now,
+      respuestas: {
+        turno,
+        tandas: [t],
+      },
+    });
   }
-}
 
+  async function addManualRow() {
+    const clientesList = Array
+      .from(clientsMeta.values())
+      .map((m) => m?.nombre || "")
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+
+    const optionsHtml = clientesList.map((n) => `<option value="${n.replace(/"/g, "&quot;")}"></option>`).join("");
+
+    const html = `
+      <div style="text-align:left;display:grid;gap:10px">
+        <label style="font-weight:800">Cliente</label>
+        <input id="m-cli" class="swal2-input" list="m-cli-list" placeholder="Buscar / seleccionar cliente" style="width:100%"/>
+        <datalist id="m-cli-list">${optionsHtml}</datalist>
+
+        <label style="font-weight:800">Nivel de atención (panel destino)</label>
+        <select id="m-nivel" class="swal2-select" style="width:100%">
+          <option value="crit">CRÍTICO / OFFLINE</option>
+          <option value="medio">MEDIO</option>
+          <option value="regular">REGULAR (OK)</option>
+          <option value="info">INFO</option>
+        </select>
+
+        <fieldset style="border:1px solid #1E2A44;padding:8px;border-radius:8px">
+          <legend style="padding:0 6px">Checklist (opcional)</legend>
+          <label><input id="m-off"  type="checkbox"/> Equipo OFFLINE</label><br/>
+          <label><input id="m-comm" type="checkbox"/> SIN comunicaciones</label><br/>
+          <label><input id="m-220"  type="checkbox"/> Cortes 220V</label><br/>
+          <label><input id="m-arm"  type="checkbox" checked/> Panel ARMADO</label><br/>
+          <label><input id="m-zonas" type="checkbox"/> Zonas abiertas</label><br/>
+          <label><input id="m-bat"   type="checkbox"/> Batería baja</label><br/>
+          <label><input id="m-hora"  type="checkbox"/> Hora desfasada</label>
+        </fieldset>
+
+        <label style="font-weight:800">Acción tomada (opcional)</label>
+        <select id="m-accion" class="swal2-select" style="width:100%">
+          <option value="">(ninguna)</option>
+          <option value="llamo_avisa">Llamé y avisé</option>
+          <option value="whatsapp_avisa">Avisé por WhatsApp</option>
+          <option value="no_corresponde">No correspondía avisar</option>
+          <option value="no_contacto">No pude contactar</option>
+        </select>
+
+        <label style="font-weight:800">Detalle / Nota (opcional)</label>
+        <textarea id="m-nota" class="swal2-textarea" style="height:90px" placeholder="Detalle de la situación / contacto / referencia"></textarea>
+      </div>
+    `;
+
+    const res = await MySwal.fire({
+      title: "Agregar fila manual a la tabla",
+      html,
+      width: 700,
+      showCancelButton: true,
+      confirmButtonText: "Agregar",
+      cancelButtonText: "Cancelar",
+      focusConfirm: false,
+      preConfirm: () => {
+        const Q = (id) => document.getElementById(id);
+        const cliente = Q("m-cli")?.value?.trim();
+        const nivel = Q("m-nivel")?.value || "crit";
+        if (!cliente) { MySwal.showValidationMessage("Seleccioná un cliente de la lista"); return false; }
+
+        const bucketManual = nivel;
+
+        const checklist = {
+          equipoOffline: Q("m-off")?.checked || false,
+          alarmaComunicacionOK: !(Q("m-comm")?.checked || false),
+          cortes220v: Q("m-220")?.checked || false,
+          alarmaPanelArmado: Q("m-arm")?.checked || false,
+          alarmaZonasAbiertas: Q("m-zonas")?.checked || false,
+          alarmaBateriaBaja: Q("m-bat")?.checked || false,
+          equipoHora: Q("m-hora")?.checked || false,
+        };
+        const accionCode = Q("m-accion")?.value || "";
+        const accionNota  = Q("m-nota")?.value?.trim() || "";
+
+        return { cliente, bucketManual, checklist, notas: accionNota, accionCode, accionNota };
+      }
+    });
+
+    if (res.isConfirmed && res.value) {
+      await createManualDoc(res.value);
+      MySwal.fire({ icon: "success", title: "Fila agregada", timer: 1100, showConfirmButton: false });
+    }
+  }
+
+  // NUEVO: agregar mini-card (marquesina) a novedades-wall
+  async function addMiniCard() {
+    const html = `
+      <div style="text-align:left;display:grid;gap:10px">
+        <label style="font-weight:800">Mensaje</label>
+        <textarea id="mc-text" class="swal2-textarea" style="height:90px" placeholder="Texto breve para mostrar en mini-card"></textarea>
+
+        <label style="font-weight:800">Severidad</label>
+        <select id="mc-sev" class="swal2-select" style="width:100%">
+          <option value="info">Info</option>
+          <option value="warning">Aviso</option>
+          <option value="critical">Crítico</option>
+          <option value="offline">Offline</option>
+          <option value="ok">OK</option>
+        </select>
+
+        <label style="font-weight:800">Cliente (opcional)</label>
+        <input id="mc-cli" class="swal2-input" placeholder="Cliente relacionado (opcional)"/>
+      </div>
+    `;
+    const res = await MySwal.fire({
+      title: "Agregar mini-card",
+      html,
+      width: 650,
+      showCancelButton: true,
+      confirmButtonText: "Agregar",
+      cancelButtonText: "Cancelar",
+      focusConfirm: false,
+      preConfirm: () => {
+        const t = document.getElementById("mc-text")?.value?.trim();
+        const sev = document.getElementById("mc-sev")?.value || "info";
+        const cliente = document.getElementById("mc-cli")?.value?.trim() || "";
+        if (!t) { MySwal.showValidationMessage("Escribí un mensaje"); return false; }
+        return { t, sev, cliente };
+      }
+    });
+    if (res.isConfirmed && res.value) {
+      const { t, sev, cliente } = res.value;
+      await addDoc(collection(db, "novedades-wall"), {
+        text: t,
+        sev,
+        cliente,
+        at: serverTimestamp(),
+        source: "manual",
+        createdBy: "LiveOps",
+      });
+      MySwal.fire({ icon: "success", title: "Mini-card agregada", timer: 1000, showConfirmButton: false });
+    }
+  }
 
   async function openEditor(row) {
     try {
       setPaused(true);
       const c = row.checklist || {};
+      const esc = (s) => String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
       const html = `
         <div style="text-align:left">
           <div style="font-weight:800;margin-bottom:8px">Cliente</div>
-          <input class="swal2-input" style="width:100%" value="${row.cliente || ""}" disabled />
+          <input class="swal2-input" style="width:100%" value="${esc(row?.cliente)}" disabled />
 
           <div style="font-weight:800;margin:6px 0 8px">Checklist</div>
           <label style="display:block;margin:2px 0"><input type="checkbox" id="swal-offline" ${c.equipoOffline ? "checked" : ""}/> OFFLINE</label>
@@ -1210,14 +1074,26 @@ async function addManualRow() {
           <label style="display:block;margin:2px 0"><input type="checkbox" id="swal-hora" ${c.equipoHora ? "checked" : ""}/> Hora desfasada</label>
 
           <div style="font-weight:800;margin:10px 0 2px">Notas</div>
-          <textarea id="swal-notas" class="swal2-textarea" style="width:100%;height:90px">${row?.notas || ""}</textarea>
+          <textarea id="swal-notas" class="swal2-textarea" style="width:100%;height:90px">${esc(row?.notas)}</textarea>
+
+          <div style="font-weight:800;margin:10px 0 6px">Acción tomada</div>
+          <select id="swal-accion" class="swal2-select" style="width:100%">
+            <option value="">(ninguna)</option>
+            <option value="llamo_avisa">Llamé y avisé</option>
+            <option value="whatsapp_avisa">Avisé por WhatsApp</option>
+            <option value="no_corresponde">No correspondía avisar</option>
+            <option value="no_contacto">No pude contactar</option>
+          </select>
+
+          <div style="font-weight:800;margin:10px 0 2px">Detalle de la acción</div>
+          <textarea id="swal-accion-nota" class="swal2-textarea" style="width:100%;height:70px" placeholder="Opcional"></textarea>
 
           <div style="margin-top:10px;opacity:.8"><i>Para editar cámaras, usá “Gestionar cámaras” desde la columna Cámaras.</i></div>
         </div>
       `;
 
       const result = await MySwal.fire({
-        title: "Editar cliente",
+        title: `Editar cliente · ${row?.cliente || "—"}`,
         html,
         width: 720,
         focusConfirm: false,
@@ -1239,6 +1115,8 @@ async function addManualRow() {
               alarmaMonitoreada: true,
             },
             notas: Q("swal-notas")?.value || "",
+            accionCode: Q("swal-accion")?.value || "",
+            accionNota: Q("swal-accion-nota")?.value?.trim() || "",
           };
           return patch;
         },
@@ -1257,7 +1135,6 @@ async function addManualRow() {
     }
   }
 
-  // Detalle de fallas (popup de solo lectura + alta rápida)
   async function openFails(row) {
     try {
       setPaused(true);
@@ -1373,7 +1250,6 @@ async function addManualRow() {
     MySwal.fire({ title: `Guía · ${row.cliente}`, html: `<div style="text-align:left">${blocks}</div>`, width: 600 });
   }
 
-  // ====== Export CSV ======
   function exportCSV() {
     const headers = ["Cliente", "Bucket", "FuenteBucket", "MetaLabel", "SeveridadAuto", "AccionTomada", "DetalleAccion", "Turno", "UltimoRondin", "CamsMedio", "CamsGrave", "Issues", "ACKHasta", "MantDesde", "MantHasta", "Notas"];
     const lines = [headers.join(",")];
@@ -1409,6 +1285,7 @@ async function addManualRow() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
   const toggleFs = async () => {
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
@@ -1455,7 +1332,6 @@ async function addManualRow() {
     };
   }, [totalPages]);
 
-  /* ====== Fullscreen state ====== */
   useEffect(() => {
     const onFs = () => setIsFs(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFs);
@@ -1500,7 +1376,7 @@ async function addManualRow() {
 
   /* ===== Tabla ===== */
   const TablePane = ({ rows, title, rowsPer = rowsPerPane, bucket }) => {
-    const isDropEnabled = !!bucket; // solo en paneles con bucket destino (quad)
+    const isDropEnabled = !!bucket;
     return (
       <Paper
         elevation={0}
@@ -1528,13 +1404,14 @@ async function addManualRow() {
             }}>
             <TableHead>
               <TableRow>
+                <TableCell sx={{ width: 18, p: 0 }} />
                 <TableCell>Cliente</TableCell>
-                <TableCell>Cámaras</TableCell>
-                <TableCell>Estados / Alarma</TableCell>
+                <TableCell>Estados</TableCell>
+                <TableCell>Cámaras en falla</TableCell>
                 <TableCell>Acción tomada</TableCell>
-                <TableCell>Último rondín</TableCell>
               </TableRow>
             </TableHead>
+
             <TableBody>
               {rows.map((row) => (
                 <ClientRow
@@ -1559,7 +1436,6 @@ async function addManualRow() {
     );
   };
 
-  // Toggle de vistas
   const cycleViewMode = () => {
     setViewMode((m) => (m === "single" ? "split2" : m === "split2" ? "quad" : "single"));
     setSplitView((v) => !v);
@@ -1567,10 +1443,10 @@ async function addManualRow() {
 
   /* ===== Render ===== */
   return (
-    <Box sx={{ height: "100vh", display: "grid", gridTemplateRows: "auto auto auto 1fr auto", bgcolor: PALETTE.bg, color: PALETTE.text, fontSize: 16 }}>
+    <Box id="liveops-container" sx={{ height: "100vh", display: "grid", gridTemplateRows: "auto auto auto 1fr auto", bgcolor: PALETTE.bg, color: PALETTE.text, fontSize: 16 }}>
       <AppBar position="static" elevation={0} sx={{ bgcolor: PALETTE.header, borderBottom: `1px solid ${PALETTE.border}` }}>
         <Toolbar sx={{ minHeight: 80, gap: 1, flexWrap: "wrap" }}>
-          <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: 0.6 }}>Wallboard · Monitoreo</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: 0.6 }}>LiveOps · Monitoreo</Typography>
           <Box sx={{ flex: 1 }} />
 
           <Stack direction="row" spacing={1} alignItems="center">
@@ -1583,12 +1459,10 @@ async function addManualRow() {
 
             <IconButton onClick={exportCSV} sx={{ color: PALETTE.subtext }} title="Exportar CSV"><FaDownload /></IconButton>
 
-            {/* Sonido (beep) */}
             <IconButton onClick={handleToggleSound} sx={{ color: soundOn ? PALETTE.brand : PALETTE.subtext }} title={soundOn ? "Sonido ON" : "Sonido OFF"}>
               <FaVolumeUp />
             </IconButton>
 
-            {/* Vista (Single → 2 Cols → 4 Paneles) */}
             <IconButton
               onClick={cycleViewMode}
               sx={{ color: viewMode !== "single" ? PALETTE.brand : PALETTE.subtext }}
@@ -1601,15 +1475,13 @@ async function addManualRow() {
               {paused ? <FaPlay /> : <FaPause />}
             </IconButton>
 
-            {/* === BOTONES + === */}
- <IconButton onClick={addMiniCard} sx={{ color: PALETTE.subtext }} title="Agregar mini-card (marquesina)">
-   <FaPlus />
- </IconButton>
- <IconButton onClick={addManualRow} sx={{ color: PALETTE.brand }} title="Agregar fila manual a la tabla">
-  <FaPlusSquare />
-</IconButton>
+            <IconButton onClick={addMiniCard} sx={{ color: PALETTE.subtext }} title="Agregar mini-card (marquesina)">
+              <FaPlus />
+            </IconButton>
+            <IconButton onClick={addManualRow} sx={{ color: PALETTE.brand }} title="Agregar fila manual a la tabla">
+              <FaPlusSquare />
+            </IconButton>
 
-            {/* === ABRIR WALL SOLO DE NOVEDADES === */}
             <IconButton onClick={openNovedadesWall} sx={{ color: PALETTE.subtext }} title="Abrir Wall de Novedades (solo mini-cards)">
               <FaExternalLinkAlt />
             </IconButton>
@@ -1619,7 +1491,6 @@ async function addManualRow() {
             </IconButton>
           </Stack>
 
-          {/* Ticker manual */}
           <Divider orientation="vertical" flexItem sx={{ mx: 1, borderColor: PALETTE.border }} />
           <Stack direction="row" spacing={1} alignItems="center" sx={{ maxWidth: 520 }}>
             <Box
@@ -1630,8 +1501,8 @@ async function addManualRow() {
               title="Escribe un mensaje para que circule en el marquee"
               style={{ background: PALETTE.panel, color: PALETTE.text, border: `1px solid ${PALETTE.border}`, borderRadius: 8, padding: "8px 10px", width: 280, outline: "none", fontWeight: 700 }}
             />
-            <IconButton onClick={addTickerItem} sx={{ color: PALETTE.subtext }} title="Agregar al ticker"><FaPlay /></IconButton>
-            <IconButton onClick={clearTickerItems} sx={{ color: PALETTE.subtext }} title="Limpiar mensajes manuales"><FaPause /></IconButton>
+            <IconButton onClick={async ()=>{ const t = tickerInput?.trim(); if(!t) return; await addDoc(collection(db,"novedades-ticker"),{ text:t, at:serverTimestamp(), source:"manual", createdBy:"LiveOps" }); setTickerInput(""); }} sx={{ color: PALETTE.subtext }} title="Agregar al ticker"><FaPlay /></IconButton>
+            <IconButton onClick={async ()=>{ try { const qy = query(collection(db,"novedades-ticker"), orderBy("at","desc"), limit(120)); const snap = await new Promise((resolve,reject)=>{ const unsub=onSnapshot(qy,(s)=>{unsub(); resolve(s);},reject); }); await Promise.all(snap.docs.map(d => deleteDoc(doc(db,"novedades-ticker", d.id)))); } catch(e){ console.error(e); MySwal.fire({icon:"error",title:"No se pudo limpiar el ticker",text:String(e?.message||e)});} }} sx={{ color: PALETTE.subtext }} title="Limpiar mensajes manuales"><FaPause /></IconButton>
           </Stack>
         </Toolbar>
       </AppBar>
@@ -1645,7 +1516,6 @@ async function addManualRow() {
           "@keyframes scroll": { "0%": { transform: "translateX(100%)" }, "100%": { transform: "translateX(-100%)" } },
           fontWeight: 800, letterSpacing: 0.4, textShadow: `0 1px 0 ${PALETTE.border}`,
         }}>
-          {/* Mostramos críticos/offline activos (auto) + manuales */}
           {(() => {
             const auto = [];
             const now = Date.now();
@@ -1670,38 +1540,18 @@ async function addManualRow() {
       <Box ref={containerRef} sx={{ overflow: "auto", WebkitOverflowScrolling: "touch", p: 1.5, touchAction: "pan-y" }}>
         {viewMode === "quad" ? (
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 12, height: "100%" }}>
-            <TablePane
-              title={`Críticos / Offline (${groups.crit.length})`}
-              rows={groups.crit.slice(0, rowsPerPaneQuad)}
-              rowsPer={rowsPerPaneQuad}
-              bucket={BUCKETS.crit}
-            />
-            <TablePane
-              title={`Medios (${groups.medio.length})`}
-              rows={groups.medio.slice(0, rowsPerPaneQuad)}
-              rowsPer={rowsPerPaneQuad}
-              bucket={BUCKETS.medio}
-            />
-            <TablePane
-              title={`Regulares (OK) (${groups.regular.length})`}
-              rows={groups.regular.slice(0, rowsPerPaneQuad)}
-              rowsPer={rowsPerPaneQuad}
-              bucket={BUCKETS.regular}
-            />
-            <TablePane
-              title={`Info (${groups.info.length})`}
-              rows={groups.info.slice(0, rowsPerPaneQuad)}
-              rowsPer={rowsPerPaneQuad}
-              bucket={BUCKETS.info}
-            />
+            <TablePane title={`Críticos / Offline (${groups.crit.length})`} rows={groups.crit.slice(0, rowsPerPaneQuad)} rowsPer={rowsPerPaneQuad} bucket={BUCKETS.crit} />
+            <TablePane title={`Medios (${groups.medio.length})`} rows={groups.medio.slice(0, rowsPerPaneQuad)} rowsPer={rowsPerPaneQuad} bucket={BUCKETS.medio} />
+            <TablePane title={`Regulares (OK) (${groups.regular.length})`} rows={groups.regular.slice(0, rowsPerPaneQuad)} rowsPer={rowsPerPaneQuad} bucket={BUCKETS.regular} />
+            <TablePane title={`Info (${groups.info.length})`} rows={groups.info.slice(0, rowsPerPaneQuad)} rowsPer={rowsPerPaneQuad} bucket={BUCKETS.info} />
           </Box>
         ) : viewMode === "split2" ? (
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <TablePane rows={leftForSplit} title={`Página ${page+1}/${totalPages}`} />
-            <TablePane rows={pageRowsRight} title={`Página ${((page+1)%totalPages)||totalPages}/${totalPages}`} />
+            <TablePane rows={byClient.slice(page * rowsPerPane, page * rowsPerPane + rowsPerPane)} title={`Página ${page+1}/${totalPages}`} />
+            <TablePane rows={byClient.slice(((page+1)%totalPages) * rowsPerPane, ((page+1)%totalPages) * rowsPerPane + rowsPerPane)} title={`Página ${((page+1)%totalPages)||totalPages}/${totalPages}`} />
           </Box>
         ) : (
-          <TablePane rows={pageRowsLeft} title={`Página ${page+1}/${totalPages}`} />
+          <TablePane rows={byClient.slice(page * rowsPerPane, page * rowsPerPane + rowsPerPane)} title={`Página ${page+1}/${totalPages}`} />
         )}
       </Box>
     </Box>

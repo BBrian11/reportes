@@ -4,6 +4,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import { riesgoTheme, RiesgoGlobalStyles } from "./theme/riesgoTheme.jsx";
 
+import AppShellGlobal from "./components/layout/AppShellGlobal.jsx";
+
 import Dashboard from "./components/Dashboard/Dashboard.jsx";
 import FormBuilder from "./components/Dashboard/FormBuilder.jsx";
 import DynamicForm from "./components/Dashboard/DynamicForm.jsx";
@@ -19,10 +21,8 @@ import AdminDashboard from "./components/admin/AdminDashboard.jsx";
 import NovedadesForm from "./components/Dashboard/NovedadesForm";
 import { AdminAuthProvider } from "./context/AdminAuthContext";
 import PortalPendientes from "./components/Dashboard/PortalPendientes.jsx";
-import DashboardOperador from './components/Dashboard/DashboardOperador';
-import RondinCCTV from './components/Dashboard/RondinCCTV';
-
-
+import DashboardOperador from "./components/Dashboard/DashboardOperador";
+import RondinCCTV from "./components/Dashboard/RondinCCTV";
 
 export default function App() {
   return (
@@ -31,52 +31,54 @@ export default function App() {
       <RiesgoGlobalStyles />
       <AdminAuthProvider>
         <Router>
-          <Routes>
-            {/* 👇 Hacemos que la raíz muestre login admin */}
-            <Route path="/" element={<Navigate to="/login-admin" replace />} />
+          {/* 🔥 Header global SIEMPRE visible */}
+          <AppShellGlobal title="Monitoreo G3T">
+            <Routes>
+              {/* raíz → login admin */}
+              <Route path="/" element={<Navigate to="/login-admin" replace />} />
 
-            {/* Login de administración (Firestore only, sin Firebase Auth) */}
-            <Route path="/login-admin" element={<LoginAdmin />} />
+              {/* Login (visible bajo header; si no lo querés, lo movemos a otra variante) */}
+              <Route path="/login-admin" element={<LoginAdmin />} />
 
-            {/* Dashboard general AHORA vive en /dashboard */}
-            <Route path="/dashboard" element={<Dashboard />} />
+              {/* Dashboard general */}
+              <Route path="/dashboard" element={<Dashboard />} />
 
-            {/* Formularios */}
-            <Route path="/form-builder" element={<FormBuilder />} />
-            <Route path="/formularios/:id" element={<DynamicForm />} />
-            <Route path="/monitoreo" element={<DashboardOperador/>} />
-            <Route path="/novedades" element={<NovedadesWall />} />
-            <Route path="/clientes" element={  <ClientesCriticosList />} />
-            <Route path="/formulario" element={<NovedadesForm />} />
-            <Route path="/pendientes" element={<PortalPendientes/>} />
+              {/* Formularios */}
+              <Route path="/form-builder" element={<FormBuilder />} />
+              <Route path="/formularios/:id" element={<DynamicForm />} />
+              <Route path="/monitoreo" element={<DashboardOperador />} />
+              <Route path="/novedades" element={<NovedadesWall />} />
+              <Route path="/clientes" element={<ClientesCriticosList />} />
+              <Route path="/formulario" element={<NovedadesForm />} />
+              <Route path="/pendientes" element={<PortalPendientes />} />
+              <Route path="/ron" element={<RondinCCTV />} />
 
-            <Route path="/ron" element={<RondinCCTV/>} />
+              <Route
+                path="/rondin2"
+                element={
+                  <RequireOperador>
+                    <FormRiesgoRondin />
+                  </RequireOperador>
+                }
+              />
 
-            <Route
-              path="/rondin2"
-              element={
-                <RequireOperador>
-                  <FormRiesgoRondin />
-                </RequireOperador>
-              }
-            />
+              {/* Monitoreo en vivo */}
+              <Route path="/monitor" element={<LiveOpsDashboard />} />
 
-            {/* Vista de monitoreo */}
-            <Route path="/monitor" element={<LiveOpsDashboard />} />
+              {/* Admin protegido por contexto de admin */}
+              <Route
+                path="/admin"
+                element={
+                  <RequireAdmin>
+                    <Dashboard />
+                  </RequireAdmin>
+                }
+              />
 
-            {/* Admin protegido por contexto de admin */}
-            <Route
-              path="/admin"
-              element={
-                <RequireAdmin>
-                  <Dashboard />
-                </RequireAdmin>
-              }
-            />
-
-            {/* Fallback → login admin */}
-            <Route path="*" element={<Navigate to="/login-admin" replace />} />
-          </Routes>
+              {/* Fallback → login admin */}
+              <Route path="*" element={<Navigate to="/login-admin" replace />} />
+            </Routes>
+          </AppShellGlobal>
         </Router>
       </AdminAuthProvider>
     </ThemeProvider>

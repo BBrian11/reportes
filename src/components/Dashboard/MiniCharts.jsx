@@ -1,5 +1,5 @@
 // src/components/Dashboard/MiniCharts.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Line } from "react-chartjs-2";
 import * as echarts from "echarts";
 
@@ -49,13 +49,8 @@ function fmtDiaMes(d) {
 }
 
 export default function MiniCharts({ eventos, onExportCharts }) {
-  // 🔒 Hooks siempre arriba, sin returns antes
-  const [tab, setTab] = useState("hoy");
-
   const pieChartRef = useRef(null);
   const echartsInstance = useRef(null);
-
-  // En react-chartjs-2 v5 el ref apunta a la instancia de Chart (no al canvas)
   const lineChartRef = useRef(null);
 
   // Normalizo lista
@@ -72,7 +67,7 @@ export default function MiniCharts({ eventos, onExportCharts }) {
     return { totalEventos: total, eventosCriticos: crit };
   }, [lista]);
 
-  // Agrupación por día (usa e.fechaObj | e.fecha | e.fechaHora | e.ts | e.createdAt)
+  // Agrupación por día
   const lineData = useMemo(() => {
     const grouped = new Map();
     for (const e of lista) {
@@ -116,7 +111,6 @@ export default function MiniCharts({ eventos, onExportCharts }) {
   useEffect(() => {
     if (!pieChartRef.current) return;
 
-    // Reusar instancia si existe
     echartsInstance.current = echartsInstance.current || echarts.init(pieChartRef.current);
 
     const eventCounts = {};
@@ -150,7 +144,7 @@ export default function MiniCharts({ eventos, onExportCharts }) {
     };
   }, [lista]);
 
-  // Exportar imágenes cuando cambian los datos (espera un tick para que se pinten)
+  // Exportar imágenes
   useEffect(() => {
     const timer = setTimeout(() => {
       const lineChart = lineChartRef.current; // instancia ChartJS
@@ -170,17 +164,21 @@ export default function MiniCharts({ eventos, onExportCharts }) {
     return () => clearTimeout(timer);
   }, [lineData, lista, onExportCharts]);
 
-  // 🟦 Estado vacío (después de hooks)
+  // 🟦 Estado vacío
   if (!lista.length) {
     return (
       <div className="mini-dashboard-grid">
         <div className="mini-card kpi-card">
-          <h4>Total Eventos</h4>
-          <p>0</p>
+          <h4 style={{ margin: 0, color: "#0b0b0b", fontWeight: 900 }}>Total Eventos</h4>
+          <p style={{ fontSize: 42, margin: "6px 0 0", fontWeight: 900, color: "#0b0b0b" }}>0</p>
+          <small style={{ color: "#b91c1c", fontWeight: 700 }}>Críticos: 0</small>
         </div>
         <div className="mini-card chart-card">
-          <h5>Distribución por Tipo</h5>
-          <div className="pie-chart-wrapper" style={{ width: "100%", height: 250, display: "grid", placeItems: "center", color: "#64748b" }}>
+          <h5 style={{ margin: 0, color: "#0b0b0b", fontWeight: 800 }}>Distribución por Tipo</h5>
+          <div
+            className="pie-chart-wrapper"
+            style={{ width: "100%", height: 250, display: "grid", placeItems: "center", color: "#64748b" }}
+          >
             📭 No hay datos para mostrar
           </div>
         </div>
@@ -190,36 +188,29 @@ export default function MiniCharts({ eventos, onExportCharts }) {
 
   return (
     <div className="mini-dashboard-grid">
-      {/* KPIs */}
+      {/* KPI: SOLO Total Eventos */}
       <div className="mini-card kpi-card">
-        <div className="kpi-header">
-          <h4>Total Eventos</h4>
-          <div className="tabs">
-            <button className={tab === "hoy" ? "active" : ""} onClick={() => setTab("hoy")}>Hoy</button>
-            <button className={tab === "semana" ? "active" : ""} onClick={() => setTab("semana")}>Semana</button>
-          </div>
-        </div>
-        <p style={{ fontSize: 28, margin: 0 }}>{totalEventos}</p>
-        <small style={{ color: "#ef4444" }}>Críticos: {eventosCriticos}</small>
+        <h4 style={{ margin: 0, color: "#0b0b0b", fontWeight: 900 }}>Total Eventos</h4>
+        <p style={{ fontSize: 42, margin: "6px 0 2px", fontWeight: 900, color: "#0b0b0b" }}>
+          {totalEventos}
+        </p>
+        <small style={{ color: "#b91c1c", fontWeight: 800 }}>
+          Críticos: {eventosCriticos}
+        </small>
       </div>
 
       {/* Line Chart */}
       <div className="mini-card chart-card" style={{ minHeight: 260 }}>
-        <h5>Tendencia diaria</h5>
+        <h5 style={{ margin: 0, color: "#0b0b0b", fontWeight: 800 }}>Tendencia diaria</h5>
         <div style={{ position: "relative", width: "100%", height: 220 }}>
-          {/* En v5, ref recibe la instancia ChartJS */}
           <Line ref={lineChartRef} data={lineData} options={lineOptions} />
         </div>
       </div>
 
       {/* Pie Chart (ECharts) */}
       <div className="mini-card chart-card">
-        <h5>Distribución por Tipo</h5>
-        <div
-          ref={pieChartRef}
-          className="pie-chart-wrapper"
-          style={{ width: "100%", height: 250 }}
-        />
+        <h5 style={{ margin: 0, color: "#0b0b0b", fontWeight: 800 }}>Distribución por Tipo</h5>
+        <div ref={pieChartRef} className="pie-chart-wrapper" style={{ width: "100%", height: 250 }} />
       </div>
     </div>
   );

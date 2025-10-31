@@ -150,3 +150,15 @@
 .rdt_Table {
   min-width: 980px;
 }
+/* Botón neutro */
+.btn.-slate {
+  background: #475569;      /* slate-600 */
+  color: #fff;
+  border-color: transparent;
+}
+.btn.-slate:hover {
+  background: #334155;      /* slate-700 */
+}
+.btn.-slate:active {
+  transform: translateY(1px);
+}
