@@ -251,8 +251,17 @@ export default function NovedadesWizardPro() {
     observaciones: "",
     imagenes: null,
     extras: {},
+    requiereGrabacion: "",   // ⬅️ nuevo ("" | "si" | "no")
   });
-
+  
+  function estadoCalculado(evento, requiereGrabacion) {
+    if (evento === "Puerta Mantenida Abierta (PMA)") return "pendiente";
+    if (requiereGrabacion === "si") return "pendiente";
+    if (requiereGrabacion === "no") return "procesado";
+    // default mientras no eligieron nada
+    return "pendiente";
+  }
+  
   const [sopCheck, setSopCheck] = useState({});
   const currentSOP = SOP[form.evento] || null;
   const [notificaciones, setNotificaciones] = useState([]);
@@ -310,6 +319,7 @@ export default function NovedadesWizardPro() {
     }
     if (step === 2) {
       if (!form.evento || form.evento === "-") return warn("Seleccioná el tipo de evento.");
+      if (!form.requiereGrabacion) return warn("Indicá si requiere grabación (Sí/No).");
       if (categoria === "edificios" && !form.fechaHoraEvento) return warn("Indicá fecha y hora reales del evento.");
 
       const extrasDef = (EXTRA_FIELDS[categoria] || {})[form.evento] || [];
@@ -338,7 +348,7 @@ export default function NovedadesWizardPro() {
   };
 
   const onSelectEvento = (ev) => {
-    setForm((f) => ({ ...f, evento: ev, extras: { ...f.extras } }));
+    setForm((f) => ({ ...f, evento: ev, requiereGrabacion: "", extras: { ...f.extras } }));
     if (!sopCheck[ev]) {
       const base = SOP[ev];
       if (base) {
@@ -585,7 +595,7 @@ export default function NovedadesWizardPro() {
     return (
       <section className="wiz__section" aria-labelledby="st-ev">
         <h2 className="wiz__h2" id="st-ev">Tipo de evento</h2>
-
+  
         <div className="wiz__chips" role="group" aria-label="Eventos sugeridos">
           {EVENTOS[categoria].slice(0, 6).map((ev) => (
             <button
@@ -599,13 +609,19 @@ export default function NovedadesWizardPro() {
             </button>
           ))}
         </div>
-
+  
         <Label>Seleccioná el evento</Label>
-        <select value={form.evento} onChange={(e) => onSelectEvento(e.target.value)} required className="inp">
+        <select
+          value={form.evento}
+          onChange={(e) => onSelectEvento(e.target.value)}
+          required
+          className="inp"
+        >
           <option>-</option>
           {EVENTOS[categoria].map((ev) => <option key={ev}>{ev}</option>)}
         </select>
-
+  
+        {/* Si la categoría es edificios, mostramos fecha/hora y unidad */}
         {categoria === "edificios" && (
           <>
             <Label>Fecha y hora reales del evento</Label>
@@ -617,21 +633,46 @@ export default function NovedadesWizardPro() {
               className="inp"
             />
             <small className="muted">Corresponde al momento real del evento (no al envío).</small>
-
+  
             <Label>Unidad involucrada (opcional)</Label>
-            <select value={form.unidad} onChange={(e) => setForm((f) => ({ ...f, unidad: e.target.value }))} className="inp">
+            <select
+              value={form.unidad}
+              onChange={(e) => setForm((f) => ({ ...f, unidad: e.target.value }))}
+              className="inp"
+            >
               <option value="">Seleccione una unidad</option>
               {generateUnidadOptions().map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </>
         )}
-
+  
+        {/* ⬇️ Bloque "¿Requiere grabación?" (solo si NO es PMA) */}
+        {form.evento && form.evento !== "Puerta Mantenida Abierta (PMA)" && (
+          <>
+            <Label>¿Requiere grabación?</Label>
+            <select
+              className="inp"
+              required
+              value={form.requiereGrabacion}
+              onChange={(e) => setForm((f) => ({ ...f, requiereGrabacion: e.target.value }))}
+            >
+              <option value="">-</option>
+              <option value="si">Sí</option>
+              <option value="no">No</option>
+            </select>
+            <small className="muted">
+              Si es <b>Sí</b>, el ticket se envía <b>Pendiente</b>. Si es <b>No</b>, se envía <b>Procesado</b>.
+            </small>
+          </>
+        )}
+  
+        {/* Campos extra específicos del evento */}
         {extrasDef.length > 0 && (
           <div className="dyn">
             <h3 className="dyn__title">Datos específicos del evento</h3>
             {extrasDef.map((fld) => {
               const v = form.extras?.[fld.name] ?? "";
-
+  
               // Lógica especial para "quien-contactado" + "Otro…"
               if (fld.name === "quien-contactado" && fld.type === "select") {
                 const sel = v || "-";
@@ -649,7 +690,7 @@ export default function NovedadesWizardPro() {
                     >
                       {fld.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
-
+  
                     {showOtro && (
                       <div className="mt12">
                         <Label>Especificá a quién *</Label>
@@ -668,7 +709,7 @@ export default function NovedadesWizardPro() {
                   </div>
                 );
               }
-
+  
               // Render genérico (select/text) para el resto
               if (fld.type === "select") {
                 return (
@@ -685,7 +726,7 @@ export default function NovedadesWizardPro() {
                   </div>
                 );
               }
-
+  
               return (
                 <div key={fld.name} className="dyn__field">
                   <Label>{fld.label}{fld.required ? " *" : ""}</Label>
@@ -705,6 +746,7 @@ export default function NovedadesWizardPro() {
       </section>
     );
   };
+  
 
   const DetallesStep = () => (
     <section className="wiz__section" aria-labelledby="st-det">
