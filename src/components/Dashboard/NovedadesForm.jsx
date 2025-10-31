@@ -319,7 +319,10 @@ export default function NovedadesWizardPro() {
     }
     if (step === 2) {
       if (!form.evento || form.evento === "-") return warn("Seleccioná el tipo de evento.");
-      if (!form.requiereGrabacion) return warn("Indicá si requiere grabación (Sí/No).");
+          // Solo pedimos "¿Requiere grabación?" si NO es PMA
+      if (form.evento !== "Puerta Mantenida Abierta (PMA)" && !form.requiereGrabacion) {
+        return warn("Indicá si requiere grabación (Sí/No).");
+        }
       if (categoria === "edificios" && !form.fechaHoraEvento) return warn("Indicá fecha y hora reales del evento.");
 
       const extrasDef = (EXTRA_FIELDS[categoria] || {})[form.evento] || [];
@@ -406,7 +409,14 @@ export default function NovedadesWizardPro() {
     data[OPERADOR_NAME[categoria]] = form.operador;
     data[LUGAR_NAME[categoria]] = form.lugar;
     data[EVENTO_NAME[categoria]] = form.evento;
-    data.estado = (estado || "pendiente").toLowerCase();
+ 
+    // Estado calculado: PMA => pendiente; otros => según requiereGrabacion
+    data.estado = estadoCalculado(form.evento, form.requiereGrabacion);
+
+    // Guardamos el campo para auditoría/consultas
+    if (form.requiereGrabacion) {
+      data.requiereGrabacion = form.requiereGrabacion; // "si" | "no"
+    }
 
     if (form.zona) data["zona-otros"] = form.zona;
     if (form.linkDrive) data["linkDrive"] = form.linkDrive;
@@ -510,6 +520,7 @@ export default function NovedadesWizardPro() {
         observaciones: "",
         imagenes: null,
         extras: {},
+        requiereGrabacion: "",
       });
       setSopCheck({});
     } catch (e) {
@@ -652,7 +663,7 @@ export default function NovedadesWizardPro() {
             <Label>¿Requiere grabación?</Label>
             <select
               className="inp"
-              required
+             
               value={form.requiereGrabacion}
               onChange={(e) => setForm((f) => ({ ...f, requiereGrabacion: e.target.value }))}
             >
@@ -832,6 +843,20 @@ export default function NovedadesWizardPro() {
             <option value="procesado">Procesado</option>
           </select>
           <small className="muted">Dejalo en <b>Pendiente</b> para retomarlo desde el portal.</small>
+          {(() => {
+          const estadoPrev = estadoCalculado(form.evento, form.requiereGrabacion);
+          return (
+            <div className="mt12">
+              <Label>Estado (calculado)</Label>
+              <div className="inp" style={{pointerEvents:"none", opacity:.9}}>
+               {estadoPrev.toUpperCase()}
+              </div>
+              <small className="muted">
+                Reglas: <b>PMA</b> ⇒ <b>Pendiente</b>. Resto: “¿Requiere grabación?” = <b>Sí</b> ⇒ <b>Pendiente</b>, <b>No</b> ⇒ <b>Procesado</b>.
+              </small>
+            </div>
+         );
+        })()}
         </div>
       </section>
     );
