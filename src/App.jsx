@@ -15,14 +15,14 @@ import LiveOpsDashboard from "./components/Dashboard/LiveOpsDashboard.jsx";
 import NovedadesWall from "./components/Dashboard/NovedadesWall.jsx";
 import RequireOperador from "./components/auth/RequireOperador.jsx";
 import RequireAdmin from "./components/auth/RequireAdmin.jsx";
-import ClientesCriticosList from "./components/Dashboard/ClientesCriticosList";
+import ClientesCriticosList from "./components/Dashboard/ClientesCriticosList.jsx";
 import LoginAdmin from "./components/auth/LoginAdmin.jsx";
 import AdminDashboard from "./components/admin/AdminDashboard.jsx";
-import NovedadesForm from "./components/Dashboard/NovedadesForm";
-import { AdminAuthProvider } from "./context/AdminAuthContext";
+import NovedadesForm from "./components/Dashboard/NovedadesForm.jsx";
+import { AdminAuthProvider } from "./context/AdminAuthContext.jsx";
 import PortalPendientes from "./components/Dashboard/PortalPendientes.jsx";
-import DashboardOperador from "./components/Dashboard/DashboardOperador";
-import RondinCCTV from "./components/Dashboard/RondinCCTV";
+import DashboardOperador from "./components/Dashboard/DashboardOperador.jsx";
+import RondinCCTV from "./components/Dashboard/RondinCCTV.jsx";
 
 export default function App() {
   return (
@@ -31,28 +31,95 @@ export default function App() {
       <RiesgoGlobalStyles />
       <AdminAuthProvider>
         <Router>
-          {/* 🔥 Header global SIEMPRE visible */}
           <AppShellGlobal title="Monitoreo G3T">
             <Routes>
-              {/* raíz → login admin */}
+              {/* Landing → login */}
               <Route path="/" element={<Navigate to="/login-admin" replace />} />
-
-              {/* Login (visible bajo header; si no lo querés, lo movemos a otra variante) */}
               <Route path="/login-admin" element={<LoginAdmin />} />
 
-              {/* Dashboard general */}
-              <Route path="/dashboard" element={<Dashboard />} />
+              {/* === ADMIN (protegido) === */}
+              <Route
+                path="/dashboard"
+                element={
+                  <RequireAdmin>
+                    <Dashboard />
+                  </RequireAdmin>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RequireAdmin>
+                    <AdminDashboard />
+                  </RequireAdmin>
+                }
+              />
+              <Route
+                path="/form-builder"
+                element={
+                  <RequireAdmin>
+                    <FormBuilder />
+                  </RequireAdmin>
+                }
+              />
+              <Route
+                path="/formularios/:id"
+                element={
+                  <RequireAdmin>
+                    <DynamicForm />
+                  </RequireAdmin>
+                }
+              />
+              <Route
+                path="/clientes"
+                element={
+                  <RequireAdmin>
+                    <ClientesCriticosList />
+                  </RequireAdmin>
+                }
+              />
 
-              {/* Formularios */}
-              <Route path="/form-builder" element={<FormBuilder />} />
-              <Route path="/formularios/:id" element={<DynamicForm />} />
-              <Route path="/monitoreo" element={<DashboardOperador />} />
-              <Route path="/novedades" element={<NovedadesWall />} />
-              <Route path="/clientes" element={<ClientesCriticosList />} />
-              <Route path="/formulario" element={<NovedadesForm />} />
-              <Route path="/pendientes" element={<PortalPendientes />} />
-              <Route path="/ron" element={<RondinCCTV />} />
-
+              {/* === OPERADOR (protegido) === */}
+              <Route
+                path="/monitoreo"
+                element={
+                  <RequireOperador>
+                    <DashboardOperador />
+                  </RequireOperador>
+                }
+              />
+              <Route
+                path="/novedades"
+                element={
+                  <RequireOperador>
+                    <NovedadesWall />
+                  </RequireOperador>
+                }
+              />
+              <Route
+                path="/formulario"
+                element={
+                  <RequireOperador>
+                    <NovedadesForm />
+                  </RequireOperador>
+                }
+              />
+              <Route
+                path="/pendientes"
+                element={
+                  <RequireOperador>
+                    <PortalPendientes />
+                  </RequireOperador>
+                }
+              />
+              <Route
+                path="/ron"
+                element={
+                  <RequireOperador>
+                    <RondinCCTV />
+                  </RequireOperador>
+                }
+              />
               <Route
                 path="/rondin2"
                 element={
@@ -61,21 +128,16 @@ export default function App() {
                   </RequireOperador>
                 }
               />
-
-              {/* Monitoreo en vivo */}
-              <Route path="/monitor" element={<LiveOpsDashboard />} />
-
-              {/* Admin protegido por contexto de admin */}
               <Route
-                path="/admin"
+                path="/monitor"
                 element={
-                  <RequireAdmin>
-                    <Dashboard />
-                  </RequireAdmin>
+                  <RequireOperador>
+                    <LiveOpsDashboard />
+                  </RequireOperador>
                 }
               />
 
-              {/* Fallback → login admin */}
+              {/* Fallback */}
               <Route path="*" element={<Navigate to="/login-admin" replace />} />
             </Routes>
           </AppShellGlobal>

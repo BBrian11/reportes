@@ -1,0 +1,14 @@
+HTTP/1.1 200 OK
+Cache-Control: max-age=86400
+Content-Type: text/html
+Last-Modified: Fri, 08 May 2020 13:29:43 GMT
+Accept-Ranges: bytes
+ETag: "2a37a8bb3c25d61:0"
+Server: 
+X-XSS-Protection: 1; mode=block
+Strict-Transport-Security: max-age=31536000
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Date: Mon, 03 Nov 2025 17:01:07 GMT
+Content-Length: 623
+

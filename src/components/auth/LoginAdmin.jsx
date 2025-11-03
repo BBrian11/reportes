@@ -18,7 +18,8 @@ export default function LoginAdmin() {
 
   const normEmail = (v) => (v || "").trim().toLowerCase();
   const normPass  = (v) => (v || "").trim();
-  const routeForRole = (rol) => (rol === "operador" ? "/monitoreo" : "/admin");
+  // Admin → /dashboard | Operador → /monitoreo
+  const routeForRole = (rol) => (rol === "operador" ? "/monitoreo" : "/dashboard");
 
   useEffect(() => {
     if (!hydrated) return;
@@ -59,14 +60,26 @@ export default function LoginAdmin() {
   }
 
   async function buscarAdmin(email, pass) {
-    const qRef = query(
+    // Intento 1: campo "contraseña"
+    let qRef = query(
       collection(db, "administracion"),
       where("email", "==", normEmail(email)),
       where("contraseña", "==", normPass(pass)),
       limit(1)
     );
-    const snap = await getDocs(qRef);
-    if (snap.empty) return null;
+    let snap = await getDocs(qRef);
+
+    // Fallback: campo "contrasena"
+    if (snap.empty) {
+      qRef = query(
+        collection(db, "administracion"),
+        where("email", "==", normEmail(email)),
+        where("contrasena", "==", normPass(pass)),
+        limit(1)
+      );
+      snap = await getDocs(qRef);
+      if (snap.empty) return null;
+    }
 
     const d = snap.docs[0];
     const data = d.data() || {};
@@ -130,7 +143,7 @@ export default function LoginAdmin() {
             <Stack spacing={2.2}>
               <TextField
                 label="Email o Usuario"
-                type="email"
+                type="text" // acepta usuario o email
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 fullWidth

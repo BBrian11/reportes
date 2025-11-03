@@ -1,13 +1,25 @@
+// src/components/auth/RequireOperador.jsx
 import React from "react";
-import { useOperadorAuth } from "../../context/OperadorAuthContext.jsx";
-import LoginOperador from "../Dashboard/riesgoRondin/LoginOperador.jsx";
+import { Navigate, useLocation } from "react-router-dom";
+import { useAdminAuth } from "../../context/AdminAuthContext";
+import { normRol } from "../../utils/roles";
 
 export default function RequireOperador({ children }) {
-  const { operador } = useOperadorAuth();
+  const { admin, hydrated } = useAdminAuth();
+  const location = useLocation();
 
-  if (!operador) {
-    return <LoginOperador />; // Si NO hay sesión → muestra login
+  if (!hydrated) return null;
+
+  // No logueado → login
+  if (!admin) {
+    return <Navigate to="/login-admin" replace state={{ from: location.pathname }} />;
   }
 
-  return children; // Si hay sesión → muestra el contenido protegido
+  // Si es admin, puede pasar (o si querés, lo podés redirigir a /dashboard)
+  const rol = normRol(admin.rol);
+  if (rol !== "operador" && rol !== "admin") {
+    return <Navigate to="/login-admin" replace />;
+  }
+
+  return children;
 }
