@@ -90,13 +90,20 @@ export default function AppShellGlobal({ title = "Monitoreo G3T", sidebar = null
     return () => ro.disconnect();
   }, []);
 
-  const openInfoGlobal = () => {
-    window.dispatchEvent(new CustomEvent("g3t:openInfo"));
-    markAllRead?.();
-  };
+
+   const openInfoGlobal = () => {
+       const b = window.__G3T_BRIDGES?.global1;
+       if (b?.openNotificaciones) b.openNotificaciones();
+       else window.dispatchEvent(new CustomEvent("g3t:openInfo"));
+       markAllRead?.();
+     };
   const openAlertasGlobal = () => {
     window.dispatchEvent(new CustomEvent("g3t:openAlert"));
   };
+  const openHistoricoGlobal = () => {
+    window.dispatchEvent(new CustomEvent("g3t:openHistorico"));
+  };
+  
 
   return (
     <>
@@ -108,34 +115,51 @@ export default function AppShellGlobal({ title = "Monitoreo G3T", sidebar = null
             {title}
           </Link>
 
-          {/* CENTRO: notificaciones */}
-          <div style={styles.headerActions}>
-            <button
-              type="button"
-              title="Notificaciones"
-              aria-label="Abrir notificaciones"
-              onClick={openInfoGlobal}
-              style={{ ...styles.hdrFab, background: "#2563eb" }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2Z" fill="#fff"/>
-              </svg>
-              {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
-            </button>
+    <div style={styles.headerActions}>
+  {/* Notificaciones */}
+  <button
+    type="button"
+    title="Notificaciones"
+    aria-label="Abrir notificaciones"
+    onClick={openInfoGlobal}
+    style={{ ...styles.hdrFab, background: "#2563eb" }}
+  >
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2Z" fill="#fff"/>
+    </svg>
+    {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
+  </button>
 
-            <button
-              type="button"
-              title="Alertas críticas"
-              aria-label="Abrir alertas"
-              onClick={openAlertasGlobal}
-              style={{ ...styles.hdrFab, background: "#ef4444" }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z" fill="#fff"/>
-              </svg>
-              {alertCount > 0 && <span style={styles.badge}>{alertCount}</span>}
-            </button>
-          </div>
+  {/* Histórico 15 minutos */}
+  <button
+    type="button"
+    title="Histórico (últimos 15 min)"
+    aria-label="Abrir histórico de los últimos 15 minutos"
+    onClick={openHistoricoGlobal}
+    style={{ ...styles.hdrFab, background: "#0ea5e9" }}
+  >
+    {/* Ícono relojito simple */}
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 8v5l3 2" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="#fff" strokeWidth="2"/>
+    </svg>
+    {/* Si querés texto: <span style={{color:'#fff',fontSize:12,fontWeight:700}}>15m</span> */}
+  </button>
+
+  {/* Alertas */}
+  <button
+    type="button"
+    title="Alertas críticas"
+    aria-label="Abrir alertas"
+    onClick={openAlertasGlobal}
+    style={{ ...styles.hdrFab, background: "#ef4444" }}
+  >
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z" fill="#fff"/>
+    </svg>
+    {alertCount > 0 && <span style={styles.badge}>{alertCount}</span>}
+  </button>
+</div>
 
           {/* DERECHA: usuario */}
           <div style={styles.userMenu}>

@@ -5,6 +5,7 @@ import { ThemeProvider, CssBaseline } from "@mui/material";
 import { riesgoTheme, RiesgoGlobalStyles } from "./theme/riesgoTheme.jsx";
 
 import AppShellGlobal from "./components/layout/AppShellGlobal.jsx";
+import NotificationsBridge from "./components/common/NotificationsBridge.jsx";
 
 import Dashboard from "./components/Dashboard/Dashboard.jsx";
 import FormBuilder from "./components/Dashboard/FormBuilder.jsx";
@@ -31,6 +32,17 @@ export default function App() {
       <RiesgoGlobalStyles />
       <AdminAuthProvider>
         <Router>
+          {/* Bridge global: disponible en todas las rutas */}
+          <NotificationsBridge
+            bridgeName="global1"
+            enableInfo
+            enableAlertas
+            enableHistorico
+            historicoLimit={100}
+            realtimeWindowMinutes={15}
+            // db={getFirestore()} // opcional si querés pasarlo explícito
+          />
+
           <AppShellGlobal title="Monitoreo G3T">
             <Routes>
               {/* Landing → login */}

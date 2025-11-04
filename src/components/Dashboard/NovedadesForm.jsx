@@ -2,8 +2,9 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Swal from "sweetalert2";
 import "../../styles/novedades-form.css";
-import NotificationsBridge from "../common/NotificationsBridge.jsx";
 
+ import NotificationsBridge from "../common/NotificationsBridge.jsx";
+ import useNotifications from "./hooks/useNotifications.js";
 /* Firebase (modular) */
 import { initializeApp, getApps } from "firebase/app";
 import {
@@ -916,6 +917,7 @@ function SOPPanel({ evento, sop, check, onCheckChange }) {
 }
 /* ===== Componente principal ===== */
 export default function NovedadesWizardPro() {
+  const { notificaciones = [], alertas = [], markAllRead } = useNotifications?.() || {};
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.matchMedia("(max-width: 860px)").matches : false
   );
@@ -969,9 +971,7 @@ export default function NovedadesWizardPro() {
   }
 
   const [sopCheck, setSopCheck] = useState({});
-  const currentSOP = SOP[form.evento] || null;
-  const [notificaciones, setNotificaciones] = useState([]);
-  const [alertas, setAlertas] = useState([]);
+   // NotificationsBridge: estado local simple
 
   useEffect(() => {
     document.body.classList.add("page-light");
@@ -1083,6 +1083,10 @@ export default function NovedadesWizardPro() {
       clientes.otros;
     return (pool || []).filter((n) => n.toLowerCase().includes((search || "").toLowerCase()));
   }, [categoria, clientes, search]);
+// SOP actual según evento seleccionado
+const currentSOP = useMemo(() => {
+  return form.evento ? (SOP[form.evento] || null) : null;
+}, [form.evento]);
 
   const warn = (m) => (Swal.fire("Faltan datos", m, "warning"), false);
   const validarPaso = useCallback(() => {
@@ -1353,13 +1357,7 @@ console.log("[NovedadesWizardPro] ENVIAR", {
 
 /* === PATCH: mostrar TODO lo que se envía === */
 
-const ok = await previewEnvio({ categoria, data, imagenes: form.imagenes });
-if (!ok) {
-  if (btn) { btn.textContent = old || "Enviar ✔"; btn.disabled = false; }
-  return; // usuario canceló
-} 
-const btn = document.querySelector(".wiz__actions .btn-primary");
-const old = btn?.textContent;
+
 if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
     // Requiere grabación (solo si NO es PMA)
     if (form.evento !== "Puerta Mantenida Abierta (PMA)" && form.requiereGrabacion) {
@@ -1457,7 +1455,15 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
 
 
     if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
-
+  /* === Confirmación previa y manejo de botón === */
+      const btn = document.querySelector(".wiz__actions .btn-primary");
+      const old = btn?.textContent;
+     const ok = await previewEnvio({ categoria, data, imagenes: form.imagenes });
+      if (!ok) {
+        // Usuario canceló, aún no cambiamos el texto del botón
+        return;
+      }
+      if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
     try {
       const docRef = await addDoc(collection(db, `novedades/${categoria}/eventos`), data);
       if (form.imagenes?.length) {
@@ -2059,7 +2065,20 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
           <h1 className="m-0">Novedades · Centro de Monitoreo</h1>
           <div className="wiz__progress" aria-hidden="true">
             <span style={{ width: `${progress}%` }} />
-          </div>
+          </div><div className="d-flex gap-2">
+      <button type="button" className="btn btn-light btn-sm"
+        onClick={() => window.__G3T_BRIDGES?.global1?.openNotificaciones?.()}>
+       📬 Notificaciones
+     </button>
+     <button type="button" className="btn btn-light btn-sm"
+        onClick={() => window.__G3T_BRIDGES?.global1?.openAlertas?.()}>
+       ⚠️ Alertas
+     </button>
+     <button type="button" className="btn btn-light btn-sm"
+       onClick={() => window.__G3T_BRIDGES?.global1?.openHistorico?.()}>
+       ⏱ Histórico
+     </button>
+    </div>
         </div>
       </header>
 
@@ -2109,7 +2128,15 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
         />
       </div>
 
-      <NotificationsBridge notificaciones={notificaciones} alertas={alertas} />
+      <NotificationsBridge
+   db={db}
+   notificaciones={notificaciones}
+   alertas={alertas}
+   onAfterOpenInfo={markAllRead}
+   filtrarPorCategoria={categoria || null}
+   mostrarBotonHistorico={true}   // ⏱ botón flotante 15m
+ />
+
     </div>
   );
 }
