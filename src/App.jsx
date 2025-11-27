@@ -24,6 +24,7 @@ import { AdminAuthProvider } from "./context/AdminAuthContext.jsx";
 import PortalPendientes from "./components/Dashboard/PortalPendientes.jsx";
 import DashboardOperador from "./components/Dashboard/DashboardOperador.jsx";
 import RondinCCTV from "./components/Dashboard/RondinCCTV.jsx";
+import OperadorDashboard from "./components/Dashboard/OperadorDashboard.jsx";
 
 export default function App() {
   return (
@@ -82,6 +83,15 @@ export default function App() {
                   </RequireAdmin>
                 }
               />
+                            <Route
+                path="/operador-dashboard"
+                element={
+                  <RequireOperador>
+                    <OperadorDashboard />
+                  </RequireOperador>
+                }
+              />
+
               <Route
                 path="/clientes"
                 element={

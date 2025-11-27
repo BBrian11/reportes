@@ -51,6 +51,7 @@ const styles = {
   ddDanger: { color: "#dc2626" },
   layout: { display: "flex", minHeight: "100vh" },
   content: { flexGrow: 1, padding: 0, background: "#fff" },
+  authWrap: { minHeight: "100vh", display: "grid", placeItems: "center", background: "#fff" },
 };
 
 function nameFromEmail(email = "") {
@@ -68,6 +69,9 @@ export default function AppShellGlobal({ title = "Monitoreo G3T", sidebar = null
   const navigate = useNavigate();
   const location = useLocation(); // re-render en cambios de ruta
 
+  // Detectar rutas de autenticación
+  const isAuthRoute = /^\/(login|login-admin)(\/|$)/.test(location.pathname);
+
   const { unreadCount = 0, alertCount = 0, markAllRead } = useNotifications?.() || {};
   const rol = normRol(user?.rol);
   const userText = displayName(user);
@@ -77,37 +81,52 @@ export default function AppShellGlobal({ title = "Monitoreo G3T", sidebar = null
     navigate("/login-admin", { replace: true });
   };
 
+  // Setear --app-header-height según haya header o no (login = 0)
   useLayoutEffect(() => {
     const hdr = document.getElementById("app-global-header");
-    if (!hdr) return;
     const setVar = () => {
-      const h = hdr.getBoundingClientRect().height || HEADER_H;
+      const h = hdr ? (hdr.getBoundingClientRect().height || HEADER_H) : 0;
       document.documentElement.style.setProperty("--app-header-height", `${Math.round(h)}px`);
     };
     setVar();
-    const ro = new ResizeObserver(setVar);
-    ro.observe(hdr);
-    return () => ro.disconnect();
-  }, []);
+    let ro;
+    if (hdr) {
+      ro = new ResizeObserver(setVar);
+      ro.observe(hdr);
+    }
+    return () => ro && ro.disconnect();
+  }, [location.pathname]);
 
-
-   const openInfoGlobal = () => {
-       const b = window.__G3T_BRIDGES?.global1;
-       if (b?.openNotificaciones) b.openNotificaciones();
-       else window.dispatchEvent(new CustomEvent("g3t:openInfo"));
-       markAllRead?.();
-     };
+  const openInfoGlobal = () => {
+    const b = window.__G3T_BRIDGES?.global1;
+    if (b?.openNotificaciones) b.openNotificaciones();
+    else window.dispatchEvent(new CustomEvent("g3t:openInfo"));
+    markAllRead?.();
+  };
   const openAlertasGlobal = () => {
     window.dispatchEvent(new CustomEvent("g3t:openAlert"));
   };
   const openHistoricoGlobal = () => {
     window.dispatchEvent(new CustomEvent("g3t:openHistorico"));
   };
-  
 
+  // Modo login: no header, no sidebar, sólo el contenido de la página de login
+  if (isAuthRoute) {
+    // Forzar altura de header 0 para layouts que dependan de la var
+    if (typeof document !== "undefined") {
+      document.documentElement.style.setProperty("--app-header-height", "0px");
+    }
+    return (
+      <main style={styles.authWrap}>
+        {children}
+      </main>
+    );
+  }
+
+  // Resto de rutas con header + (sidebar opcional)
   return (
     <>
-      {showHeader && (
+      {showHeader && !isAuthRoute && (
         <header id="app-global-header" style={styles.header}>
           {/* IZQUIERDA: logo */}
           <Link to="/login-admin" style={styles.logo}>
@@ -115,51 +134,49 @@ export default function AppShellGlobal({ title = "Monitoreo G3T", sidebar = null
             {title}
           </Link>
 
-    <div style={styles.headerActions}>
-  {/* Notificaciones */}
-  <button
-    type="button"
-    title="Notificaciones"
-    aria-label="Abrir notificaciones"
-    onClick={openInfoGlobal}
-    style={{ ...styles.hdrFab, background: "#2563eb" }}
-  >
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2Z" fill="#fff"/>
-    </svg>
-    {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
-  </button>
+          <div style={styles.headerActions}>
+            {/* Notificaciones */}
+            <button
+              type="button"
+              title="Notificaciones"
+              aria-label="Abrir notificaciones"
+              onClick={openInfoGlobal}
+              style={{ ...styles.hdrFab, background: "#2563eb" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2Z" fill="#fff"/>
+              </svg>
+              {unreadCount > 0 && <span style={styles.badge}>{unreadCount}</span>}
+            </button>
 
-  {/* Histórico 15 minutos */}
-  <button
-    type="button"
-    title="Histórico (últimos 15 min)"
-    aria-label="Abrir histórico de los últimos 15 minutos"
-    onClick={openHistoricoGlobal}
-    style={{ ...styles.hdrFab, background: "#0ea5e9" }}
-  >
-    {/* Ícono relojito simple */}
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 8v5l3 2" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="#fff" strokeWidth="2"/>
-    </svg>
-    {/* Si querés texto: <span style={{color:'#fff',fontSize:12,fontWeight:700}}>15m</span> */}
-  </button>
+            {/* Histórico 15 minutos */}
+            <button
+              type="button"
+              title="Histórico (últimos 15 min)"
+              aria-label="Abrir histórico de los últimos 15 minutos"
+              onClick={openHistoricoGlobal}
+              style={{ ...styles.hdrFab, background: "#0ea5e9" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 8v5l3 2" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="#fff" strokeWidth="2"/>
+              </svg>
+            </button>
 
-  {/* Alertas */}
-  <button
-    type="button"
-    title="Alertas críticas"
-    aria-label="Abrir alertas"
-    onClick={openAlertasGlobal}
-    style={{ ...styles.hdrFab, background: "#ef4444" }}
-  >
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z" fill="#fff"/>
-    </svg>
-    {alertCount > 0 && <span style={styles.badge}>{alertCount}</span>}
-  </button>
-</div>
+            {/* Alertas */}
+            <button
+              type="button"
+              title="Alertas críticas"
+              aria-label="Abrir alertas"
+              onClick={openAlertasGlobal}
+              style={{ ...styles.hdrFab, background: "#ef4444" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z" fill="#fff"/>
+              </svg>
+              {alertCount > 0 && <span style={styles.badge}>{alertCount}</span>}
+            </button>
+          </div>
 
           {/* DERECHA: usuario */}
           <div style={styles.userMenu}>
@@ -198,7 +215,8 @@ export default function AppShellGlobal({ title = "Monitoreo G3T", sidebar = null
       )}
 
       <div style={styles.layout}>
-        {sidebar}
+        {/* Sidebar sólo si NO es login */}
+        {!isAuthRoute && sidebar}
         <main style={styles.content}>{children}</main>
       </div>
     </>

@@ -2,11 +2,13 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Swal from "sweetalert2";
 import "../../styles/novedades-form.css";
+import { logOp } from "../../utils/opLogger";
 
  import NotificationsBridge from "../common/NotificationsBridge.jsx";
  import useNotifications from "./hooks/useNotifications.js";
 /* Firebase (modular) */
 import { initializeApp, getApps } from "firebase/app";
+// arriba, donde importás de firestore…
 import {
   getFirestore,
   collection,
@@ -15,8 +17,13 @@ import {
   getDocs,
   query,
   orderBy,
+  where,            // ← NUEVO
   Timestamp,
 } from "firebase/firestore";
+
+// auth
+import { getAuth, onAuthStateChanged } from "firebase/auth"; // ← NUEVO
+
 import {
   getStorage,
   ref as storageRef,
@@ -37,9 +44,51 @@ const firebaseConfig = {
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const storage = getStorage(app);
+// ==== Helpers globales de sesión/email (ámbito de módulo) ====
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig;
+
+function guessNameFromEmail(email = "") {
+  const base = (email.split("@")[0] || "").replace(/\./g, " ").trim();
+  if (!base) return "";
+  return base
+    .split(/\s+/)
+    .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(" ");
+}
+
+function sniffEmailFromDOM() {
+  const zones = [
+    document.querySelector("header"),
+    document.querySelector(".MuiAppBar-root"),
+    document.querySelector("nav[role='navigation']"),
+    document.querySelector("header[role='banner']"),
+    document.querySelector("nav"),
+    document.body
+  ].filter(Boolean);
+
+  for (const el of zones) {
+    const txt = (el?.innerText || "").trim();
+    if (!txt || !/@/.test(txt)) continue;
+    const m = txt.match(EMAIL_RE);
+    if (m && m[0]) return m[0].toLowerCase();
+  }
+  return null;
+}
+
+function captureEmailFromDOMIfAny() {
+  const domEmail = sniffEmailFromDOM();
+  if (domEmail) {
+    try {
+      window.__G3T_USER_EMAIL = domEmail;
+      localStorage.setItem("g3t_user_email", domEmail);
+      sessionStorage.setItem("g3t_user_email", domEmail);
+    } catch {}
+  }
+  return domEmail;
+}
 
 /* ===== Catálogos ===== */
-const OPERADORES = ["Operador 1", "Operador 2", "Operador 3", "Operador 4", "Operador 5", "Operador 6"];
+const OPERADORES = [];
 
 const EVENTOS = {
   tgs: [
@@ -653,105 +702,126 @@ function getFieldOptions({ categoria, evento, name, form }) {
 
 /* =========================
    Generador de observación formal
+/* =========================
+   Generador de observación formal (prosa)
    ========================= */
-function makeAutoObs({ categoria, form }) {
-  const lugar = form.lugar || "-";
-  const op = form.operador || "-";
-  const evento = form.evento || "-";
-
-  const fecha = form.fechaHoraEvento ? form.fechaHoraEvento.replace("T", " ") : null;
-  const unidad = form.unidad ? `, unidad ${form.unidad}` : "";
-  const zona = form.zona ? ` (Zona/Canal: ${form.zona})` : "";
-  const cierre = "Se deja constancia y se mantiene monitoreo activo hasta normalización.";
-
-  if (categoria === "edificios") {
-    if (evento === "Puerta Mantenida Abierta (PMA)") {
-      const razon = form.extras?.["razones-pma"];
-      const resp = form.extras?.["respuesta-residente"];
-      const resol = form.extras?.["resolusion-evento"];
-      const partes = [
-        `Se detecta evento de Puerta Mantenida Abierta en ${lugar}${unidad}${zona}${fecha ? ` (hora real ${fecha})` : ""}.`,
-        "Se fija cámara al acceso y se verifica ausencia de riesgos inmediatos.",
-        razon ? `Motivo relevado: ${razon}.` : null,
-        resp ? `Respuesta del residente/encargado: ${resp}.` : null,
-        resol ? `Resolución: ${resol}.` : null,
-        cierre,
-        `Operador: ${op}.`,
-      ].filter(Boolean);
-      return partes.join(" ");
+   function makeAutoObs({ categoria, form }) {
+    const lugar = form.lugar || "";
+    const op = form.operador || "";
+    const evento = form.evento || "";
+    const fecha = form.fechaHoraEvento ? form.fechaHoraEvento.replace("T", " ") : "";
+    const unidadTxt = form.unidad ? `, unidad ${form.unidad}` : "";
+    const zonaTxt = form.zona ? ` (Zona/Canal: ${form.zona})` : "";
+  
+    // Helpers de redacción
+    const fraseOperador = op ? ` Gestiona ${op} desde el Centro de Monitoreo.` : "";
+    const cierre = " Se deja constancia y se mantiene el monitoreo activo hasta su completa normalización.";
+  
+    const orac = (...partes) =>
+      partes.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  
+    // ---- EDIFICIOS
+    if (categoria === "edificios") {
+      if (evento === "Puerta Mantenida Abierta (PMA)") {
+        const razon = form.extras?.["razones-pma"];
+        const resp  = form.extras?.["respuesta-residente"];
+        const resol = form.extras?.["resolusion-evento"] || form.extras?.["resolucion-evento"];
+  
+        const intro = orac(
+          `Se detecta una situación de Puerta Mantenida Abierta en ${lugar}${unidadTxt}${zonaTxt}${fecha ? `, con registro a las ${fecha}` : ""}.`,
+          "Se fija la cámara al acceso y, tras verificar el entorno, no se advierten riesgos inmediatos."
+        );
+  
+        const detalleRazon = razon ? ` El motivo relevado fue: ${razon}.` : "";
+        const detalleResp  = resp ? ` La persona contactada manifestó: ${resp}.` : "";
+        const detalleResol = resol ? ` Como resultado de la gestión, ${resol.toLowerCase().startsWith("se ") ? resol : `se determina: ${resol}.`}` : "";
+  
+        return (intro + detalleRazon + detalleResp + detalleResol + fraseOperador + cierre).trim();
+      }
+  
+      if (evento === "Portón Mantenido Abierto (PMA)") {
+        const cola = (form.extras?.["vehiculos-en-cola"] || "").trim();
+        const resol = form.extras?.["resolusion-evento"] || form.extras?.["resolucion-evento"];
+  
+        const intro = orac(
+          `Se observa Portón Mantenido Abierto en ${lugar}${zonaTxt}${fecha ? `, registrándose a las ${fecha}` : ""}.`,
+          cola ? `Se identifica flujo vehicular en espera: ${cola}.` : ""
+        );
+        const detalleResol = resol ? ` ${resol.toLowerCase().startsWith("se ") ? resol : `Se resuelve: ${resol}.`}` : "";
+  
+        return (intro + detalleResol + fraseOperador + cierre).trim();
+      }
+  
+      if (evento === "Puerta Forzada (Intrusión)") {
+        const evidencia = form.extras?.["evidencia-visual"];           // "Sí" / "No"
+        const qc = form.extras?.["quien-contactado"];                   // puede ser "Otro…"
+        const qco = form.extras?.["quien-contactado-otro"];             // texto libre
+        const fuerzas = form.extras?.["fuerzas-notificadas"];           // opciones dinámicas
+  
+        const intro = orac(
+          `Se registra un posible intento de intrusión o forzado en ${lugar}${unidadTxt}${zonaTxt}${fecha ? `, con marca horaria ${fecha}` : ""}.`,
+          evidencia === "Sí"
+            ? "A través del sistema de CCTV se obtienen indicios visuales que respaldan la sospecha."
+            : evidencia === "No"
+            ? "El análisis de CCTV no aporta evidencia visual concluyente, por lo que se prioriza la verificación por contacto."
+            : ""
+        );
+  
+        const contacto = qc === "Otro…" ? qco : qc;
+        const detalleContacto = contacto ? ` Se establece comunicación con ${contacto} para coordinar verificación y resguardo del acceso.` : "";
+  
+        let detalleFuerzas = "";
+        if (fuerzas) {
+          const f = fuerzas.toLowerCase();
+          if (f.includes("911")) detalleFuerzas = " Se notifica a la línea de emergencias 911 para su intervención.";
+          else if (f.includes("seguridad privada")) detalleFuerzas = " Se da aviso a la seguridad privada del sitio para respuesta presencial.";
+          else if (f.includes("no corresponde") || f === "no") detalleFuerzas = " No se requiere intervención de fuerzas en esta instancia.";
+        }
+  
+        const protocolo = " Se aplica el procedimiento operativo estándar (SOP) y se preserva la evidencia disponible para su eventual uso.";
+  
+        return (intro + detalleContacto + detalleFuerzas + protocolo + fraseOperador + cierre).trim();
+      }
     }
-
-    if (evento === "Puerta Forzada (Intrusión)") {
-      const evv = form.extras?.["evidencia-visual"];
-      const qc = form.extras?.["quien-contactado"];
-      const qco = form.extras?.["quien-contactado-otro"];
-      const fuerzas = form.extras?.["fuerzas-notificadas"];
-      const contacto = qc === "Otro…" ? qco : qc;
-      const partes = [
-        `Se registra posible intrusión/forzado en ${lugar}${unidad}${zona}${fecha ? ` (hora real ${fecha})` : ""}.`,
-        evv ? `Evidencia visual: ${evv}.` : null,
-        contacto ? `Contacto realizado: ${contacto}.` : null,
-        fuerzas ? `Notificación a fuerzas: ${fuerzas}.` : null,
-        "Se aplica procedimiento según SOP y se preserva evidencia.",
-        cierre,
-        `Operador: ${op}.`,
-      ].filter(Boolean);
-      return partes.join(" ");
+  
+    // ---- TGS
+    if (categoria === "tgs") {
+      if (evento === "Ingreso de Personal (Apertura de Alarma)") {
+        const nom = form.extras?.["proveedor-personal"];
+        const mot = form.extras?.["motivo-ingreso"];
+        const intro = `Se registra un ingreso en ${lugar}${zonaTxt}${fecha ? `, a las ${fecha}` : ""}.`;
+        const detalle = orac(
+          nom ? `El acceso es efectuado por ${nom}.` : "",
+          mot ? `El motivo informado es: ${mot}.` : "",
+          "Se valida el procedimiento y se continúa con el monitoreo hasta normalización de señales."
+        );
+        return (intro + " " + detalle + fraseOperador + cierre).trim();
+      }
+  
+      if (evento === "Salida de Personal (Cierre de Alarma)") {
+        const nom = form.extras?.["proveedor-personal"];
+        const intro = `Se registra el cierre en ${lugar}${zonaTxt}${fecha ? `, a las ${fecha}` : ""}.`;
+        const detalle = orac(
+          nom ? `El egreso corresponde a ${nom}.` : "",
+          "Se confirma la normalización del sistema y no se observan anomalías en CCTV."
+        );
+        return (intro + " " + detalle + fraseOperador + cierre).trim();
+      }
     }
-
-    if (evento === "Portón Mantenido Abierto (PMA)") {
-      const cola = (form.extras?.["vehiculos-en-cola"] || "").trim();
-      const resol = form.extras?.["resolusion-evento"];
-      const partes = [
-        `Se visualiza Portón Mantenido Abierto en ${lugar}${zona}${fecha ? ` (hora real ${fecha})` : ""}.`,
-        cola ? `Detalle de fila/flujo vehicular: ${cola}.` : null,
-        resol ? `Resolución: ${resol}.` : null,
-        cierre,
-        `Operador: ${op}.`,
-      ].filter(Boolean);
-      return partes.join(" ");
+  
+    // ---- VTV
+    if (categoria === "vtv" && (evento === "Corte de energía eléctrica" || evento === "Restauración de energía eléctrica")) {
+      const intro = `${evento} en ${lugar}${zonaTxt}${fecha ? `, con registro ${fecha}` : ""}.`;
+      const detalle = "Se verifica el estado de UPS/NVR y cámaras, documentando el impacto operativo observado.";
+      return (intro + " " + detalle + fraseOperador + cierre).trim();
     }
+  
+    // ---- Caso general
+    const introGen = `${evento} en ${lugar}${zonaTxt}${fecha ? `, registrado a las ${fecha}` : ""}.`;
+    const detalleGen = "Se actúa conforme a procedimiento interno y se documentan las acciones realizadas.";
+    return (introGen + " " + detalleGen + fraseOperador + cierre).trim();
   }
-
-  if (categoria === "tgs") {
-    if (evento === "Ingreso de Personal (Apertura de Alarma)") {
-      const nom = form.extras?.["proveedor-personal"];
-      const mot = form.extras?.["motivo-ingreso"];
-      return [
-        `Se registra ingreso en ${lugar}${zona}.`,
-        nom ? `Personal/proveedor: ${nom}.` : null,
-        mot ? `Motivo: ${mot}.` : null,
-        "Se valida contra procedimiento y se mantiene monitoreo.",
-        `Operador: ${op}.`,
-      ].filter(Boolean).join(" ");
-    }
-    if (evento === "Salida de Personal (Cierre de Alarma)") {
-      const nom = form.extras?.["proveedor-personal"];
-      return [
-        `Se registra cierre en ${lugar}${zona}.`,
-        nom ? `Personal/proveedor: ${nom}.` : null,
-        "Se confirma normalización de señales.",
-        `Operador: ${op}.`,
-      ].filter(Boolean).join(" ");
-    }
-  }
-
-  if (categoria === "vtv" && (evento === "Corte de energía eléctrica" || evento === "Restauración de energía eléctrica")) {
-    return [
-      `${evento} en ${lugar}${zona}.`,
-      "Se verifica estado de UPS/NVR y cámaras.",
-      "Se deja constancia y se mantiene monitoreo activo hasta normalización.",
-      `Operador: ${op}.`,
-    ].join(" ");
-  }
-
-  return [
-    `${evento} en ${lugar}${zona}.`,
-    "Se registran actuaciones conforme procedimiento.",
-    "Se deja constancia y se mantiene monitoreo activo hasta normalización.",
-    `Operador: ${op}.`,
-  ].join(" ");
-}
+  
 
 /* Prompts (SweetAlert helpers) */
 async function promptSelect({title, label, options, required = true, initial = ""}) {
@@ -933,6 +1003,9 @@ export default function NovedadesWizardPro() {
   const [estado, setEstado] = useState("pendiente");
   const [clientes, setClientes] = useState({ tgs: [], vtv: [], edificios: [], barrios: [], otros: [] });
   const [search, setSearch] = useState("");
+  const [operadores, setOperadores] = useState(OPERADORES);
+  // trackea los checks de SOP por evento: { [evento]: { pasos: boolean[], registro: boolean[] } }
+const [sopCheck, setSopCheck] = useState({});
 
   const [form, setForm] = useState({
     operador: "",
@@ -955,6 +1028,104 @@ export default function NovedadesWizardPro() {
 
   const [autoObsOn, setAutoObsOn] = useState(true);
   const lastAutoRef = useRef("");
+// === Editor Observaciones en SweetAlert (anti-atajos + focus real) ===
+const editingObsRef = useRef(false);
+
+const openObsEditorSwal = useCallback(async () => {
+  try {
+    editingObsRef.current = true;
+
+    const initialValue = (form.observaciones || "").toString();
+
+    const res = await Swal.fire({
+      title: "Editar Observaciones",
+      html: `
+        <div style="text-align:left">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; margin-bottom:8px">
+            <small style="color:#64748b">Escribí libremente (no dispara atajos del wizard).</small>
+            <small id="obs-count" style="color:#64748b">${initialValue.length} chars</small>
+          </div>
+
+          <textarea
+            id="g3t-obs-input"
+            class="swal2-textarea"
+            spellcheck="true"
+            style="
+              height:260px;
+              resize:vertical;
+              pointer-events:auto !important;
+              user-select:text !important;
+              outline:none;
+              line-height:1.35;
+            "
+            placeholder="Agregá un resumen claro y profesional…"
+          >${escapeHtml(initialValue)}</textarea>
+
+          <small style="display:block;margin-top:8px;color:#64748b">
+            Tip: Enter = salto de línea · Ctrl+Enter = guardar
+          </small>
+        </div>
+      `,
+      width: 900,
+      showCancelButton: true,
+      confirmButtonText: "Guardar",
+      cancelButtonText: "Cancelar",
+      focusConfirm: false,
+      allowOutsideClick: false,
+      allowEscapeKey: true,
+
+      didOpen: () => {
+        const popup = Swal.getPopup();
+
+        // ✅ Mata atajos globales aunque estén en capture en tu app
+        const stop = (e) => { e.stopPropagation(); };
+        popup?.addEventListener("keydown", stop, true);
+        popup?.addEventListener("keyup", stop, true);
+        popup?.addEventListener("keypress", stop, true);
+
+        const ta = document.getElementById("g3t-obs-input");
+        const counter = document.getElementById("obs-count");
+
+        if (ta) {
+          ta.focus();
+          // cursor al final
+          ta.selectionStart = ta.selectionEnd = ta.value.length;
+
+          ta.addEventListener("input", () => {
+            if (counter) counter.textContent = `${ta.value.length} chars`;
+          });
+
+          // Ctrl+Enter para guardar
+          ta.addEventListener("keydown", (e) => {
+            if (e.ctrlKey && e.key === "Enter") {
+              e.preventDefault();
+              Swal.clickConfirm();
+            }
+          });
+        }
+      },
+
+      preConfirm: () => {
+        const ta = document.getElementById("g3t-obs-input");
+        return (ta?.value ?? "").toString();
+      },
+    });
+
+    editingObsRef.current = false;
+
+    if (!res.isConfirmed) return;
+
+    const text = (res.value || "").toString();
+
+    // ✅ Marca como edición humana: no volver a pisar con auto-obs
+    lastAutoRef.current = "";
+    setAutoObsOn(false);
+
+    setForm((f) => ({ ...f, observaciones: text }));
+  } finally {
+    editingObsRef.current = false;
+  }
+}, [form.observaciones, setForm, setAutoObsOn]);
 
   const autoGrow = useCallback((el) => {
     if (!el) return;
@@ -964,33 +1135,145 @@ export default function NovedadesWizardPro() {
   }, []);
 
   function estadoCalculado(evento, requiereGrabacion) {
-    if (evento === "Puerta Mantenida Abierta (PMA)") return "pendiente";
+    if (evento === "Puerta Mantenida Abierta (PMA)" || evento === "Puerta Forzada (Intrusión)") return "pendiente";
     if (requiereGrabacion === "si") return "pendiente";
     if (requiereGrabacion === "no") return "procesado";
     return "pendiente";
   }
 
-  const [sopCheck, setSopCheck] = useState({});
-   // NotificationsBridge: estado local simple
+  // Quitar placeholders tipo "Operador 1", "Operador 2", etc.
+const PLACEHOLDER_RE = /^operador\s*\d+$/i;
+
+// Limpia la lista original
+const operadoresLimpios = useMemo(
+  () => (operadores || []).filter(n => n && !PLACEHOLDER_RE.test(String(n).trim())),
+  [operadores]
+);
+
+// Arma opciones priorizando el detectado y sin duplicados ni placeholders
+const opOptions = useMemo(() => {
+  const seen = new Set();
+  return [form.operador, ...operadoresLimpios]
+    .filter(Boolean)
+    .filter((n) => {
+      const k = String(n).trim().toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+}, [form.operador, operadoresLimpios]);
 
   useEffect(() => {
     document.body.classList.add("page-light");
     return () => document.body.classList.remove("page-light");
   }, []);
 
-  useEffect(() => {
-    if (!editorFull) return;
-    const onKey = (e) => { if (e.key === "Escape") setEditorFull(false); };
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [editorFull]);
 
   useEffect(() => { autoGrow(taRef.current); }, [autoGrow, form.observaciones, step]);
+  useEffect(() => {
+    const auth = getAuth(app);
+  
+    const getSession = () => {
+      const u = auth?.currentUser || null;
+      // 1) displayName directo
+      const display = (u?.displayName || "").trim();
+      // 2) email por cualquier vía
+      const email =
+        (u?.email) ||
+        (u?.providerData?.[0]?.email) ||
+        window.__G3T_USER_EMAIL ||
+        localStorage.getItem("g3t_user_email") ||
+        sessionStorage.getItem("g3t_user_email") ||
+        "";
+      return { display, email };
+    };
+  
+    const setOperadorSmart = (nombre) => {
+      if (!nombre) return;
+      setOperadores(prev => (prev.includes(nombre) ? prev : [nombre, ...prev]));
+      setForm(f => ({ ...f, operador: f.operador || nombre }));
+      try { localStorage.setItem("g3t_last_operador", nombre); } catch {}
+    };
 
+    
+
+    const resolveNow = async () => {
+      try {
+        const { display, email } = getSession();
+  
+        // preferimos displayName si existe
+        if (display && display.length >= 3) {
+          setOperadorSmart(display);
+          console.debug("[Operador] displayName →", display);
+          return;
+        }
+  
+        if (email) {
+          // buscar en colección "operadores" por usuario == email
+          try {
+            const qy = query(collection(db, "operadores"), where("usuario", "==", email));
+            const snap = await getDocs(qy);
+            let nombre = "";
+            snap.forEach(d => {
+              const x = d.data() || {};
+              if (!nombre) nombre = (x.nombre || x.displayName || "").trim();
+            });
+  
+            if (!nombre) {
+              nombre = guessNameFromEmail(email); // p.ej. "juan.perez" → "Juan Perez"
+            }
+  
+            if (nombre) {
+              setOperadorSmart(nombre);
+              console.debug("[Operador] desde Firestore/email →", nombre);
+              return;
+            }
+          } catch (e) {
+            console.warn("[Operador] No se pudo consultar 'operadores':", e);
+            const fallback = guessNameFromEmail(email);
+            if (fallback) {
+              setOperadorSmart(fallback);
+              console.debug("[Operador] fallback por email →", fallback);
+              return;
+            }
+          }
+        }
+  
+        // último recurso: cache local
+        const last = localStorage.getItem("g3t_last_operador");
+        if (last) {
+          setOperadorSmart(last);
+          console.debug("[Operador] cache local →", last);
+          return;
+        }
+  
+        console.info("[Operador] No se pudo resolver automáticamente (sin auth, email ni cache).");
+      } catch (e) {
+        console.warn("[Operador] Error inesperado resolviendo operador:", e);
+      }
+    };
+  
+    // correr ahora con el estado actual
+    resolveNow();
+  
+    // escuchar cambios de sesión y reintentar
+    const unsub = onAuthStateChanged(auth, () => resolveNow());
+  
+    // si en 1 segundo no se pudo resolver y sigue vacío, probá cache
+    const t = setTimeout(() => {
+      if (!form.operador) {
+        const last = localStorage.getItem("g3t_last_operador");
+        if (last) {
+          setOperadorSmart(last);
+          console.debug("[Operador] fallback tardío (cache) →", last);
+        }
+      }
+    }, 1000);
+  
+    return () => { clearTimeout(t); try { unsub && unsub(); } catch {} };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, app]);
+  
   // Cargar clientes
   useEffect(() => {
     (async () => {
@@ -1092,7 +1375,7 @@ const currentSOP = useMemo(() => {
   const validarPaso = useCallback(() => {
     if (step === 0 && !categoria) return warn("Elegí una categoría para continuar.");
     if (step === 1) {
-      if (!form.operador) return warn("Seleccioná el operador.");
+      
       if (!form.lugar) return warn("Seleccioná el lugar.");
     }
     if (step === 2) {
@@ -1100,7 +1383,7 @@ const currentSOP = useMemo(() => {
       if (form.evento !== "Puerta Mantenida Abierta (PMA)" && !form.requiereGrabacion) {
         return warn("Indicá si requiere grabación (Sí/No).");
       }
-      if (categoria === "edificios" && !form.fechaHoraEvento) return warn("Indicá fecha y hora reales del evento.");
+      if (categoria === "edificios" && !form.fechaHoraEvento) return warn("Indicá fecha y hora del evento.");
 
       const extrasDef = (EXTRA_FIELDS[categoria] || {})[form.evento] || [];
       for (const fld of extrasDef) {
@@ -1119,18 +1402,17 @@ const currentSOP = useMemo(() => {
     return true;
   }, [step, categoria, form]);
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (validarPaso()) setStep((s) => Math.min(s + 1, 4)); }
-    if ((e.key === "Enter" && e.shiftKey) || e.key === "Escape") { e.preventDefault(); setStep((s) => Math.max(s - 1, 0)); }
-  };
+
   useEffect(() => { mainRef.current?.focus(); }, [step]);
 
   const onSelectEvento = (ev) => {
     setForm((f) => ({
       ...f,
       evento: ev,
-      requiereGrabacion: "",
-      // 🔒 limpia extras que no corresponden al evento elegido
+      // PMA: sin flag; Intrusión: “si”; resto: se deja vacío para que el usuario elija
+      requiereGrabacion: ev === "Puerta Forzada (Intrusión)" ? "si"
+                        : ev === "Puerta Mantenida Abierta (PMA)" ? ""
+                        : "",
       extras: filterExtrasFor(categoria, ev, f.extras),
     }));
     if (!sopCheck[ev]) {
@@ -1143,6 +1425,7 @@ const currentSOP = useMemo(() => {
       }
     }
   };
+  
 
   function pickDomOrState(name, form) {
     const fromState = form?.extras?.[name];
@@ -1206,61 +1489,97 @@ const currentSOP = useMemo(() => {
   const runEventoWizard = useCallback(async () => {
     if (!categoria) return;
 
+    // Trabajamos en un BORRADOR local, no tocamos el form real hasta el final
+    let draft = {
+      ...form,
+      extras: { ...(form.extras || {}) },
+    };
+
+    // 1) Elegir evento
     const ev = await promptSelect({
       title: "Tipo de evento",
       label: "Seleccioná el evento",
       options: EVENTOS[categoria] || [],
-      initial: form.evento || ""
+      initial: draft.evento || "",
     });
     if (!ev) return;
-    onSelectEvento(ev);
+    draft.evento = ev;
 
-    let reqGrab = form.requiereGrabacion || "";
-    if (ev !== "Puerta Mantenida Abierta (PMA)") {
-      const v = await promptYesNo({ title: "¿Requiere grabación?", label: "Indicá si corresponde registro de video" });
+    // 2) ¿Requiere grabación?
+    let reqGrab = draft.requiereGrabacion || "";
+    if (ev === "Puerta Forzada (Intrusión)") {
+      reqGrab = "si";
+      draft.requiereGrabacion = "si";
+    } else if (ev !== "Puerta Mantenida Abierta (PMA)") {
+      const v = await promptYesNo({
+        title: "¿Requiere grabación?",
+        label: "Indicá si corresponde registro de video",
+      });
       if (!v) return;
       reqGrab = v;
-      setForm(f => ({ ...f, requiereGrabacion: v }));
+      draft.requiereGrabacion = v;
     } else {
-      setForm(f => ({ ...f, requiereGrabacion: "" }));
+      draft.requiereGrabacion = "";
     }
 
+    // 3) Fecha / hora / unidad (solo edificios)
     if (categoria === "edificios") {
-      const dt = await promptDateTime({ title: "Fecha y hora reales del evento", label: "Ingresá el momento real del evento", initial: form.fechaHoraEvento || "" });
+      const dt = await promptDateTime({
+        title: "Fecha y hora del evento",
+        label: "Ingresá el momento real del evento",
+        initial: draft.fechaHoraEvento || "",
+      });
       if (!dt) return;
-      setForm(f => ({ ...f, fechaHoraEvento: dt }));
+      draft.fechaHoraEvento = dt;
 
       const u = await promptSelect({
         title: "Unidad involucrada (opcional)",
         label: "Podés elegir una unidad (o saltear)",
         options: generateUnidadOptions(),
-        initial: form.unidad || "",
-        required: false
+        initial: draft.unidad || "",
+        required: false,
       });
-      if (u !== null) setForm(f => ({ ...f, unidad: u || "" }));
+      if (u !== null) {
+        draft.unidad = u || "";
+      }
     }
 
+    // 4) Campos extra específicos del evento
     const extrasDef = (EXTRA_FIELDS[categoria] || {})[ev] || [];
     for (const fld of extrasDef) {
       if (fld.type === "select") {
         const sel = await promptSelect({
           title: "Datos específicos del evento",
           label: fld.label + (fld.required ? " *" : ""),
-          options: getFieldOptions({ categoria, evento: ev, name: fld.name, form }),
-          initial: form.extras?.[fld.name] ?? ""
+          options: getFieldOptions({
+            categoria,
+            evento: ev,
+            name: fld.name,
+            form: draft, // usamos el borrador como contexto
+          }),
+          initial: draft.extras?.[fld.name] ?? "",
         });
         if (sel === null) return;
+
         if (fld.name === "quien-contactado" && sel === "Otro…") {
           const otro = await promptInput({
             title: "Especificá a quién",
             label: "Ingresá el contacto",
             placeholder: "Ej: Guardia nocturna de edificio",
             required: true,
+            initial: draft.extras?.["quien-contactado-otro"] ?? "",
           });
           if (otro === null) return;
-          setForm(f => ({ ...f, extras: { ...f.extras, [fld.name]: sel, ["quien-contactado-otro"]: otro }}));
+          draft.extras = {
+            ...draft.extras,
+            [fld.name]: sel,
+            ["quien-contactado-otro"]: otro,
+          };
         } else {
-          setForm(f => ({ ...f, extras: { ...f.extras, [fld.name]: sel }}));
+          draft.extras = {
+            ...draft.extras,
+            [fld.name]: sel,
+          };
         }
       } else if (fld.type === "text") {
         const val = await promptInput({
@@ -1268,51 +1587,211 @@ const currentSOP = useMemo(() => {
           label: fld.label + (fld.required ? " *" : ""),
           placeholder: fld.placeholder || "",
           required: !!fld.required,
-          initial: form.extras?.[fld.name] ?? ""
+          initial: draft.extras?.[fld.name] ?? "",
         });
         if (val === null) return;
-        setForm(f => ({ ...f, extras: { ...f.extras, [fld.name]: val }}));
+        draft.extras = {
+          ...draft.extras,
+          [fld.name]: val,
+        };
       }
     }
 
+    // 5) PREVIEW del asistente (acá antes te decía "Datos cargados")
+    const fechaTxt =
+      categoria === "edificios" ? draft.fechaHoraEvento || "—" : "—";
+    const requiereTxt =
+      ev === "Puerta Mantenida Abierta (PMA)"
+        ? "N/A (PMA)"
+        : (reqGrab || "—").toUpperCase();
+
+    const { isConfirmed } = await Swal.fire({
+      icon: "question",
+      title: "Confirmar datos del evento",
+      html: `
+        <div style="text-align:left">
+          <p style="margin:0 0 6px"><b>Evento:</b> ${ev}</p>
+          ${
+            categoria === "edificios"
+              ? `<p style="margin:0 0 6px"><b>Fecha/Hora:</b> ${fechaTxt}</p>`
+              : ""
+          }
+          ${
+            ev !== "Puerta Mantenida Abierta (PMA)"
+              ? `<p style="margin:0 0 6px"><b>Requiere grabación:</b> ${requiereTxt}</p>`
+              : ""
+          }
+          ${
+            extrasDef.length
+              ? `<p style="margin:8px 0 0"><b>Datos específicos:</b> se completaron ${extrasDef.length} campo(s).</p>`
+              : ""
+          }
+          <p style="margin:8px 0 0">
+            Si confirmás, se copiarán estos datos al formulario.
+          </p>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Aplicar al formulario",
+      cancelButtonText: "Volver sin aplicar",
+      focusCancel: true,
+      allowOutsideClick: false,
+    });
+
+    if (!isConfirmed) {
+      console.log(
+        "[Wizard Evento] Cancelado por el operador, NO se modificó el formulario."
+      );
+      return;
+    }
+
+    // 6) AHORA SÍ aplicamos al formulario real
+
+    // De paso aprovechamos la lógica ya existente de onSelectEvento
+    onSelectEvento(ev);
+
+    setForm((prev) => ({
+      ...prev,
+      evento: ev,
+      requiereGrabacion: draft.requiereGrabacion,
+      fechaHoraEvento: draft.fechaHoraEvento,
+      unidad: draft.unidad,
+      extras: {
+        ...(prev.extras || {}),
+        ...(draft.extras || {}),
+      },
+    }));
+
+    // Inicializar SOP si por alguna razón no está
+    if (!sopCheck[ev]) {
+      const base = SOP[ev];
+      if (base) {
+        setSopCheck((prev) => ({
+          ...prev,
+          [ev]: {
+            pasos: new Array(base.pasos.length).fill(false),
+            registro: new Array(base.registro.length).fill(false),
+          },
+        }));
+      }
+    }
+
+    // Tip + coach específico para PMA, pero DESPUÉS de aplicar
+    // Coach específico para PMA (sin atajos de teclado)
     if (categoria === "edificios" && ev === "Puerta Mantenida Abierta (PMA)") {
-      await Swal.fire({ icon: "info", title: "Tip", text: "Podés usar Ctrl+Enter para reabrir el asistente y ajustar los campos de PMA.", confirmButtonText: "Ok" });
       await runCoachPMA();
     }
+  }, [categoria, form, onSelectEvento, sopCheck, runCoachPMA]);
 
-    await Swal.fire({
-      icon: "success",
-      title: "Datos cargados",
-      html: `<div style="text-align:left">
-        <p style="margin:0 0 6px"><b>Evento:</b> ${ev}</p>
-        ${categoria === "edificios" ? `<p style="margin:0 0 6px"><b>Fecha/Hora:</b> ${form.fechaHoraEvento || "—"}</p>` : ""}
-        ${ev !== "Puerta Mantenida Abierta (PMA)" ? `<p style="margin:0 0 6px"><b>Requiere grabación:</b> ${(reqGrab || "—").toUpperCase()}</p>` : ""}
-        <p style="margin:0">Podés continuar o ajustar desde el formulario.</p>
-      </div>`,
-      confirmButtonText: "Continuar"
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoria, form.evento, form.fechaHoraEvento, form.unidad, form.extras]);
 
-  useEffect(() => {
-    if (step === 2 && categoria && form.lugar) {
-      if (!wizardRunning.current) {
-        wizardRunning.current = true;
-        (async () => {
-          try { await runEventoWizard(); }
-          finally { wizardRunning.current = false; }
-        })();
-      }
-    }
-  }, [step, categoria, form.lugar, runEventoWizard]);
 
+  // ⚙️ El asistente de evento AHORA se dispara solo cuando vos apretás el botón.
+  // No se llama más automáticamente al entrar en el paso 2.
   useEffect(() => { if (step !== 2) wizardRunning.current = false; }, [step]);
+
+// === Helpers de sesión / nombre ===
+const [operadorStatus, setOperadorStatus] = useState("resolviendo"); // "resolviendo" | "ok" | "fail"
+
+useEffect(() => {
+  const auth = getAuth(app);
+
+  const setOperadorSmart = (nombre) => {
+    if (!nombre) return;
+    setOperadores(prev => (prev.includes(nombre) ? prev : [nombre, ...prev]));
+    setForm(f => ({ ...f, operador: f.operador || nombre }));
+    try { localStorage.setItem("g3t_last_operador", nombre); } catch {}
+    setOperadorStatus("ok");
+  };
+
+  const getSession = () => {
+    const u = auth?.currentUser || null;
+    const display = (u?.displayName || "").trim();
+    const email =
+      (u?.email) ||
+      (u?.providerData?.[0]?.email) ||
+      window.__G3T_USER_EMAIL ||
+      localStorage.getItem("g3t_user_email") ||
+      sessionStorage.getItem("g3t_user_email") ||
+      captureEmailFromDOMIfAny() || // ← primer intento vía DOM
+      "";
+    return { display, email };
+  };
+
+  const resolveNow = async () => {
+    try {
+      setOperadorStatus("resolviendo");
+      const { display, email } = getSession();
+
+      // 1) displayName directo
+      if (display && display.length >= 3) {
+        setOperadorSmart(display);
+        return;
+      }
+
+      // 2) Con email → Firestore("operadores") o derivar del mail
+      if (email) {
+        try {
+          const qy = query(collection(db, "operadores"), where("usuario", "==", email));
+          const snap = await getDocs(qy);
+          let nombre = "";
+          snap.forEach(d => {
+            const x = d.data() || {};
+            if (!nombre) nombre = (x.nombre || x.displayName || "").trim();
+          });
+          if (!nombre) nombre = guessNameFromEmail(email);
+          if (nombre) { setOperadorSmart(nombre); return; }
+        } catch {
+          const fb = guessNameFromEmail(email);
+          if (fb) { setOperadorSmart(fb); return; }
+        }
+      }
+
+      // 3) Cache local
+      const last = localStorage.getItem("g3t_last_operador");
+      if (last) { setOperadorSmart(last); return; }
+
+      setOperadorStatus("fail");
+    } catch {
+      setOperadorStatus("fail");
+    }
+  };
+
+  // Resolver ahora
+  resolveNow();
+
+  // Reintentar cuando cambie la sesión
+  const unsub = onAuthStateChanged(auth, () => resolveNow());
+
+  // Observar el DOM: cuando abrís el menú del usuario aparece el mail → capturamos y resolvemos
+  const mo = new MutationObserver(() => {
+    if (operadorStatus === "ok") return;
+    const got = captureEmailFromDOMIfAny();
+    if (got) resolveNow();
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+
+  // Reintento tardío leve
+  const t = setTimeout(() => {
+    if (!form.operador && operadorStatus !== "ok") {
+      const last = localStorage.getItem("g3t_last_operador");
+      if (last) setOperadorSmart(last);
+      else setOperadorStatus("fail");
+    }
+  }, 1500);
+
+  return () => { clearTimeout(t); mo.disconnect(); try { unsub && unsub(); } catch {} };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [db, app]);
+
 
   // Autocompletar observación (sin pisar ediciones humanas)
   useEffect(() => {
     if (!autoObsOn) return;
-    const current = (form.observaciones || "").trim();
-    if (current && current !== lastAutoRef.current) return;
+
+  // Si estás editando en Swal, NO autogeneres ni pises el texto
+  if (editingObsRef.current) return;
+
+  const current = (form.observaciones || "").trim();
 
     const text = makeAutoObs({ categoria, form });
     lastAutoRef.current = text;
@@ -1339,51 +1818,62 @@ const currentSOP = useMemo(() => {
     form.extras?.["motivo-ingreso"],
     form.extras?.["proveedor-internet"],
   ]);
-
   const handleSubmit = async () => {
     if (!categoria) return;
+
     const data = {};
+
+    // Campos base
     data[OPERADOR_NAME[categoria]] = form.operador;
     data[LUGAR_NAME[categoria]] = form.lugar;
     data[EVENTO_NAME[categoria]] = form.evento;
 
-    // Estado base
+    // Estado base calculado
     data.estado = estadoCalculado(form.evento, form.requiereGrabacion);
-console.log("[NovedadesWizardPro] ENVIAR", {
-  categoria,
-  evento: form.evento,
-  dataPreview: JSON.parse(JSON.stringify(data)),
-});
 
-/* === PATCH: mostrar TODO lo que se envía === */
+    // Refuerzo Intrusión
+    if (form.evento === "Puerta Forzada (Intrusión)") {
+      data.estado = "pendiente";
+      data.requiereGrabacion = "si";
+    }
 
-
-if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
-    // Requiere grabación (solo si NO es PMA)
-    if (form.evento !== "Puerta Mantenida Abierta (PMA)" && form.requiereGrabacion) {
+    // Requiere grabación (no PMA)
+    if (
+      form.evento !== "Puerta Mantenida Abierta (PMA)" &&
+      form.requiereGrabacion
+    ) {
       data.requiereGrabacion = form.requiereGrabacion;
     }
 
+    // Zona / Canal
     if (form.zona) data["zona-otros"] = form.zona;
+
+    // Link Drive + alias
     if (form.linkDrive) {
       const drive = form.linkDrive.trim();
-      data.linkDrive = drive;                        // canónico
-      data["enlace-imagenes-drive"] = drive;         // alias compat
+      if (drive) {
+        data.linkDrive = drive;
+        data["enlace-imagenes-drive"] = drive;
+      }
     }
 
+    // ==== EDIFICIOS ====
     if (categoria === "edificios") {
       if (form.unidad) data["unidad"] = form.unidad;
+
       const eventoTime = eventoTimestampFromLocal(form.fechaHoraEvento);
-      if (!eventoTime) return warn("Seleccioná la fecha y hora del evento.");
+      if (!eventoTime) {
+        warn("Seleccioná la fecha y hora del evento.");
+        return;
+      }
       data.fechaHoraEvento = eventoTime.ts;
       data.fechaHoraEventoLocal = eventoTime.local;
       data.fechaHoraEventoISO = eventoTime.iso;
 
-      // PMA: normalización de campos y reglas
+      // PMA reglas especiales
       if (form.evento === "Puerta Mantenida Abierta (PMA)") {
-        // Forzar reglas de negocio
-        delete data.requiereGrabacion;          // PMA no usa este flag
-        data.estado = "pendiente";              // PMA siempre pendiente al crear
+        delete data.requiereGrabacion;
+        data.estado = "pendiente";
 
         const getExtraSafe = (name) => {
           const v1 = (form.extras?.[name] ?? "").trim();
@@ -1393,25 +1883,27 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
         };
 
         const razon = getExtraSafe("razones-pma");
-        const resp  = getExtraSafe("respuesta-residente");
-        const resol = getExtraSafe("resolucion-evento") || getExtraSafe("resolusion-evento");
+        const resp = getExtraSafe("respuesta-residente");
+        const resol =
+          getExtraSafe("resolucion-evento") ||
+          getExtraSafe("resolusion-evento");
 
-        if (razon) { 
+        if (razon) {
           data["razones-pma"] = razon;
-          data.razonesPma     = razon;        // alias camelCase
+          data.razonesPma = razon;
         }
-        if (resp)  { 
+        if (resp) {
           data["respuesta-residente"] = resp;
-          data.respuestaResidente     = resp; // alias camelCase
+          data.respuestaResidente = resp;
         }
-        if (resol) { 
-          data["resolucion-evento"] = resol;   // correcto
-          data["resolusion-evento"] = resol;   // legacy compat
-          data.resolucionEvento     = resol;   // alias camelCase
+        if (resol) {
+          data["resolucion-evento"] = resol;
+          data["resolusion-evento"] = resol;
+          data.resolucionEvento = resol;
         }
       }
 
-      // Extras del evento (solo los válidos)
+      // Extras edificios
       const extrasDef = (EXTRA_FIELDS.edificios || {})[form.evento] || [];
       extrasDef.forEach((fdef) => {
         let v = form.extras?.[fdef.name];
@@ -1423,6 +1915,7 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
       });
     }
 
+    // ==== TGS ====
     if (categoria === "tgs") {
       const extrasDef = (EXTRA_FIELDS.tgs || {})[form.evento] || [];
       extrasDef.forEach((fdef) => {
@@ -1431,6 +1924,7 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
       });
     }
 
+    // ==== VTV ====
     if (categoria === "vtv") {
       const extrasDef = (EXTRA_FIELDS.vtv || {})[form.evento] || [];
       extrasDef.forEach((fdef) => {
@@ -1439,44 +1933,77 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
       });
     }
 
-    const obsField = "observaciones-" + (categoria === "edificios" ? "edificios" : categoria);
-    if (form.observaciones?.trim()) data[obsField] = form.observaciones.trim();
+    // Observaciones
+    const obsField =
+      "observaciones-" + (categoria === "edificios" ? "edificios" : categoria);
+    if (form.observaciones?.trim()) {
+      data[obsField] = form.observaciones.trim();
+    }
+
+    // Timestamp de envío
     data.fechaHoraEnvio = getArgentinaTimestamp();
 
-    // Opcional: si querés timestamp de edición desde cliente
-    // data.editedAt = getArgentinaTimestamp();
-
-    // Traza previa a guardar
-    console.log("[NovedadesWizardPro] ENVIAR", {
+    // Traza previa sólo consola
+    console.log("[NovedadesWizardPro] PREVIEW payload", {
       categoria,
       evento: form.evento,
       dataPreview: JSON.parse(JSON.stringify(data)),
     });
 
+    // === PREVIEW COMPLETO ANTES DE ESCRIBIR EN FIRESTORE ===
+    const ok = await confirmEnvio({
+      categoria,
+      data,
+      imagenes: form.imagenes,
+    });
+    if (!ok) {
+      console.log(
+        "[NovedadesWizardPro] Envío cancelado por el operador en la vista previa."
+      );
+      return;
+    }
 
-    if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
-  /* === Confirmación previa y manejo de botón === */
-      const btn = document.querySelector(".wiz__actions .btn-primary");
-      const old = btn?.textContent;
-     const ok = await previewEnvio({ categoria, data, imagenes: form.imagenes });
-      if (!ok) {
-        // Usuario canceló, aún no cambiamos el texto del botón
-        return;
-      }
-      if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
+    // Ahora sí: botón "Enviando…" y escritura en Firestore
+    const btn = document.querySelector(".wiz__actions .btn-primary");
+    const old = btn?.textContent;
+    if (btn) {
+      btn.textContent = "Enviando…";
+      btn.disabled = true;
+    }
+
     try {
-      const docRef = await addDoc(collection(db, `novedades/${categoria}/eventos`), data);
+      const docRef = await addDoc(
+        collection(db, `novedades/${categoria}/eventos`),
+        data
+      );
+
       if (form.imagenes?.length) {
         const urls = await subirImagenes(form.imagenes, categoria, docRef.id);
-        if (urls.length) await updateDoc(docRef, { imagenes: urls });
+        if (urls.length) {
+          await updateDoc(docRef, { imagenes: urls });
+        }
       }
 
+      // Aviso especial VTV
       if (categoria === "vtv") {
         const planta = normalizar(data["planta-vtv"]);
-        const evento = normalizar(data["evento-vtv"]);
-        const plantasCrit = ["la plata", "olmos", "lanus", "berisso", "llavallol"];
-        const eventosCrit = ["corte de energia electrica", "evento confirmado"];
-        if (plantasCrit.some((k) => planta?.includes(k)) && eventosCrit.some((ev) => evento?.includes(ev))) {
+        const eventoNorm = normalizar(data["evento-vtv"]);
+        const plantasCrit = [
+          "la plata",
+          "olmos",
+          "lanus",
+          "berisso",
+          "llavallol",
+        ];
+        const eventosCrit = [
+          "corte de energia electrica",
+          "evento confirmado",
+        ];
+
+        if (
+          plantasCrit.some((k) => planta?.includes(k)) &&
+          eventosCrit.some((ev) => eventoNorm?.includes(ev))
+        ) {
           await Swal.fire({
             icon: "warning",
             title: "⚠️ AVISO INMEDIATO AL JEFE DE PLANTA",
@@ -1488,8 +2015,12 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
         }
       }
 
+      // Mensaje final + link a portal de pendientes
       const portalBase = "https://reportesg3t.web.app/portal.html";
-      const urlPend = `${portalBase}?estado=pendiente&categoria=${encodeURIComponent(categoria)}`;
+      const urlPend = `${portalBase}?estado=pendiente&categoria=${encodeURIComponent(
+        categoria
+      )}`;
+
       await Swal.fire({
         icon: "success",
         title: "Enviado",
@@ -1498,11 +2029,14 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
             Ticket <b>${(categoria || "").toUpperCase()}</b> enviado.<br>
             Estado: <b>${(data.estado || "pendiente").toUpperCase()}</b>
           </p>
-          <a href="${urlPend}" target="_blank" rel="noopener" style="display:inline-block;padding:8px 12px;border-radius:6px;background:#2563eb;color:#fff;text-decoration:none;">🔗 Ver pendientes</a>
+          <a href="${urlPend}" target="_blank" rel="noopener"
+             style="display:inline-block;padding:8px 12px;border-radius:6px;background:#2563eb;color:#fff;text-decoration:none;">
+            🔗 Ver pendientes
+          </a>
         `,
       });
 
-      // Reset
+      // Reset del wizard
       setStep(0);
       setCategoria(null);
       setEstado("pendiente");
@@ -1527,9 +2061,14 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
       console.error(e);
       Swal.fire("Error", "Hubo un problema al enviar los datos.", "error");
     } finally {
-      if (btn) { btn.textContent = old || "Enviar ✔"; btn.disabled = false; }
+      if (btn) {
+        btn.textContent = old || "Enviar ✔";
+        btn.disabled = false;
+      }
     }
   };
+
+
 
   const StepsNav = () => {
     const labels = ["Categoría", "Lugar", "Evento", "Detalles", "Resumen"];
@@ -1573,27 +2112,49 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
       </div>
     </section>
   );
-
   const LugarStep = () => (
     <section className="wiz__section" aria-labelledby="st-lugar">
       <h2 className="wiz__h2" id="st-lugar">Datos básicos</h2>
-
+  
       <div className="row g-3">
+        {/* ===== Operador (solo lectura) ===== */}
         <div className="col-12 col-md-6">
           <Label>Operador</Label>
-          <select
-            value={form.operador}
-            onChange={(e) => setForm((f) => ({ ...f, operador: e.target.value }))}
-            required
-            className="inp form-select"
+  
+          {/* Muestra el operador detectado o el estado */}
+          <div className="form-control-plaintext" aria-live="polite">
+            {form.operador ? (
+              <b>{form.operador}</b>
+            ) : operadorStatus === "resolviendo" ? (
+              <em>Resolviendo…</em>
+            ) : (
+              <em>No detectado</em>
+            )}
+          </div>
+  
+          {/* Campo oculto para que viaje en el envío */}
+          <input type="hidden" name="operador" value={form.operador || ""} />
+  
+          {/* Mensaje auxiliar */}
+          <small
+            className={
+              form.operador
+                ? "text-muted"
+                : (operadorStatus === "resolviendo" ? "text-muted" : "text-danger")
+            }
           >
-            <option value="" disabled hidden>Seleccioná un operador…</option>
-            {OPERADORES.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
+            {form.operador
+              ? ""
+              : (operadorStatus === "resolviendo"
+                  ? "Resolviendo sesión… abrí el menú de usuario si no aparece."
+                  : "No se pudo detectar automáticamente.")}
+          </small>
         </div>
-
+  
+        {/* ===== Lugar ===== */}
         <div className="col-12 col-md-6">
           <Label>{LUGAR_LABEL[categoria]}</Label>
+  
           <input
             type="text"
             placeholder="Buscar…"
@@ -1602,6 +2163,7 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
             className="inp inp--search form-control"
             aria-label="Buscar lugar"
           />
+  
           <select
             value={form.lugar}
             onChange={(e) => setForm((f) => ({ ...f, lugar: e.target.value }))}
@@ -1609,32 +2171,35 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
             className="inp form-select mt-2"
           >
             <option value="" disabled hidden>Seleccioná un lugar…</option>
-            {opcionesLugar.map((n) => <option key={n} value={n}>{n}</option>)}
+            {opcionesLugar.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
           </select>
         </div>
       </div>
     </section>
   );
-
+  
+  
   const EventoStep = () => {
     const extrasDef = (EXTRA_FIELDS[categoria] || {})[form.evento] || [];
     const sugeridas = plantillasEvento();
     return (
+    
       <section className="wiz__section" aria-labelledby="st-ev">
-        <h2 className="wiz__h2" id="st-ev">Tipo de evento</h2>
+        <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+          <h2 className="wiz__h2" id="st-ev">Tipo de evento</h2>
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm"
+            onClick={runEventoWizard}
+            disabled={!categoria || !form.lugar}
+          >
+            🧩 Asistente de evento
+          </button>
+        </div>
 
         <div className="wiz__chips" role="group" aria-label="Eventos sugeridos">
-          {(EVENTOS[categoria] || []).slice(0, 6).map((ev) => (
-            <button
-              key={ev}
-              type="button"
-              className={`chip ${form.evento === ev ? "is-on" : ""}`}
-              onClick={() => onSelectEvento(ev)}
-              aria-pressed={form.evento === ev}
-            >
-              {ev}
-            </button>
-          ))}
         </div>
 
         <div className="row g-3 align-items-end">
@@ -1651,35 +2216,43 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
             </select>
             <small className="muted d-block mt-1">Tip: también podés usar <b>Ctrl+Enter</b>.</small>
           </div>
+{/* PMA: no se muestra el control */}
+{form.evento === "Puerta Mantenida Abierta (PMA)" ? null : (
+  form.evento === "Puerta Forzada (Intrusión)" ? (
+    <div className="col-12 col-lg-6">
+      <Label>¿Requiere grabación?</Label>
+      <div className="alert alert-info" role="status">Sí (obligatorio)</div>
+    </div>
+  ) : (
+    <div className="col-12 col-lg-6">
+      <Label>¿Requiere grabación?</Label>
+      <div className="btn-group d-flex" role="group" aria-label="Requiere grabación">
+        <button
+          type="button"
+          className={`btn ${form.requiereGrabacion === "si" ? "btn-primary" : "btn-outline-primary"}`}
+          onClick={() => setForm((f) => ({ ...f, requiereGrabacion: "si" }))}
+        >
+          Sí
+        </button>
+        <button
+          type="button"
+          className={`btn ${form.requiereGrabacion === "no" ? "btn-primary" : "btn-outline-primary"}`}
+          onClick={() => setForm((f) => ({ ...f, requiereGrabacion: "no" }))}
+        >
+          No
+        </button>
+      </div>
+      <small className="muted d-block mt-1">Sí ⇒ <b>Pendiente</b> · No ⇒ <b>Procesado</b></small>
+    </div>
+  )
+)}
 
-          {form.evento && form.evento !== "Puerta Mantenida Abierta (PMA)" && (
-            <div className="col-12 col-lg-6">
-              <Label>¿Requiere grabación?</Label>
-              <div className="btn-group d-flex" role="group" aria-label="Requiere grabación">
-                <button
-                  type="button"
-                  className={`btn ${form.requiereGrabacion === "si" ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={() => setForm((f) => ({ ...f, requiereGrabacion: "si" }))}
-                >
-                  Sí
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${form.requiereGrabacion === "no" ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={() => setForm((f) => ({ ...f, requiereGrabacion: "no" }))}
-                >
-                  No
-                </button>
-              </div>
-              <small className="muted d-block mt-1">Sí ⇒ <b>Pendiente</b> · No ⇒ <b>Procesado</b></small>
-            </div>
-          )}
         </div>
 
         {categoria === "edificios" && (
           <div className="row g-3 mt-1">
             <div className="col-12 col-md-6">
-              <Label>Fecha y hora reales del evento</Label>
+              <Label>Fecha y hora del evento</Label>
               <input
                 type="datetime-local"
                 name="fechaHoraEvento"
@@ -1835,76 +2408,108 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
 
           <div className="row g-3 mt-2 op-onecol">
             <div className="col-12 col-lg-8">
-              <Label>Observaciones</Label>
-              <textarea
-                ref={taRef}
-                className="inp form-control op-textarea"
-                placeholder="Agregá un resumen claro y profesional…"
-                value={form.observaciones}
-                onInput={(e) => autoGrow(e.target)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v.trim() !== (lastAutoRef.current || "").trim()) {
-                    lastAutoRef.current = "";
-                  }
-                  setForm((f) => ({ ...f, observaciones: v }));
-                }}
-                rows={10}
-                spellCheck
-                autoCorrect="on"
-                autoCapitalize="sentences"
-              />
+            <Label>Observaciones</Label>
 
-              <div className="d-flex flex-wrap gap-2 mt-3 op-quickbar">
-                <button type="button" className="btn btn-outline-secondary btn-sm"
-                        onClick={() => appendObservacion("Se informa a contacto primario y se documenta el caso.")}>
-                  Insertar: informar contacto
-                </button>
-                <button type="button" className="btn btn-outline-secondary btn-sm"
-                        onClick={() => appendObservacion("Se adjuntan imágenes como respaldo de la intervención.")}>
-                  Insertar: adjunto imágenes
-                </button>
-                <button type="button" className="btn btn-outline-secondary btn-sm"
-                        onClick={() => appendObservacion("Se realiza seguimiento hasta normalización.")}>
-                  Insertar: seguimiento
-                </button>
-                <button type="button" className="btn btn-outline-primary btn-sm"
-                        onClick={() => setEditorFull(true)}>
-                  Ampliar editor ⤢
-                </button>
-              </div>
+<div className="card shadow-sm border-0 p-3 p-md-4" style={{ borderRadius: 16 }}>
+  <div
+    className="form-control"
+    role="button"
+    tabIndex={0}
+    onClick={openObsEditorSwal}
+    onKeyDown={(e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openObsEditorSwal();
+      }
+    }}
+    style={{
+      minHeight: 160,
+      maxHeight: 260,
+      overflow: "auto",
+      whiteSpace: "pre-wrap",
+      cursor: "text",
+      background: "linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%)",
+      borderRadius: 14,
+      border: "1px solid #e5e7eb",
+      lineHeight: 1.4,
+      padding: "14px 14px",
+      boxShadow: "inset 0 0 0 1px rgba(255,255,255,.35)",
+    }}
+    aria-label="Vista previa de Observaciones (click para editar)"
+    title="Click para editar"
+  >
+    {form.observaciones?.trim() ? (
+      form.observaciones
+    ) : (
+      <span style={{ color: "#64748b" }}>
+        Click para escribir observaciones… <span style={{ opacity: 0.8 }}>(se abre el editor)</span>
+      </span>
+    )}
+  </div>
+
+  <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3">
+    <small className="text-muted">
+      {form.observaciones?.length ? (
+        <>Caracteres: <b>{form.observaciones.length}</b></>
+      ) : (
+        <>Sin texto</>
+      )}
+    </small>
+
+    <div className="d-flex flex-wrap gap-2">
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        onClick={openObsEditorSwal}
+      >
+        ✍️ Editar
+      </button>
+
+      <button
+        type="button"
+        className="btn btn-outline-secondary btn-sm"
+        onClick={() => {
+          const text = makeAutoObs({ categoria, form });
+          lastAutoRef.current = text;
+          setAutoObsOn(true);
+          setForm((f) => ({ ...f, observaciones: text }));
+        }}
+      >
+        ♻️ Regenerar
+      </button>
+
+      <button
+        type="button"
+        className="btn btn-outline-danger btn-sm"
+        onClick={() => {
+          lastAutoRef.current = "";
+          setAutoObsOn(false);
+          setForm((f) => ({ ...f, observaciones: "" }));
+        }}
+      >
+        🧹 Limpiar
+      </button>
+    </div>
+  </div>
+
+  <div className="mt-2">
+    <small className="text-muted">
+      Nota: al editar manualmente se desactiva el autocompletado para que no te lo pise.
+    </small>
+  </div>
+</div>
+
+
+
+
+
+              
             </div>
 
-            <div className="col-12 col-lg-4">
-              <div className="card op-preview">
-                <div className="card-header">Previsualización</div>
-                <div className="card-body">
-                  <div className="preview-box">
-                    {form.observaciones?.trim()
-                      ? form.observaciones
-                      : "Lo que escribas/selecciones aparecerá aquí para validar tono y claridad."}
-                  </div>
-                  <div className="d-grid gap-2 mt-3">
-                    <button
-                      type="button"
-                      className="btn btn-light"
-                      onClick={() => {
-                        setForm((f) => ({ ...f, observaciones: "" }));
-                        lastAutoRef.current = "";
-                      }}
-                    >
-                      Limpiar observaciones
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <small className="muted d-block mt-2">
-                Consejo: mantené frases cortas y accionables. Evitá jerga interna.
-              </small>
+          
             </div>
           </div>
-        </div>
-
+      
         {editorFull && (
           <div className="op-editor--full" role="dialog" aria-modal="true">
             <div className="op-toolbar">
@@ -2028,38 +2633,12 @@ if (btn) { btn.textContent = "Enviando…"; btn.disabled = true; }
     };
   }, []);
 
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.ctrlKey) {
-        const k = Number(e.key);
-        if (k >= 1 && k <= 6) {
-          const lista = plantillasEvento();
-          const item = lista[k - 1];
-          if (item) {
-            e.preventDefault();
-            appendObservacion(item);
-          }
-        }
-      }
-      if (e.ctrlKey && e.key === "Enter") {
-        if (step === 2 && categoria) {
-          e.preventDefault();
-          if (!wizardRunning.current) {
-            wizardRunning.current = true;
-            (async () => {
-              try { await runEventoWizard(); }
-              finally { wizardRunning.current = false; }
-            })();
-          }
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [step, categoria, runEventoWizard]);
+ 
 
-  return (
-    <div className={`wiz ${isMobile ? "is-mobile" : ""}`} onKeyDown={handleKeyDown}>
+
+    return (
+      <div className={`wiz ${isMobile ? "is-mobile" : ""}`}>
+  
       <header className="wiz__header" role="banner">
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
           <h1 className="m-0">Novedades · Centro de Monitoreo</h1>

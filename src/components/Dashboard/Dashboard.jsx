@@ -25,6 +25,9 @@ import { db } from "../../services/firebase";
 import "../../styles/dashboard.css";
 import NotificationsBridge from "../common/NotificationsBridge.jsx"; 
 
+
+
+
 export default function Dashboard() {
   const [eventos, setEventos] = useState([]);
   const [filtros, setFiltros] = useState({
