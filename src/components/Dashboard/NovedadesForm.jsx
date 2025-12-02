@@ -23,6 +23,8 @@ import {
 
 // auth
 import { getAuth, onAuthStateChanged } from "firebase/auth"; // ← NUEVO
+import AIAgentChat from "../../components/AIAgentChat.jsx";
+import "../../styles/ai-agent-chat.css";
 
 import {
   getStorage,
@@ -1028,6 +1030,48 @@ const [sopCheck, setSopCheck] = useState({});
 
   const [autoObsOn, setAutoObsOn] = useState(true);
   const lastAutoRef = useRef("");
+  // ===== Integración Chat IA: aplicar texto en Observaciones =====
+const applyAITextToObservaciones = useCallback((text, { mode } = { mode: "replace" }) => {
+  const t = (text || "").toString().trim();
+  if (!t) return;
+
+  // al aplicar IA, evitamos que el autocompletado lo pise
+  lastAutoRef.current = "";
+  setAutoObsOn(false);
+
+  setForm((f) => {
+    const cur = (f.observaciones || "").toString();
+    const next =
+      mode === "append"
+        ? (cur ? (cur + "\n\n" + t) : t)
+        : t;
+    return { ...f, observaciones: next };
+  });
+}, [setForm, setAutoObsOn]);
+const applyAIText = useCallback((text, { mode }) => {
+  const t = String(text || "").trim();
+  if (!t) return;
+
+  setForm((f) => {
+    const cur = (f.observaciones || "").toString();
+    const next = mode === "append" ? (cur ? (cur + "\n\n" + t) : t) : t;
+    return { ...f, observaciones: next };
+  });
+}, [setForm]);
+
+const disableAutoObs = useCallback(() => {
+  lastAutoRef.current = "";
+  setAutoObsOn(false);
+}, [setAutoObsOn]);
+
+
+
+
+const disableAutoObsFromAI = useCallback(() => {
+  lastAutoRef.current = "";
+  setAutoObsOn(false);
+}, [setAutoObsOn]);
+
 // === Editor Observaciones en SweetAlert (anti-atajos + focus real) ===
 const editingObsRef = useRef(false);
 
@@ -2713,8 +2757,18 @@ useEffect(() => {
    alertas={alertas}
    onAfterOpenInfo={markAllRead}
    filtrarPorCategoria={categoria || null}
-   mostrarBotonHistorico={true}   // ⏱ botón flotante 15m
+      // ⏱ botón flotante 15m
  />
+<AIAgentChat
+  categoria={categoria}
+  form={form}
+  sop={currentSOP}
+  title="Agente IA (Gemini)"
+  modelName="gemini-2.5-flash"
+  onDisableAuto={disableAutoObs}
+  onApplyText={applyAIText}
+/>
+
 
     </div>
   );

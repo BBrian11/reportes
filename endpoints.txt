@@ -1,0 +1,4 @@
+/api/auth/
+/api/common/NgForOf
+/api/forms/
+/api/staticmap
