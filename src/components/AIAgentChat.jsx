@@ -51,6 +51,7 @@ export default function AIAgentChat({
     includeSheetMeta: true,
     includeGeneratedStamp: false,
     includeVisual: true,
+    includeFilteredTable: true, // NUEVO: agrega la tabla filtrada al PDF
   });
 
   const [msgs, setMsgs] = useState(() => {
@@ -311,6 +312,116 @@ export default function AIAgentChat({
       notes: sheet.notes,
       processedAt: sheet.processedAt,
     };
+  };
+
+  // ===== Tabla filtrada (eventos visibles) para PDF =====
+  const getFilteredEventosForPdf = () => {
+    const arr = Array.isArray(window.__FILTERED_EVENTOS__) ? window.__FILTERED_EVENTOS__ : [];
+    return arr;
+  };
+
+  const safeUrl = (u) => {
+    if (!u || typeof u !== "string") return null;
+    let s = u.trim();
+    if (!s) return null;
+  
+    // Si viene sin protocolo, probamos con https:// (ej: drive.google.com/..., www..., etc.)
+    if (!/^https?:\/\//i.test(s)) {
+      const looksLikeDomain = /^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}(\/|$|\?|#)/i.test(s);
+      if (looksLikeDomain) s = `https://${s}`;
+    }
+  
+    try {
+      const url = new URL(s);
+      return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+    } catch {
+      return null;
+    }
+  };
+  
+
+  const firstUrlInText = (txt) => {
+    if (!txt) return "";
+    const m = String(txt).match(/https?:\/\/[^\s)]+/i);
+    return m ? safeUrl(m[0]) || "" : "";
+  };
+
+  const formatDateAny = (row) => {
+    const candidates = [
+      row?.fechaObj,
+      row?.fecha,
+      row?.fechaHoraEnvio,
+      row?.fechaHoraEvento,
+      row?.timestamp,
+      row?.ts,
+    ];
+
+    for (const v of candidates) {
+      if (!v) continue;
+
+      // Firestore Timestamp support
+      if (typeof v?.toDate === "function") {
+        const d = v.toDate();
+        if (d instanceof Date && !isNaN(d)) {
+          return d.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+        }
+      }
+
+      const d = v instanceof Date ? v : new Date(v);
+      if (d instanceof Date && !isNaN(d)) {
+        return d.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+      }
+    }
+    return "";
+  };
+
+  const isEdificioLike = (row) => {
+    const cl = String(row?.cliente || "").toUpperCase();
+    if (cl.includes("EDIFICIO")) return true;
+    if (row?.edificio) return true;
+    return String(row?.cliente || "").toLowerCase() === "edificios";
+  };
+
+  const normalizeEventoRowForPdf = (e) => {
+    const observacion =
+      e?.observacion ??
+      e?.observaciones ??
+      e?.["observaciones-edificios"] ??
+      e?.["observaciones_edificios"] ??
+      "";
+
+    const linkField = e?.linkDrive || e?.link || e?.["link-drive"] || e?.["link_drive"] || "";
+    const linkDrive = safeUrl(linkField) || firstUrlInText(observacion) || "";
+
+    return {
+      cliente: String(e?.cliente ?? ""),
+      evento: String(e?.evento ?? e?.["evento-edificio"] ?? e?.tipo ?? ""),
+      ubicacion: String(e?.ubicacion ?? e?.edificio ?? e?.lugar ?? ""),
+      fecha: formatDateAny(e),
+      observacion: String(observacion ?? ""),
+      linkDrive: String(linkDrive ?? ""),
+      // extras edificios (si existen)
+      razones: String(e?.["razones-pma"] ?? e?.["razones_pma"] ?? e?.razones ?? ""),
+      resolucion: String(e?.["resolucion-evento"] ?? e?.resolucion ?? e?.resolucionEvento ?? ""),
+      respuesta: String(e?.["respuesta-residente"] ?? e?.respuesta ?? ""),
+    };
+  };
+
+  const buildFilteredTableData = (eventos) => {
+    const rows = (Array.isArray(eventos) ? eventos : []).map(normalizeEventoRowForPdf);
+    const onlyEdificio = rows.length > 0 && (Array.isArray(eventos) ? eventos.every(isEdificioLike) : false);
+
+    const head = onlyEdificio
+      ? ["Cliente", "Evento", "Ubicación", "Fecha", "Observación", "Link", "Razones", "Resolución", "Respuesta"]
+      : ["Cliente", "Evento", "Ubicación", "Fecha", "Observación", "Link"];
+
+    const body = rows.map((r) =>
+      onlyEdificio
+        ? [r.cliente, r.evento, r.ubicacion, r.fecha, r.observacion, r.linkDrive, r.razones, r.resolucion, r.respuesta]
+        : [r.cliente, r.evento, r.ubicacion, r.fecha, r.observacion, r.linkDrive]
+    );
+
+    return { head, body, onlyEdificio, total: rows.length };
   };
 
   const safeString = (v) => {
@@ -835,180 +946,443 @@ export default function AIAgentChat({
     doc.addImage(imgData, "PNG", x, y, w, h, undefined, "FAST");
     return y + h;
   };
-
+ 
   const drawHeaderLine = (doc, x1, x2, y) => {
     doc.setDrawColor(220, 225, 235);
     doc.setLineWidth(0.6);
     doc.line(x1, y, x2, y);
   };
+// ===== PDF UI (look moderno) =====
+const PDF_THEME = {
+  ink: [20, 26, 38],
+  sub: [88, 98, 120],
+  line: [223, 228, 238],
+  cardFill: [247, 249, 252],
+  brand: [15, 120, 190],   // azul moderno
+  accent: [16, 185, 129],  // teal moderno
+};
 
-  const downloadPdf = async (overrideText = null, overrideOptions = null) => {
-    try {
-      const options = overrideOptions || pdfOptions;
+const safeRoundedRect = (doc, x, y, w, h, r = 10, style = "F") => {
+  try {
+    if (typeof doc.roundedRect === "function") {
+      doc.roundedRect(x, y, w, h, r, r, style);
+      return;
+    }
+  } catch {}
+  // fallback
+  doc.rect(x, y, w, h, style);
+};
 
-      const baseText = overrideText != null ? String(overrideText) : getLastAssistantText();
-      const text = normalizeAssistantText(baseText).trim();
-      if (!text) {
-        setErr("No hay contenido disponible para exportar a PDF.");
-        return;
-      }
+const drawPageHeader = (doc, { title, left, right, topBarY = 0, topBarH = 56, isCover = false }) => {
+  const pageW = doc.internal.pageSize.getWidth();
 
-      const mod = await import("jspdf");
-      const jsPDF = mod.jsPDF || mod.default?.jsPDF || mod.default;
-      if (!jsPDF) throw new Error("No se pudo cargar jsPDF. Verifique la instalación.");
+  // Banda superior FULL WIDTH (sin border radius)
+  doc.setFillColor(...PDF_THEME.ink);
+  doc.rect(0, topBarY, pageW, topBarH, "F");
 
-      const doc = new jsPDF({ unit: "pt", format: "a4" });
+  // Línea acento (sin border radius). Podés dejarla corta o hacerla full width:
+  // Opción A (corta, prolija):
+  doc.setFillColor(...PDF_THEME.accent);
+  doc.rect(left, topBarY + topBarH - 6, 120, 6, "F");
 
-      const left = 44;
-      const top = 56;
-      const bottom = 48;
+  // Opción B (full width):
+  // doc.setFillColor(...PDF_THEME.accent);
+  // doc.rect(0, topBarY + topBarH - 6, pageW, 6, "F");
 
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const maxWidth = pageWidth - left * 2;
+  // Título (alineado al margen de contenido)
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(isCover ? 16 : 11);
+  doc.text(String(title || "Reporte").toUpperCase(), left, topBarY + (isCover ? 34 : 33));
 
-      let y = top;
+  // Fecha (alineada al margen de contenido)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(230, 235, 245);
+  const dt = `Generado: ${new Date().toLocaleString("es-AR")}`;
+  const w = doc.getTextWidth(dt);
+  doc.text(dt, right - w, topBarY + 33);
+};
 
-      const newPage = () => {
-        doc.addPage();
-        y = top;
-      };
 
-      const ensureSpace = (needed) => {
-        if (y + needed > pageHeight - bottom) newPage();
-      };
+const drawPageFooter = (doc, { left, right, pageHeight, bottom, pageNumber, pageCount }) => {
+  const y = pageHeight - bottom + 18;
 
-      // Título
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(15);
-      doc.setTextColor(25, 30, 45);
-      doc.text(String(title || "Reporte").toUpperCase(), left, y);
-      y += 14;
+  // línea fina
+  doc.setDrawColor(...PDF_THEME.line);
+  doc.setLineWidth(0.8);
+  doc.line(left, pageHeight - bottom + 8, right, pageHeight - bottom + 8);
 
-      // Fecha
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...PDF_THEME.sub);
+
+  const p = `Página ${pageNumber} de ${pageCount}`;
+  doc.text(p, left, y);
+
+  // micro marca a la derecha
+  const r = "Monitoreo y Gestión · Reporte Operativo";
+  const wr = doc.getTextWidth(r);
+  doc.text(r, right - wr, y);
+};
+
+const drawSectionTitle = (doc, { label, left, y, maxWidth }) => {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...PDF_THEME.ink);
+
+  // chip de sección
+  doc.setFillColor(238, 242, 248);
+  const padX = 10;
+  const padY = 7;
+  const txtW = doc.getTextWidth(label) + padX * 2;
+  safeRoundedRect(doc, left, y - 12, Math.min(txtW, maxWidth), 22, 11, "F");
+
+  doc.text(label, left + padX, y + 3);
+  return y + 18;
+};
+
+const drawInfoCard = (doc, { left, y, w, lines }) => {
+  const lineH = 13;
+  const pad = 12;
+  const textY = y + pad + 10;
+  const h = pad * 2 + lines.length * lineH + 6;
+
+  doc.setFillColor(...PDF_THEME.cardFill);
+  doc.setDrawColor(...PDF_THEME.line);
+  doc.setLineWidth(1);
+  safeRoundedRect(doc, left, y, w, h, 14, "FD");
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(...PDF_THEME.ink);
+
+  let yy = textY;
+  for (const ln of lines) {
+    doc.text(String(ln || ""), left + pad, yy);
+    yy += lineH;
+  }
+
+  return y + h;
+};
+
+const drawDivider = (doc, { left, right, y }) => {
+  doc.setDrawColor(...PDF_THEME.line);
+  doc.setLineWidth(0.8);
+  doc.line(left, y, right, y);
+};
+
+const downloadPdf = async (overrideText = null, overrideOptions = null) => {
+  try {
+    const options = overrideOptions || pdfOptions;
+
+    const baseText = overrideText != null ? String(overrideText) : getLastAssistantText();
+    const text = normalizeAssistantText(baseText).trim();
+    if (!text) {
+      setErr("No hay contenido disponible para exportar a PDF.");
+      return;
+    }
+
+    const mod = await import("jspdf");
+    const jsPDF = mod.jsPDF || mod.default?.jsPDF || mod.default;
+    if (!jsPDF) throw new Error("No se pudo cargar jsPDF. Verifique la instalación.");
+
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+    // Layout (más aire para header/footer)
+    const left = 44;
+    const right = doc.internal.pageSize.getWidth() - 44;
+    const top = 86;       // deja espacio para header moderno
+    const bottom = 56;    // deja espacio para footer
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const maxWidth = (right - left);
+
+    let y = top;
+
+    const newPage = (isCover = false) => {
+      doc.addPage();
+      // Header en cada página
+      drawPageHeader(doc, { title, left, right, isCover });
+      y = top;
+    };
+
+    const ensureSpace = (needed) => {
+      if (y + needed > pageHeight - bottom) newPage(false);
+    };
+
+    // ===== Header (portada) página 1 =====
+    drawPageHeader(doc, { title, left, right, isCover: true });
+    y = top;
+
+    // Subtítulo / Contexto rápido arriba (look “pro”)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...PDF_THEME.sub);
+
+    const subtitleParts = [];
+ 
+    if (context?.lugar) subtitleParts.push(`Lugar: ${context.lugar}`);
+    if (context?.evento) subtitleParts.push(`Evento: ${context.evento}`);
+
+    if (subtitleParts.length) {
+      ensureSpace(22);
+      doc.text(subtitleParts.join("   ·   "), left, y);
+      y += 18;
+      drawDivider(doc, { left, right, y });
+      y += 16;
+    } else {
+      y += 10;
+    }
+
+    // ===== Contexto (opcional) en tarjeta =====
+    if (options.includeContext) {
+      const cardLines = [
+        `Categoría: ${context.categoria || "-"}`,
+        `Lugar: ${context.lugar || "-"}`,
+        `Evento: ${context.evento || "-"}`,
+      ];
+
+      ensureSpace(120);
+      y = drawSectionTitle(doc, { label: "Contexto", left, y, maxWidth });
+      const endY = drawInfoCard(doc, { left, y, w: maxWidth, lines: cardLines });
+      y = endY + 16;
+    }
+
+    // ===== Planilla (opcional) en tarjeta =====
+    if (options.includeSheetMeta && sheetDigest) {
+      const cardLines = [
+        `Archivo: ${sheetDigest.fileName || "-"}`,
+        `Hoja: ${sheetDigest.activeSheet || "-"}`,
+        `Filas totales: ${sheetDigest.totalRows ?? "-"}`,
+        `Filas analizadas: ${sheetDigest.processedRows ?? "-"}`,
+        `Columnas: ${(sheetDigest.columns || []).length}`,
+      ];
+
+      ensureSpace(150);
+      y = drawSectionTitle(doc, { label: "Planilla", left, y, maxWidth });
+      const endY = drawInfoCard(doc, { left, y, w: maxWidth, lines: cardLines });
+      y = endY + 16;
+    }
+
+    // ===== Informe =====
+    ensureSpace(40);
+    y = drawSectionTitle(doc, { label: "Informe", left, y, maxWidth });
+
+    if (options.includeGeneratedStamp) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9.5);
-      doc.setTextColor(80, 90, 110);
-      doc.text(`Generado: ${new Date().toLocaleString("es-AR")}`, left, y);
+      doc.setTextColor(...PDF_THEME.sub);
+      doc.text("Contenido generado por el asistente según el contexto y datos consultados.", left, y);
+      y += 14;
+    }
 
-      drawHeaderLine(doc, left, pageWidth - left, y + 10);
-      y += 26;
+    // Texto principal (mejor espaciado por párrafos)
+    doc.setTextColor(...PDF_THEME.ink);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
 
-      // Contexto (opcional)
-      if (options.includeContext) {
-        doc.setTextColor(35, 40, 55);
-        doc.setFontSize(10);
-        doc.text(`Categoría: ${context.categoria || "-"}`, left, y);
-        y += 14;
-        doc.text(`Lugar: ${context.lugar || "-"}`, left, y);
-        y += 14;
-        doc.text(`Evento: ${context.evento || "-"}`, left, y);
-        y += 18;
-      }
+    const paragraphs = String(text).split(/\n{2,}/g).map((p) => p.trim()).filter(Boolean);
+    const lineHeight = 14;
 
-      // Meta planilla (opcional)
-      if (options.includeSheetMeta && sheetDigest) {
-        ensureSpace(70);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10.5);
-        doc.setTextColor(25, 30, 45);
-        doc.text("Planilla", left, y);
-        y += 12;
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9.5);
-        doc.setTextColor(35, 40, 55);
-        doc.text(`Archivo: ${sheetDigest.fileName || "-"}`, left, y);
-        y += 12;
-        doc.text(`Hoja: ${sheetDigest.activeSheet || "-"}`, left, y);
-        y += 12;
-        doc.text(`Filas totales: ${sheetDigest.totalRows ?? "-"}`, left, y);
-        y += 12;
-        doc.text(`Filas analizadas: ${sheetDigest.processedRows ?? "-"}`, left, y);
-        y += 12;
-        doc.text(`Columnas: ${(sheetDigest.columns || []).length}`, left, y);
-        y += 10;
-        drawHeaderLine(doc, left, pageWidth - left, y);
-        y += 16;
-      }
-
-      // Encabezado sección Informe
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(25, 30, 45);
-
-      ensureSpace(18);
-      doc.text("Informe", left, y);
-      y += 10;
-
-      if (options.includeGeneratedStamp) {
-        doc.setTextColor(110, 120, 140);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9.5);
-        doc.text("Contenido generado por el asistente según el contexto y datos consultados.", left, y);
-        y += 14;
-      }
-
-      drawHeaderLine(doc, left, pageWidth - left, y);
-      y += 18;
-
-      // Texto principal
-      doc.setTextColor(35, 40, 55);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-
-      const lines = doc.splitTextToSize(text, maxWidth);
-      const lineHeight = 13;
-
+    for (const p of paragraphs) {
+      const lines = doc.splitTextToSize(p, maxWidth);
       for (const line of lines) {
-        if (y + lineHeight > pageHeight - bottom) newPage();
+        if (y + lineHeight > pageHeight - bottom) newPage(false);
         doc.text(line, left, y);
         y += lineHeight;
       }
+      y += 6; // espacio entre párrafos
+    }
 
-      // Capturas (opcional)
-      if (isDash && options.includeVisual) {
-        const targets = DASH_CAPTURE_IDS.map((id) => document.getElementById(id)).filter((n) => isNodeVisible(n));
-        if (targets.length) {
+    // ===== Capturas (opcional) =====
+    if (isDash && options.includeVisual) {
+      const targets = DASH_CAPTURE_IDS.map((id) => document.getElementById(id)).filter((n) => isNodeVisible(n));
+      if (targets.length) {
+        y += 6;
+        ensureSpace(50);
+        y = drawSectionTitle(doc, { label: "Resumen visual", left, y, maxWidth });
+
+        for (const node of targets) {
+          let imgData = null;
+          try {
+            imgData = await captureNodePng(node);
+          } catch (e) {
+            console.warn("[AIAgentChat] No se pudo capturar un gráfico:", e);
+            continue;
+          }
+
+          const yEnd = await addImageFitted(doc, imgData, {
+            left,
+            y,
+            maxWidth,
+            top,
+            bottom,
+            pageHeight,
+          });
+          y = yEnd + 18;
+        }
+      }
+    }
+
+    // ===== Tabla filtrada (opcional) =====
+    if (options.includeFilteredTable) {
+      const filteredEventos = getFilteredEventosForPdf();
+      const { head, body, total } = buildFilteredTableData(filteredEventos);
+
+      if (!total) {
+        y += 8;
+        ensureSpace(60);
+        y = drawSectionTitle(doc, { label: "Tabla filtrada", left, y, maxWidth });
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10.5);
+        doc.setTextColor(...PDF_THEME.ink);
+        doc.text("Sin registros filtrados para imprimir.", left, y);
+        y += 14;
+      } else {
+        let autoTableFn = null;
+        try {
+          const atMod = await import("jspdf-autotable");
+          autoTableFn = atMod?.default || atMod?.autoTable || atMod;
+        } catch (e) {
+          autoTableFn = null;
+        }
+
+        y += 8;
+        ensureSpace(70);
+        y = drawSectionTitle(doc, { label: `Tabla filtrada (${total} filas)`, left, y, maxWidth });
+
+        const MAX_ROWS = 300;
+        const clipped = body.slice(0, MAX_ROWS);
+        const clippedNote = total > MAX_ROWS ? `Filas incluidas: ${MAX_ROWS} de ${total}.` : "";
+
+        if (autoTableFn) {
+          const startY = y;
+          const LINK_COL = Math.max(0, head.indexOf("Link"));
+
+          autoTableFn(doc, {
+            head: [head],
+            body: clipped,
+            startY,
+            margin: { left, right: pageWidth - right },
+
+            // Look pro
+            styles: {
+              fontSize: 8,
+              cellPadding: 3,
+              overflow: "linebreak",
+              textColor: PDF_THEME.ink,
+              lineColor: PDF_THEME.line,
+              lineWidth: 0.7,
+            },
+            headStyles: {
+              fillColor: PDF_THEME.ink,
+              textColor: [255, 255, 255],
+              fontStyle: "bold",
+              fontSize: 8.5,
+            },
+            alternateRowStyles: { fillColor: [250, 251, 253] },
+
+            columnStyles: {
+              0: { cellWidth: 62 }, // Cliente
+              3: { cellWidth: 72 }, // Fecha
+              5: { cellWidth: 92 }, // Link
+            },
+
+            didParseCell: (data) => {
+              if (data.section !== "body") return;
+              if (data.column.index !== LINK_COL) return;
+
+              const u = safeUrl(String(data.cell.raw || ""));
+              if (!u) return;
+
+              data.cell.styles.textColor = PDF_THEME.brand; // azul link
+              data.cell.styles.fontStyle = "normal";
+            },
+
+            didDrawCell: (data) => {
+              if (data.section !== "body") return;
+              if (data.column.index !== LINK_COL) return;
+
+              const u = safeUrl(String(data.cell.raw || ""));
+              if (!u) return;
+
+              doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: u });
+            },
+          });
+
+          const finalY = doc.lastAutoTable?.finalY;
+          y = typeof finalY === "number" ? finalY + 14 : y + 14;
+
+          if (clippedNote) {
+            ensureSpace(16);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9.5);
+            doc.setTextColor(...PDF_THEME.sub);
+            doc.text(clippedNote, left, y);
+            y += 14;
+          }
+        } else {
+          // Fallback texto
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(10);
+          doc.setTextColor(...PDF_THEME.sub);
+          doc.text("Sugerencia: instale jspdf-autotable para imprimir esta tabla con formato.", left, y);
           y += 14;
-          ensureSpace(44);
 
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(11);
-          doc.setTextColor(25, 30, 45);
-          doc.text("Resumen visual", left, y);
-          y += 12;
+          doc.setFontSize(9.5);
+          doc.setTextColor(...PDF_THEME.ink);
 
-          drawHeaderLine(doc, left, pageWidth - left, y);
-          y += 16;
+          const toLine = (arr) => arr.map((x) => String(x || "").replace(/\s+/g, " ").trim()).join(" | ");
+          const linesTxt = [toLine(head), ...clipped.map(toLine)];
 
-          for (const node of targets) {
-            let imgData = null;
-            try {
-              imgData = await captureNodePng(node);
-            } catch (e) {
-              console.warn("[AIAgentChat] No se pudo capturar un gráfico:", e);
-              continue;
+          for (const line of linesTxt) {
+            const chunks = doc.splitTextToSize(line, maxWidth);
+            for (const ch of chunks) {
+              if (y + 12 > pageHeight - bottom) newPage(false);
+              doc.text(ch, left, y);
+              y += 12;
             }
+          }
 
-            const yEnd = await addImageFitted(doc, imgData, { left, y, maxWidth, top, bottom, pageHeight });
-            y = yEnd + 18;
+          if (clippedNote) {
+            if (y + 14 > pageHeight - bottom) newPage(false);
+            doc.setFontSize(9.5);
+            doc.setTextColor(...PDF_THEME.sub);
+            doc.text(clippedNote, left, y);
+            y += 14;
           }
         }
       }
-
-      const safeName = `${(title || "reporte").toLowerCase().replace(/\s+/g, "_")}_${new Date()
-        .toISOString()
-        .slice(0, 10)}.pdf`;
-
-      doc.save(safeName);
-      setErr("");
-    } catch (e) {
-      console.error("[AIAgentChat] PDF error:", e);
-      setErr(String(e?.message || e));
     }
-  };
 
+    // ===== Footer paginado + Header en páginas agregadas por autTable =====
+    const pageCount = doc.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+
+      // Asegura header en todas (autoTable agrega páginas sin pasar por newPage)
+      drawPageHeader(doc, { title, left, right, isCover: p === 1 });
+
+      // Footer
+      drawPageFooter(doc, { left, right, pageHeight, bottom, pageNumber: p, pageCount });
+    }
+
+    const safeName = `${(title || "reporte").toLowerCase().replace(/\s+/g, "_")}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.pdf`;
+
+    doc.save(safeName);
+    setErr("");
+  } catch (e) {
+    console.error("[AIAgentChat] PDF error:", e);
+    setErr(String(e?.message || e));
+  }
+};
+
+  
   const send = useCallback(
     async (text) => {
       const t = String(text || "").trim();
@@ -1568,6 +1942,15 @@ export default function AIAgentChat({
                     onChange={(e) => setPdfOptions((p) => ({ ...p, includeVisual: e.target.checked }))}
                   />
                   Incluir resumen visual (capturas del dashboard)
+                </label>
+
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={!!pdfOptions.includeFilteredTable}
+                    onChange={(e) => setPdfOptions((p) => ({ ...p, includeFilteredTable: e.target.checked }))}
+                  />
+                  Incluir tabla filtrada (eventos visibles)
                 </label>
               </div>
 

@@ -620,7 +620,7 @@ const resolveExtraContext = useCallback(async (userText, ctxFromAgent) => {
   }
 
   const coverage = {
-    fuente: "Firestore (getDocs por colecciones de novedades)",
+    fuente: "Centro de Monitoreo",
     clienteFiltro: filtros.cliente || "Todos",
     rangoSolicitado: { desde: minDate.toISOString(), hasta: maxDate.toISOString() },
     totalEventos: total,
@@ -786,7 +786,7 @@ useEffect(() => {
 
         
               <AIAgentChat
-  title="IA Dashboard"
+  title="Reportes de incidencias"
   categoria="Dashboard"
   form={{
     lugar: filtros?.ubicacion || filtros?.grupo || "",
