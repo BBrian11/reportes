@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   FaBuilding,
   FaTools,
@@ -7,7 +8,9 @@ import {
   FaTh,
   FaChevronDown,
   FaChevronUp,
+  FaUserClock,
 } from "react-icons/fa";
+
 import "../../styles/sidebar.css";
 
 /* ======== Constantes de fallback ======== */

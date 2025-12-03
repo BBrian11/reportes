@@ -805,18 +805,9 @@ export default function EventsTable({
         {/* Toolbar */}
         <div className="table-toolbar">
           <div className="toolbar-group">
-            <label className="switch">
-              <input type="checkbox" checked={dense} onChange={(e) => setDense(e.target.checked)} />
-              <span>Denso</span>
-            </label>
-            <label className="switch">
-              <input type="checkbox" checked={wrapCells} onChange={(e) => setWrapCells(e.target.checked)} />
-              <span>Multilínea</span>
-            </label>
-            <label className="switch">
-              <input type="checkbox" checked={freezeFirst} onChange={(e) => setFreezeFirst(e.target.checked)} />
-              <span>Fijar 1ª columna</span>
-            </label>
+           
+            
+            
             <button className="toolbar-btn" onClick={toggleFullscreen}>
               {isFull ? "Salir pantalla completa" : "Pantalla completa"}
             </button>

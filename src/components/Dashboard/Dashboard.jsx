@@ -20,8 +20,7 @@ import AnaliticaDetalladaPMA from "./AnaliticaDetalladaPMA.jsx";
 import NotificationBubbles from "./NotificationBubbles.jsx";
 import useNotifications from "./hooks/useNotifications.js";
 import { Link } from "react-router-dom";
-import { FaBars, FaTasks, FaWpforms } from "react-icons/fa";
-
+import { FaBars, FaTasks, FaWpforms, FaUserClock } from "react-icons/fa";
 import { collection, onSnapshot, query, limit, orderBy, getDocs, startAfter } from "firebase/firestore";
 
 import { db } from "../../services/firebase";
@@ -699,25 +698,30 @@ useEffect(() => {
     <div className="dashboard-layout">
     
 
-      <div className="floating-controls">
-        <button className="icon-btn dark" onClick={() => setSidebarOpen(true)}>
-          <FaBars size={20} />
-        </button>
+    <div className="floating-controls">
+  <button className="icon-btn dark" onClick={() => setSidebarOpen(true)}>
+    <FaBars size={20} />
+  </button>
 
-        <button
-          className={`icon-btn purple ${vista === "tareas" ? "active" : ""}`}
-          onClick={() => setVista(vista === "dashboard" ? "tareas" : "dashboard")}
-        >
-          <FaTasks size={20} />
-        </button>
+  <button
+    className={`icon-btn purple ${vista === "tareas" ? "active" : ""}`}
+    onClick={() => setVista(vista === "dashboard" ? "tareas" : "dashboard")}
+  >
+    <FaTasks size={20} />
+  </button>
+  <Link to="/operadores-analytics">
+  <button className="icon-btn teal" title="Analítica de Operadores">
+    <FaUserClock size={20} />
+  </button>
+</Link>
+  <Link to="/form-builder">
+    <button className="icon-btn blue">
+      <FaWpforms size={20} />
+    </button>
+  </Link>
+  
+</div>
 
-        <Link to="/form-builder">
-          <button className="icon-btn blue">
-            <FaWpforms size={20} />
-          </button>
-        </Link>
-      </div>
-    
 <Sidebar
   eventos={eventos}
   isOpen={sidebarOpen}

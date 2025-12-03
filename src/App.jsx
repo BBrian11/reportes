@@ -25,6 +25,7 @@ import PortalPendientes from "./components/Dashboard/PortalPendientes.jsx";
 import DashboardOperador from "./components/Dashboard/DashboardOperador.jsx";
 import RondinCCTV from "./components/Dashboard/RondinCCTV.jsx";
 import OperadorDashboard from "./components/Dashboard/OperadorDashboard.jsx";
+import OperatorsAnalyticsDashboard from "./components/Dashboard/OperatorsAnalyticsDashboard.jsx";
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
               {/* Landing → login */}
               <Route path="/" element={<Navigate to="/login-admin" replace />} />
               <Route path="/login-admin" element={<LoginAdmin />} />
+              <Route path="/operadores-analytics" element={<OperatorsAnalyticsDashboard />} />
 
               {/* === ADMIN (protegido) === */}
               <Route

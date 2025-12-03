@@ -1302,3 +1302,23 @@ body:has(.modal-overlay) {
 .modal-actions { display: flex; justify-content: center; margin-top: 12px; }
 .btn.primary { background: #2151f0; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer; }
 .notif-bubbles-portal { z-index: 999990; }
+/* === Icon button: variante TEAL visible === */
+.icon-btn.teal{
+  background: #11C5A6;
+  border: 1px solid rgba(255,255,255,.18);
+  color: #051018;            /* color del icono */
+  box-shadow: 0 10px 24px rgba(17,197,166,.18);
+}
+
+.icon-btn.teal:hover{
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.icon-btn.teal:active{
+  transform: translateY(0px);
+}
+
+.icon-btn.teal svg{
+  color: inherit;            /* asegura que el ícono no quede gris */
+}
