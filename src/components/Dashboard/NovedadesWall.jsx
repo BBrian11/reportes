@@ -63,7 +63,8 @@ const PILL_COLORS = {
   info: { bg: PALETTE.infoBg, fg: PALETTE.infoFg, bd: PALETTE.info, name: "MEDIO", icon: "info" },
   warning: { bg: PALETTE.warningBg, fg: PALETTE.warningFg, bd: PALETTE.warning, name: "ALTO", icon: "warning" },
   critical: { bg: PALETTE.criticalBg, fg: PALETTE.criticalFg, bd: PALETTE.critical, name: "CRÍTICO", icon: "error" },
-  offline: { bg: PALETTE.offlineBg, fg: PALETTE.offlineFg, bd: PALETTE.offline, name: "CRÍTICO", icon: "error" },
+  offline: { bg: PALETTE.offlineBg, fg: PALETTE.offlineFg, bd: PALETTE.offline, name: "OFFLINE", icon: "error" },
+
 };
 
 const SEV_ORDER = ["critical", "offline", "warning", "info", "ok"];
@@ -329,7 +330,20 @@ export default function NovedadesWall() {
         border: 1px solid ${PALETTE.border} !important;
         outline: none !important;
         box-shadow: none !important;
+      } /* ✅ Forzar dropdown legible (Windows/Firefox/Chrome) */
+      .swal-dark-select {
+        color-scheme: dark;
       }
+      .swal-dark-select option {
+        background: #081225 !important;
+        color: ${PALETTE.text} !important;
+      }
+      /* algunos navegadores ignoran option si no tocás también el select base */
+      .swal2-select.swal-dark-select {
+        background: #081225 !important;
+        color: ${PALETTE.text} !important;
+      }
+      
       .swal-dark-input::placeholder { color: ${PALETTE.subtext} !important; opacity: .85 !important; }
       .swal2-validation-message { background: ${PALETTE.criticalBg} !important; color: ${PALETTE.criticalFg} !important; }
       .swal2-actions .swal2-confirm { background: ${PALETTE.brand} !important; }
@@ -646,13 +660,7 @@ export default function NovedadesWall() {
       const html = `
         <div style="display:grid;gap:12px;text-align:left">
 
-          ${isNew ? `
-            <label style="font-weight:800">Guardar en</label>
-            <select id="f-save" class="swal2-select swal-dark-select">
-              <option value="fb" selected>Firestore (compartido)</option>
-              <option value="local">Local (solo este TV)</option>
-            </select>
-          ` : ""}
+          
 
           <label style="font-weight:800">Severidad</label>
           <select id="f-sev" class="swal2-select swal-dark-select">
