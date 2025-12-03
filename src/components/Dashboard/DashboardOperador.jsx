@@ -55,11 +55,10 @@ export default function DashboardOperador() {
   // ✅ Hooks SIEMPRE en el tope, sin condicionales
   const modules = useMemo(
     () => [
-      { title: "Inicio", path: "/monitoreo", icon: <FaChartLine />, description: "Panel de resumen operativo y alertas.", color: ACCENT_COLOR },
-      { title: "Monitor en Vivo", path: "/monitor", icon: <FaVideo />, description: "Operación en tiempo real (CCTV, Alarmas).", color: "#10b981" },
+     
       { title: "Crear Novedad/Reporte", path: "/formulario", icon: <FaClipboardList />, description: "Inicio rápido para nuevos reportes.", color: "#2563eb" },
       { title: "Muro de Novedades", path: "/novedades", icon: <FaChartLine />, description: "Listado y estado de reportes recientes.", color: "#059669" },
-      { title: "Reportes Pendientes", path: "/pendientes", icon: <FaTasks />, description: "Retomar/finalizar reportes Pendiente.", color: "#f59e0b" },
+
       { title: "Formulario Rondín", path: "/rondin2", icon: <FaWalking />, description: "Gestión de riesgo por rondín.", color: "#dc2626" },
       { title: "Clientes Críticos", path: "/clientes", icon: <FaUsers />, description: "Lista y detalles de clientes críticos.", color: "#9333ea" },
     ],
